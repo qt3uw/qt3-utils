@@ -34,6 +34,8 @@ class Rabi:
                        rf_frequency = 2870e6,
                        aom_width = 3e-6,
                        aom_response_time = 800e-9,
+                       pre_rf_pad = 0,
+                       post_rf_pad = 1e-6,
                        rfsynth_channel = 0):
         '''
         The input parameters to this object specify the conditions
@@ -91,6 +93,8 @@ class Rabi:
         self.rf_frequency = rf_frequency
         self.aom_width = np.round(aom_width, 9)
         self.aom_response_time = np.round(aom_response_time, 9)
+        self.post_rf_pad = np.round(post_rf_pad, 9)
+        self.pre_rf_pad = np.round(pre_rf_pad, 9)
 
         self.pulser = pulser
         #assert (type(self.pulser) = qcsapphire.Pulser) or (type(self.pulser) = pulseblaster.Pulser)
@@ -121,6 +125,8 @@ class Rabi:
             'rf_frequency':self.rf_frequency,
             'aom_width':self.aom_width,
             'aom_response_time':self.aom_response_time,
+            'post_rf_pad':self.post_rf_pad,
+            'pre_rf_pad':self.pre_rf_pad,
             'clock_period':self.clock_period
         }
 
@@ -154,18 +160,19 @@ class Rabi:
         # assert rf_width >= self.clock_period
         # assert self.aom_width >= self.clock_period
 
+
         clock_width = self.clock_period / 2
         aom_dc_on = int(self.aom_width / self.clock_period)
         rf_dc_on = int(rf_width / self.clock_period)
         aom_delay = 0
-
-        N_clock_ticks_per_cycle = 2*aom_dc_on + 2*rf_dc_on
-        rf_delay = self.aom_width + self.aom_response_time
+        rf_post_pad = int(self.post_rf_pad / self.clock_period)
+        N_clock_ticks_per_cycle = 2*aom_dc_on + 2*rf_dc_on + 2*rf_post_pad
+        rf_delay = self.aom_width + self.aom_response_time + self.pre_rf_pad
 
         rf_dc_off = N_clock_ticks_per_cycle - rf_dc_on
         rf_wait_count = 0
         aom_wait_count = 0
-        aom_dc_off = rf_dc_on
+        aom_dc_off = rf_dc_on + rf_post_pad
 
         self._setup_qcsapphire_pulser(  self.clock_period,
                                         self.aom_pulser_channel,
