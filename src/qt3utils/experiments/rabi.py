@@ -36,7 +36,8 @@ class Rabi:
                        aom_response_time = 800e-9,
                        pre_rf_pad = 0,
                        post_rf_pad = 1e-6,
-                       rfsynth_channel = 0):
+                       rfsynth_channel = 0,
+                       t1_measurement = False):
         '''
         The input parameters to this object specify the conditions
         of an experiment and the hardware system setup.
@@ -96,6 +97,7 @@ class Rabi:
         self.post_rf_pad = np.round(post_rf_pad, 9)
         self.pre_rf_pad = np.round(pre_rf_pad, 9)
 
+        self.t1_measurement = t1_measurement
         self.pulser = pulser
         #assert (type(self.pulser) = qcsapphire.Pulser) or (type(self.pulser) = pulseblaster.Pulser)
         self.rfsynth = rfsynth
@@ -277,7 +279,8 @@ class Rabi:
             pass
 
     def run(self, N_cycles = 100000,
-                  post_process_function = aggregate_data):
+                  post_process_function = aggregate_data,
+                  reverse=False):
         '''
         Performs the scan over the specificed range of RF widths.
 
@@ -328,13 +331,19 @@ class Rabi:
         self.N_cycles = int(N_cycles)
 
         self.rfsynth.set_channel_fixed_output(0, self.rf_power, self.rf_frequency)
-        self.rfsynth.rf_on(self.rfsynth_channel)
-        time.sleep(0.05) #wait for RF box to fully turn on
+        if self.t1_measurement is False:
+            self.rfsynth.rf_on(self.rfsynth_channel)
+        else:
+            self.rfsynth.rf_off(self.rfsynth_channel)
+        time.sleep(1.0) #wait for RF box
 
 
         data = []
+        rf_width_list = np.arange(self.rf_width_low, self.rf_width_high + self.rf_width_step, self.rf_width_step)
+        if reverse:
+            rf_width_list = list(reversed(rf_width_list))
 
-        for rf_width in np.arange(self.rf_width_low, self.rf_width_high + self.rf_width_step, self.rf_width_step):
+        for rf_width in rf_width_list:
 
             self.current_rf_width = np.round(rf_width, 9)
             logger.info(f'RF Width: {self.current_rf_width} seconds')
@@ -384,7 +393,7 @@ class Rabi:
                          data_buffer])
 
 
-        self.rfsynth.rf_off(self.rfsynth_channel)
+        #self.rfsynth.rf_off(self.rfsynth_channel)
 
         return data
 
