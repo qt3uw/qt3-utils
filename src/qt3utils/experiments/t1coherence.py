@@ -79,6 +79,8 @@ class T1Coherence:
         self.clock_period = 200e-9
         self.edge_counter_config = edge_counter_config
 
+        raise Exception("This Class is still a work in progress. Not ready for usage.")
+
     def experimental_conditions(self):
         '''
         Returns a dictionary that captures the essential experimental conditions.
