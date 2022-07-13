@@ -499,19 +499,8 @@ class Rabi:
 
                 self._stop_and_close_daq_tasks()
 
-<<<<<<< HEAD
                 if post_process_function:
                     data_buffer = post_process_function(data_buffer, self)
-=======
-            self._stop_and_close_daq_tasks()
-
-            if post_process_function:
-                data_buffer = post_process_function(data_buffer, self)
-
-            #should we make this a dictionary with self.current_rf_width as the key?
-            data.append([self.current_rf_width,
-                         data_buffer])
->>>>>>> 9ef0d8b (wip)
 
                 #should we make this a dictionary with self.current_rf_width as the key?
                 data.append([self.current_rf_width, data_buffer])
