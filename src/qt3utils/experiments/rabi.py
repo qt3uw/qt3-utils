@@ -436,16 +436,12 @@ class Rabi:
         ## TODO: add cleanup for edge counter... attempt to stop / close tasks
 
         self.N_cycles = int(N_cycles)
-<<<<<<< HEAD
 
-        self.rfsynth.set_power(0, self.rf_power)
-        self.rfsynth.set_frequency(0, self.rf_frequency)
-=======
         self.rfsynth.stop_sweep()
         self.rfsynth.trigger_mode('disabled')
         self.rfsynth.set_power(self.rfsynth_channel, self.rf_power)
         self.rfsynth.set_frequency(self.rfsynth_channel, self.rf_frequency)
->>>>>>> 9ef0d8b (wip)
+
         if self.t1_measurement is False:
             self.rfsynth.rf_on(self.rfsynth_channel)
         else:
