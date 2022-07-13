@@ -113,6 +113,17 @@ class CWODMR:
             'clock_period':self.clock_period
         }
 
+    def reset_pulser(self, num_resets = 2):
+
+        # the QC Sapphire can enter weird states sometimes.
+        # Observation shows that multiple resets, followed by some delay
+        # results in a steady state for the pulser
+        for i in range(num_resets):
+            self.pulser.set_all_state_off()
+            time.sleep(1)
+        self.pulser.query('*RST')
+        self.pulser.system.mode('normal')
+
     def set_pulser_state(self, rf_width):
         '''
         Sets the pulser to generate a signals on all channels -- RF channel,
@@ -150,6 +161,7 @@ class CWODMR:
         rf_dc_on = rf_width / self.clock_period
         N_clock_ticks_per_cycle = 2*rf_dc_on
         rf_dc_off = rf_dc_on
+        self.reset_pulser()
 
         self._setup_qcsapphire_pulser(self.clock_period,
                                         self.rf_pulser_channel,
@@ -174,7 +186,6 @@ class CWODMR:
                                         trigger_pulser_channel = 'D',
                                         trigger_width = 200e-9
                                         ):
-        self.pulser.query('*RCL 0') #restores system default
         self.pulser.system.period(period)
         self.pulser.system.mode('normal')
 
@@ -221,11 +232,11 @@ class CWODMR:
         a cycle is {RF on for rf_width time, RF off for rf_width time}.
 
         The N_cycles specifies the total number of these cycles to
-        acquire. Your choice depends on your desired resolution or signal-to-noise
-        ratio, your post-data acquisition processing choices, and the amount of memory
-        available on your computer.
+        acquire at each frequency. The choice depends on the desired resolution or signal-to-noise
+        ratio, the post-data acquisition processing function, and the amount of memory
+        available on the computer.
 
-        For each frequency, the number of data read from the NI DAQ will be
+        For each frequency, the number of data points read from the NI DAQ will be
         N_clock_ticks_per_cycle * N_cycles, where N_clock_ticks_per_cycle
         is the value returned by self.set_pulser_state(self.rf_width).
 
@@ -246,7 +257,6 @@ class CWODMR:
         The return from this function is a list. Each element of the list
         is a list of the following values
             RF Frequency,
-            N_clock_ticks_per_cycle,
             data_post_processing_output (or raw data trace)
 
         The remaining (fixed) values for analysis can be obtained from the
@@ -257,6 +267,8 @@ class CWODMR:
         self.edge_counter_config.reset_daq()
         self.N_cycles = int(N_cycles)
 
+        self.rfsynth.stop_sweep()
+        self.rfsynth.trigger_mode('disabled')
         self.rfsynth.rf_on(self.rfsynth_channel)
         time.sleep(0.05) #wait for RF box to fully turn on
 
@@ -281,7 +293,8 @@ class CWODMR:
         for rf_freq in np.arange(self.freq_low, self.freq_high + self.freq_step, self.freq_step):
 
             self.current_rf_freq = np.round(rf_freq, 9)
-            self.rfsynth.set_channel_fixed_output(0, self.rf_power, self.current_rf_freq)
+            self.rfsynth.set_power(self.rfsynth_channel, self.rf_power)
+            self.rfsynth.set_frequency(self.rfsynth_channel, self.current_rf_freq)
 
             logger.info(f'RF frequency: {self.current_rf_freq} Hz')
             logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} samples')
@@ -306,7 +319,6 @@ class CWODMR:
 
             #should we make this a dictionary with self.current_rf_freq as the key?
             data.append([self.current_rf_freq,
-                         self.N_clock_ticks_per_cycle,
                          data_buffer])
 
         try:
