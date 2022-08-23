@@ -1,32 +1,51 @@
 # Utility Classes and Functions for the QT3 Lab
 
+This package provides a number of tools and fully-packaged programs for usage
+in the Quantum Technologies Teaching and Test-Bed (QT3) lab @ the University of Washington.
+
+The QT3 lab confocal microscope utilizes the following hardware to perform
+various spin-control experiments on quantum systems, such as NV centers in diamond:
+
+ * TTL pulsers
+   * Quantum Composer Sapphire
+   * [Future] Spin Core PulseBlaster
+ * Excelitas SPCM for photon detection
+ * NI-DAQ card (PCIx 6363) for data acquisition and control
+ * Jena System's Piezo Actuator Stage Control Amplifier
+ * [Future] spectrometer
+
+The code in this package facilitates usages of these devices to perform
+experiments.
 
 # Setup
 
-### Requirements
+### Prerequisites
 
 The utilities in this package depend on publicly available Python packages found
-on PyPI and on packages developed in-house. This public packages will be installed
-automatically when you run the setup script (below). However, you will
-need to manually install the in-house packages
+on PyPI and on packages currently only on github. The public packages will be installed
+automatically when you run the installation script. However, you will first
+need to manually install the following packages
 
-* gadamc/qcsapphire
-* gadamc/qt3RFSynthControl
+* [gadamc/qcsapphire](https://github.com/gadamc/qcsapphire)
+* [gadamc/qt3RFSynthControl](https://github.com/gadamc/qt3RFSynthControl)
+* [gadamc/nipiezeojenapy](https://github.com/gadamc/nipiezeojenapy)
 
 ## Installation
 
+Once the prerequisite packages have been installed
+
 ```
-git clone https://github.com/gadamc/qt3nidaq-config
-cd qt3nidaq-config
+git clone https://github.com/gadamc/qt3-utils
+cd qt3-utils
 python -m pip install .
 ```
 
 # Usage
 
-In general, it's encouraged to supply usage instructions within
-the docstrings for the modules, classes and functions found in this package.
+The simplest way to get started is to use one of the canned experiment classes.
 
-# Examples
+The repository https://github.com/gadamc/qt3-default-experiments is a good starting
+point for example Jupyter Notebooks that utilize these experiment classes.
 
 # Programs
 
