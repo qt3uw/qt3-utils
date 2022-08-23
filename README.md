@@ -28,6 +28,28 @@ the docstrings for the modules, classes and functions found in this package.
 
 # Examples
 
+# Programs
+
+## QT3 Oscilloscope
+
+The console program `qt3scope` comes with this package. It allows you to run
+a simple program from the command-line that reads the count rate on a particular
+digital input terminal on the NI DAQ.
+
+Review the available command line options for the program. Pay special attention
+to the `--signal-terminal` option, ensuring that terminal value matches the current
+hardware setup.
+
+```
+> qt3scope --help
+```
+
+If default settings are correct, then should be able to run without options
+
+```
+> qt3scope
+```
+
 # Debugging
 
 # LICENSE
