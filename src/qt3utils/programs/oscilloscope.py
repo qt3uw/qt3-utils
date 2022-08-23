@@ -19,11 +19,11 @@ parser.add_argument('--signal-counter',default = 'ctr2', type=str,
                     help='NI DAQ interal counter')
 parser.add_argument('--clock-terminal', default = None, type=str,
                     help='Clock Terminal. If None (default) uses internal NI DAQ clock')
-parser.add_argument('--scope-width', default = 1000, type=int,
+parser.add_argument('--scope-width', default = 250, type=int,
                     help='NI DAQ read/write timeout in seconds.')
 parser.add_argument('--clock-rate', default = 10000, type=int,
                     help='In Hz. Only used when using internal clock')
-parser.add_argument('--num-data-samples-per-batch', default = 100, type=int,
+parser.add_argument('--num-data-samples-per-batch', default = 1000, type=int,
                     help='Number of data points to acquire per daq request.')
 parser.add_argument('--rwtimeout', default = 10, type=int,
                     help='NI DAQ read/write timeout in seconds.')
@@ -119,8 +119,7 @@ def run():
             offset = 100
             while True:
                 if np.random.random(1)[0] < 0.01:
-                    offset = np.random.choice([100,1000,10000])
-
+                    offset = np.random.choice(np.arange(100, 100000, 500))
 
                 yield 0.2*offset*np.random.random(1)[0] + offset
 
