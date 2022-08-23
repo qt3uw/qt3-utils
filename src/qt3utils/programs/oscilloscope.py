@@ -118,12 +118,11 @@ def run():
         def emitter():
             offset = 100
             while True:
-                if np.random.random(1)[0] < 0.05:
-                    offset = 1000
-                if np.random.random(1)[0] > 0.95:
-                    offset = 100
+                if np.random.random(1)[0] < 0.01:
+                    offset = np.random.choice([100,1000,10000])
 
-                yield 50*np.random.random(1)[0] + offset
+
+                yield 0.2*offset*np.random.random(1)[0] + offset
 
     ani = animation.FuncAnimation(fig, scope.update, emitter, interval=50,
                                   blit=False)
