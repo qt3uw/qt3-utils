@@ -1,5 +1,6 @@
 import time
 import argparse
+import collections
 
 import numpy as np
 from matplotlib.lines import Line2D
@@ -18,6 +19,8 @@ parser.add_argument('--signal-counter',default = 'ctr2', type=str,
                     help='NI DAQ interal counter')
 parser.add_argument('--clock-terminal', default = None, type=str,
                     help='Clock Terminal. If None (default) uses internal NI DAQ clock')
+parser.add_argument('--scope-width', default = 1000, type=int,
+                    help='NI DAQ read/write timeout in seconds.')
 parser.add_argument('--clock-rate', default = 10000, type=int,
                     help='In Hz. Only used when using internal clock')
 parser.add_argument('--num-data-samples-per-batch', default = 100, type=int,
@@ -31,36 +34,28 @@ args = parser.parse_args()
 #TODO entry points in setup.py should be defined (perhaps: qt3utils-scope) for easy launch
 
 
+
 class Scope:
-    def __init__(self, ax, maxt=1000, dt=1):
+    def __init__(self, ax, width=50):
         self.ax = ax
-        self.dt = dt
-        self.maxt = maxt
-        self.tdata = []
-        self.ydata = []
-        self.line = Line2D(self.tdata, self.ydata)
-        self.ax.add_line(self.line)
-        self.ax.set_xlim(0, self.maxt)
+        self.ydata = collections.deque(np.zeros(width))
+        self.line, = self.ax.plot(np.arange(width), self.ydata)
 
     def update(self, y):
-
-        if len(self.tdata) > 0:
-            lastt = self.tdata[-1]
-            if lastt > self.tdata[0] + self.maxt:  # reset the arrays
-                self.tdata = [self.tdata[-1]]
-                self.ydata = [self.ydata[-1]]
-                self.ax.set_xlim(self.tdata[0], self.tdata[0] + self.maxt)
-                self.ax.figure.canvas.draw()
-
-        if len(self.tdata) > 0:
-            t = self.tdata[-1] + self.dt
-        else:
-            t = self.dt
-
-        self.tdata.append(t)
+        self.ydata.popleft()
         self.ydata.append(y)
+
+        #this doesn't work with blit = True.
+        #there's a workaround if we need blit = true
+        #https://stackoverflow.com/questions/53423868/matplotlib-animation-how-to-dynamically-extend-x-limits
+        #need to sporadically call
+        #fig.canvas.resize_event()
+        
+        #could add code here to resize if 10% of the data are outside of the
+        #current range. or if the average of the most recent 10% is outside
+        #of the current min or max.
         self.ax.set_ylim(np.min(self.ydata)*.95, 1.1*np.max(self.ydata))
-        self.line.set_data(self.tdata, self.ydata )
+        self.line.set_ydata(self.ydata)
         return self.line,
 
 
@@ -80,7 +75,7 @@ def read_daq_buffer(counter_task, detector_reader,  N_samples,  read_write_timeo
 
 def run():
     fig, ax = plt.subplots()
-    scope = Scope(ax)
+    scope = Scope(ax, args.scope_width)
 
     if args.randomtest is False:
         print('configuring nidaq tasks')
@@ -121,10 +116,10 @@ def run():
     else: #random test
         def emitter():
             while True:
-                yield 100*np.random.random(1)
+                yield 100*np.random.random(1)[0]
 
-    ani = animation.FuncAnimation(fig, scope.update, emitter, interval=20,
-                                  blit=True)
+    ani = animation.FuncAnimation(fig, scope.update, emitter, interval=50,
+                                  blit=False)
 
     plt.show()
 
