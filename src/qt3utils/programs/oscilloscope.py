@@ -50,11 +50,12 @@ class Scope:
         #https://stackoverflow.com/questions/53423868/matplotlib-animation-how-to-dynamically-extend-x-limits
         #need to sporadically call
         #fig.canvas.resize_event()
-        
+
         #could add code here to resize if 10% of the data are outside of the
         #current range. or if the average of the most recent 10% is outside
         #of the current min or max.
-        self.ax.set_ylim(np.min(self.ydata)*.95, 1.1*np.max(self.ydata))
+        delta = 0.1*np.max(self.ydata)
+        self.ax.set_ylim(np.max([0, np.min(self.ydata) - delta]), np.max(self.ydata) + delta)
         self.line.set_ydata(self.ydata)
         return self.line,
 
@@ -115,8 +116,14 @@ def run():
                 yield data_sample.sum()/(samples_read / args.clock_rate)
     else: #random test
         def emitter():
+            offset = 100
             while True:
-                yield 100*np.random.random(1)[0]
+                if np.random.random(1)[0] < 0.05:
+                    offset = 1000
+                if np.random.random(1)[0] > 0.95:
+                    offset = 100
+
+                yield 50*np.random.random(1)[0] + offset
 
     ani = animation.FuncAnimation(fig, scope.update, emitter, interval=50,
                                   blit=False)
