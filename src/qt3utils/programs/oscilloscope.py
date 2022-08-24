@@ -107,7 +107,6 @@ def run():
         print('configuring nidaq tasks')
 
         nidaq_config = qt3utils.nidaq.EdgeCounter(args.daq)
-        nidaq_config.reset_daq()
 
         if args.clock_terminal is None:
             nidaq_config.configure_di_clock(clock_rate = args.clock_rate)
@@ -119,7 +118,7 @@ def run():
             daq_counter = args.signal_counter,
             source_terminal = args.signal_terminal,
             N_samples_to_acquire_or_buffer_size = args.num_data_samples_per_batch,
-            clock_terminal = args.clock_terminal,
+            clock_terminal = clock_terminal,
             trigger_terminal = None,
             sampling_mode = nidaqmx.constants.AcquisitionType.FINITE)
 
