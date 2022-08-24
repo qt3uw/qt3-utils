@@ -1,7 +1,7 @@
 # Utility Classes and Functions for the QT3 Lab
 
 This package provides a number of tools and fully-packaged programs for usage
-in the Quantum Technologies Teaching and Test-Bed (QT3) lab @ the University of Washington.
+in the Quantum Technologies Teaching and Test-Bed (QT3) lab at the University of Washington.
 
 The QT3 lab confocal microscope utilizes the following hardware to perform
 various spin-control experiments on quantum systems, such as NV centers in diamond:
