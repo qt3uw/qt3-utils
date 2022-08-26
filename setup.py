@@ -21,7 +21,8 @@ requirements = [
     'numpy',
     'matplotlib',
     'qcsapphire',
-    'qt3rfsynthcontrol'
+    'qt3rfsynthcontrol',
+    'nipiezojenapy'
 ]
 
 # The README.md file content is included in the package metadata as long description and will be
@@ -48,7 +49,8 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'qt3scope = qt3utils.programs.oscilloscope:run',
+            'qt3scope = qt3utils.applications.oscilloscope:main',
+            'qt3scan = qt3utils.applications.piezoscan:main',
         ],
     }
 )
