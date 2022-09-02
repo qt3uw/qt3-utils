@@ -42,12 +42,9 @@ python -m pip install .
 
 # Usage
 
-The simplest way to get started is to use one of the canned experiment classes.
+The simplest way to get started is to see one of the [example](examples) notebooks.
 
-The repository https://github.com/gadamc/qt3-default-experiments is a good starting
-point for example Jupyter Notebooks that utilize these experiment classes.
-
-# Programs
+# Applications
 
 ## QT3 Oscilloscope
 
@@ -67,6 +64,27 @@ If default settings are correct, then should be able to run without options
 
 ```
 > qt3scope
+```
+
+## QT3 Confocal Scan
+
+The console program `qt3scan` comes with this package.  This program launches
+a GUI applications that will perform a confocal scan using the Jena system
+piezo actuator.
+
+The run-time options available are very similar to `qt3scope`.
+Review the available command line options for the program. Pay special attention
+to the `--signal-terminal` option, ensuring that terminal value matches the current
+hardware setup.
+
+```
+> qt3scan --help
+```
+
+If default settings are correct, then should be able to run without options
+
+```
+> qt3scan
 ```
 
 # Debugging
