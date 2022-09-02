@@ -264,7 +264,6 @@ class CWODMR:
 
         '''
 
-        self.edge_counter_config.reset_daq()
         self.N_cycles = int(N_cycles)
 
         self.rfsynth.stop_sweep()
