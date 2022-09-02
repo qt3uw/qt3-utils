@@ -432,9 +432,6 @@ class Rabi:
 
         '''
 
-        self.edge_counter_config.reset_daq()
-        ## TODO: add cleanup for edge counter... attempt to stop / close tasks
-
         self.N_cycles = int(N_cycles)
 
         self.rfsynth.stop_sweep()
