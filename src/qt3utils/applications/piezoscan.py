@@ -80,7 +80,7 @@ class ScanImage:
             data = model.data
 
         self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.xmin,
-                                                                   model.xmax,
+                                                                   model.xmax + model.step_size,
                                                                    model.current_y + model.step_size,
                                                                    model.ymin])
         if self.cbar is None:
