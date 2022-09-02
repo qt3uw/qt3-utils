@@ -249,9 +249,6 @@ class T1Coherence:
 
         '''
 
-        self.edge_counter_config.reset_daq()
-        ## TODO: add cleanup for edge counter... attempt to stop / close tasks
-
         self.N_cycles = int(N_cycles)
 
 
