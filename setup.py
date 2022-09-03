@@ -49,8 +49,8 @@ setup(
 
     entry_points={
         'console_scripts': [
-            'qt3scope = qt3utils.applications.oscilloscope:main',
-            'qt3scan = qt3utils.applications.piezoscan:main',
+            'qt3scope = applications.oscilloscope:main',
+            'qt3scan = applications.piezoscan:main',
         ],
     }
 )
