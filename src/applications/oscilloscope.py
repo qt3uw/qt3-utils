@@ -107,12 +107,12 @@ class ScopeFigure:
 
 
 class MainApplicationView():
-    def __init__(self, master):
-        frame = Tk.Frame(master)
+    def __init__(self, main_frame):
+        frame = Tk.Frame(main_frame)
         frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
 
         self.scope_view = ScopeFigure(args.scope_width)
-        self.sidepanel = SidePanel(master)
+        self.sidepanel = SidePanel(main_frame)
 
         self.canvas = FigureCanvasTkAgg(self.scope_view.fig, master=frame)
         self.canvas.get_tk_widget().pack(side=Tk.TOP, fill=Tk.BOTH, expand=True)
