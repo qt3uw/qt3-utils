@@ -180,12 +180,12 @@ class SidePanel():
             self.clicked_y = mpl_event.ydata
 
 class MainApplicationView():
-    def __init__(self, master):
-        frame = tk.Frame(master)
+    def __init__(self, main_frame):
+        frame = tk.Frame(main_frame)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.scan_view = ScanImage(args.cmap)
-        self.sidepanel = SidePanel(master)
+        self.sidepanel = SidePanel(main_frame)
         self.scan_view.set_onclick_callback(self.sidepanel.mpl_onclick_callback)
 
         self.canvas = FigureCanvasTkAgg(self.scan_view.fig, master=frame)
