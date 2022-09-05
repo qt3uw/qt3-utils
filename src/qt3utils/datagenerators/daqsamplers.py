@@ -165,18 +165,89 @@ class NiDaqSampler(SamplerInterface):
     def close(self):
         self.stop()
 
-    def sample_count_rate(self, n_samples = 1):
+    def sample_counts(self, n_samples = 1):
+        '''
+        Performs n_samples of batch reads from the NiDAQ.
 
-        data =np.zeros(n_samples)
+        For each batch read (of size `num_data_samples_per_batch`), the
+        total counts are summed. Additionally, because it's possible (though unlikely)
+        for the NiDAQ to return fewer than `num_data_samples_per_batch` measurements,
+        the actual number of data samples per batch are also recorded.
+
+        Finally, a numpy array of shape (n_samples, 2) is returned, where
+        the first element is the sum of the counts, and the second element is
+        the actual number of data samples per batch.
+
+        For example, if `num_data_samples_per_batch` is 5 and n_samples is 3,
+        (typical values are 100 and 10, 100 and 1, 1000 and 1, etc)
+
+        reading counts from the NiDAQ may return
+
+        #sample 1
+        raw_counts_1 = [3,5,4,6,4]
+        sum_counts_1 = 22
+        size_counts_1 = 5
+           (22, 5)
+        #sample 2
+        raw_counts_2 = [5,5,7,3,4]
+        sum_counts_2 = 24
+        size_counts_2 = 5
+           (24, 5)
+        #sample 3
+        raw_counts_3 = [5,3,5,7]
+        sum_counts_3 = 20
+        size_counts_2 = 4
+           (20, 4)
+
+        In this example, the numpy array is of shape (3, 2) and will be
+        data = [
+                [22, 5],
+                [24, 5],
+                [20, 4]
+               ]
+
+        With these data, and knowing the clock_rate, one can easily compute
+        the count rate
+
+        #removes rows where num samples per batch were zero (which would be a bug in the code)
+        data = data[np.where(data[:,1] > 0)]
+
+        #count rate is the mean counts per clock cycle multiplied by the clock rate.
+        count_rate = clock_rate * data[:,0]/data[:,1]
+        '''
+
+        data =np.zeros((n_samples, 2))
         for i in range(n_samples):
             data_sample, samples_read = self._read_samples()
             if samples_read > 0:
-                data[i] = np.mean(data_sample[:samples_read] * self.clock_rate)
-                logger.info(f'total counts {np.sum(data_sample[:samples_read])}')
+                data[i][0] = np.sum(data_sample[:samples_read])
+            data[i][1] = samples_read
+            logger.info(f'batch data (sum counts, num clock cycles per batch): {data[i]}')
         return data
 
-        # data_sample, samples_read = self._read_samples()
-        # return data_sample[:samples_read] * self.clock_rate
+    def sample_count_rate(self, n_samples = 1):
+        '''
+        Utilizes sample_counts method above and compute the count rate as described
+        in that method's docstring.
+
+        Under normal conditions, will return a numpy array of size n_samples, with values
+        equal to the estimated count rate.
+
+        However, there are two possible outcomes if there are errors reading the NiDAQ.
+
+        1. return a numpy array of count rate measurements of size 0 < N < n_samples (if there's partial error)
+        2. return a numpy array of size N = n_samples with value of np.nan if no data are returned
+
+        If the NiDAQ is configured properly and sufficient time is allowed for data to be
+        acquired per batch, it's very unlikely that any errors will occur.
+        '''
+
+        data = self.sample_counts(n_samples)
+        data = data[np.where(data[:,1] > 0)]
+        if data.shape[0] > 0:
+            return self.clock_rate * data[:,0]/data[:,1]
+        else:
+            return np.nan*np.ones(n_samples)
 
     def yield_count_rate(self):
         while self.running:
