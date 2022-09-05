@@ -74,17 +74,23 @@ class BasePiezoScanner(abc.ABC):
         pass
 
     def scan_x(self):
+
+        scan = self.scan_axis('x', self.xmin, self.xmax, self.step_size)
+        self.data.append(scan)
+
+    def scan_axis(self, axis, min, max, step_size):
         scan = []
-        for x in np.arange(self.xmin, self.xmax, self.step_size):
+        for val in np.arange(min, max, step_size):
             if self.controller:
-                logger.info(f'go to position {x}')
-                self.controller.go_to_position(x=x)
+                logger.info(f'go to position {axis}: {val:.2f}')
+                self.controller.go_to_position(**{axis:val})
             cr = np.mean(self.sample_count_rate())
             scan.append(cr)
             logger.info(f'count rate: {cr}')
             if self.controller:
                 logger.info(f'current position: {self.controller.get_current_position()}')
-        self.data.append(scan)
+
+        return scan
 
     def reset(self):
         self.data = []
