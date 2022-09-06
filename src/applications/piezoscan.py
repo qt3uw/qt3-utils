@@ -36,7 +36,7 @@ parser.add_argument('-c', '--clock-rate', metavar = 'rate (Hz)', default = 10000
                     this value specifies the clock rate to use. Per the NI DAQ manual,
                     use a suitable clock rate for the device for best performance, which is an integer
                     multiple downsample of the digital sample clock.''')
-parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 100, type=int,
+parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 25, type=int,
                     help='''Number of data points to acquire per DAQ batch request.
                            Note that only ONE data point is shown in the scope.
                            After each request to the NI DAQ for data, the mean count
@@ -109,55 +109,52 @@ class SidePanel():
         frame = tk.Frame(root)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-
-        tk.Label(frame, text="x range (um)").grid(row=0, column=0)
+        row = 0
+        tk.Label(frame, text="Scan Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+        row += 1
+        tk.Label(frame, text="x range (um)").grid(row=row, column=0)
         self.x_min_entry = tk.Entry(frame, width=10)
         self.x_max_entry = tk.Entry(frame, width=10)
         self.x_min_entry.insert(10, 0.01)
         self.x_max_entry.insert(10, 40.01)
-        self.x_min_entry.grid(row=0, column=1)
-        self.x_max_entry.grid(row=0, column=2)
+        self.x_min_entry.grid(row=row, column=1)
+        self.x_max_entry.grid(row=row, column=2)
 
-        tk.Label(frame, text="y range (um)").grid(row=1, column=0)
+        row += 1
+        tk.Label(frame, text="y range (um)").grid(row=row, column=0)
         self.y_min_entry = tk.Entry(frame, width=10)
         self.y_max_entry = tk.Entry(frame, width=10)
         self.y_min_entry.insert(10, 0.01)
         self.y_max_entry.insert(10, 40.01)
-        self.y_min_entry.grid(row=1, column=1)
-        self.y_max_entry.grid(row=1, column=2)
+        self.y_min_entry.grid(row=row, column=1)
+        self.y_max_entry.grid(row=row, column=2)
 
-        tk.Label(frame, text="y range (um)").grid(row=1, column=0)
-        self.y_min_entry = tk.Entry(frame, width=10)
-        self.y_max_entry = tk.Entry(frame, width=10)
-        self.y_min_entry.insert(10, 0.01)
-        self.y_max_entry.insert(10, 40.01)
-        self.y_min_entry.grid(row=1, column=1)
-        self.y_max_entry.grid(row=1, column=2)
-
-        tk.Label(frame, text="step size (um)").grid(row=2, column=0)
+        row += 1
+        tk.Label(frame, text="step size (um)").grid(row=row, column=0)
         self.step_size_entry = tk.Entry(frame, width=10)
         self.step_size_entry.insert(10, 1.0)
-        self.step_size_entry.grid(row=2, column=1)
+        self.step_size_entry.grid(row=row, column=1)
 
-        tk.Label(frame, text="N samples/step").grid(row=3, column=0)
-        self.n_sample_size_entry = tk.Entry(frame, width=10)
-        self.n_sample_size_entry.insert(50, 10)
-        self.n_sample_size_entry.grid(row=3, column=1)
 
-        tk.Label(frame, text="set z (um)").grid(row=4, column=0)
-        self.z_entry = tk.Entry(frame, width=10)
-        self.z_entry.grid(row=4, column=1)
+        row += 1
+        tk.Label(frame, text="set z (um)").grid(row=row, column=0)
+        self.z_entry_text = tk.DoubleVar()
+        self.z_entry = tk.Entry(frame, width=10, textvariable=self.z_entry_text)
+        self.z_entry.grid(row=row, column=1)
         self.go_to_z_button = tk.Button(frame, text="Go To Z")
-        self.go_to_z_button.grid(row=4, column=2)
+        self.go_to_z_button.grid(row=row, column=2)
 
-        self.startButton = tk.Button(frame, text="Start")
-        self.startButton.grid(row=5, column=0)
-        self.stopButton = tk.Button(frame, text="Stop")
-        self.stopButton.grid(row=5, column=1)
-        self.log10Button = tk.Button(frame, text="Log10")
-        self.log10Button.grid(row=5, column=2)
+        row += 1
+        self.startButton = tk.Button(frame, text="Start Scan")
+        self.startButton.grid(row=row, column=0)
+        self.stopButton = tk.Button(frame, text="Stop Scan")
+        self.stopButton.grid(row=row, column=1)
+        self.saveScanButton = tk.Button(frame, text="Save Scan")
+        self.saveScanButton.grid(row=row, column=2)
 
-        tk.Label(frame, text="Selected Position (um)").grid(row=6, column=0, pady=5)
+
+        row += 1
+        tk.Label(frame, text="Position").grid(row=row, column=0, pady=10)
 
         self.go_to_x_position_text = tk.StringVar()
         self.go_to_x_position_text.set("x: ")
@@ -166,18 +163,70 @@ class SidePanel():
         self.clicked_x = None
         self.clicked_x = None
 
-        tk.Label(frame, textvariable=self.go_to_x_position_text).grid(row=6, column=1, pady=5)
-        tk.Label(frame, textvariable=self.go_to_y_position_text).grid(row=6, column=2, pady=5)
+        tk.Label(frame, textvariable=self.go_to_x_position_text).grid(row=row, column=1, pady=5)
+        tk.Label(frame, textvariable=self.go_to_y_position_text).grid(row=row, column=2, pady=5)
 
+        row += 1
         self.gotoButton = tk.Button(frame, text="Go To Position")
-        self.gotoButton.grid(row=7, column=2)
+        self.gotoButton.grid(row=row, column=2)
+
+        # row += 1
+        # tk.Label(frame, text="Optimize Pos", font='Helvetica 16').grid(row=row, column=0, pady=10)
+        row += 1
+        tk.Label(frame, text="Optimize Range (um)").grid(row=row, column=0, columnspan=2)
+        self.optimize_range_entry = tk.Entry(frame, width=10)
+        self.optimize_range_entry.insert(5, 2)
+        self.optimize_range_entry.grid(row=row, column=2)
+        row += 1
+        tk.Label(frame, text="Optimize StepSize (um)").grid(row=row, column=0, columnspan=2)
+        self.optimize_step_size_entry = tk.Entry(frame, width=10)
+        self.optimize_step_size_entry.insert(5, 0.25)
+        self.optimize_step_size_entry.grid(row=row, column=2)
+        row += 1
+        self.optimize_x_button = tk.Button(frame, text="Optimize X")
+        self.optimize_x_button.grid(row=row, column=0)
+        self.optimize_y_button = tk.Button(frame, text="Optimize Y")
+        self.optimize_y_button.grid(row=row, column=1)
+        self.optimize_z_button = tk.Button(frame, text="Optimize Z")
+        self.optimize_z_button.grid(row=row, column=2)
+
+        row += 1
+        tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+        row += 1
+        tk.Label(frame, text="N samples/step").grid(row=row, column=0)
+        self.n_sample_size_value = tk.IntVar()
+        self.n_sample_size_entry = tk.Entry(frame, width=10, textvariable = self.n_sample_size_value)
+        self.n_sample_size_entry.grid(row=row, column=1)
+        self.n_sample_size_value.set(args.num_data_samples_per_batch)
+
+
+        row += 1
+        tk.Label(frame, text="View Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
+        row += 1
+        self.set_color_map_button = tk.Button(frame, text="Set Color")
+        self.set_color_map_button.grid(row=row, column=0, pady=(2,15))
+        self.mpl_color_map_entry = tk.Entry(frame, width=10)
+        self.mpl_color_map_entry.insert(10, 'Reds')
+        self.mpl_color_map_entry.grid(row=row, column=1, pady=(2,15))
+
+        self.log10Button = tk.Button(frame, text="Log10")
+        self.log10Button.grid(row=row, column=2, pady=(2,15))
+
+
+    def update_go_to_position(self, x = None, y = None, z = None):
+        if x is not None:
+            self.go_to_x_position_text.set(f'x: {x:.2f}')
+            self.clicked_x = x
+        if y is not None:
+            self.go_to_y_position_text.set(f'y: {y:.2f}')
+            self.clicked_y = y
+        if z is not None:
+            self.z_entry_text.set(np.round(z,4))
 
     def mpl_onclick_callback(self, mpl_event):
         if mpl_event.xdata and mpl_event.ydata:
-            self.go_to_x_position_text.set(f'x: {mpl_event.xdata:.2f}')
-            self.go_to_y_position_text.set(f'y: {mpl_event.ydata:.2f}')
-            self.clicked_x = mpl_event.xdata
-            self.clicked_y = mpl_event.ydata
+            self.update_go_to_position(mpl_event.xdata, mpl_event.ydata)
+
 
 class MainApplicationView():
     def __init__(self, main_frame):
@@ -197,6 +246,28 @@ class MainApplicationView():
 
         self.canvas.draw()
 
+    def show_optimization_plot(self, title, old_opt_value,
+                                     new_opt_value,
+                                     x_vals,
+                                     y_vals):
+        win = tk.Toplevel()
+        win.title(title)
+        fig, ax = plt.subplots()
+        ax.set_xlabel('position (um)')
+        ax.set_ylabel('count rate')
+        ax.plot(x_vals, y_vals)
+        ax.axvline(old_opt_value, linestyle='--', color='red')
+        ax.axvline(new_opt_value, linestyle='-', color='blue')
+
+        canvas = FigureCanvasTkAgg(fig, master=win)
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        toolbar = NavigationToolbar2Tk(canvas, win)
+        toolbar.update()
+        canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        canvas.draw()
+
 class MainTkApplication():
 
     def __init__(self, data_model):
@@ -208,16 +279,24 @@ class MainTkApplication():
         self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
         self.view.sidepanel.log10Button.bind("<Button>", self.log_scan_image)
         self.view.sidepanel.gotoButton.bind("<Button>", self.go_to_position)
-        self.view.sidepanel.go_to_z_button.bind("<Button>", self.go_to_z_button)
+        self.view.sidepanel.go_to_z_button.bind("<Button>", self.go_to_z)
+        self.view.sidepanel.saveScanButton.bind("<Button>", self.save_scan)
+        self.view.sidepanel.set_color_map_button.bind("<Button>", self.set_color_map)
+
+        self.view.sidepanel.optimize_x_button.bind("<Button>", lambda e: self.optimize('x'))
+        self.view.sidepanel.optimize_y_button.bind("<Button>", lambda e: self.optimize('y'))
+        self.view.sidepanel.optimize_z_button.bind("<Button>", lambda e: self.optimize('z'))
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.scan_thread = None
 
+        self.optimized_position = {'x':0, 'y':0, 'z':-1}
         if self.model.controller:
-            current_z = self.model.controller.get_current_position()[2]
+            self.optimized_position['z'] = self.model.controller.get_current_position()[2]
         else:
-            current_z = 20
-        self.view.sidepanel.z_entry.insert(5, current_z)
+            self.optimized_position['z'] = 20
+        self.view.sidepanel.z_entry_text.set(self.optimized_position['z'])
+
 
     def run(self):
         self.root.title("Confocal Scanner")
@@ -229,14 +308,25 @@ class MainTkApplication():
             self.model.controller.go_to_position(x = self.view.sidepanel.clicked_x, y = self.view.sidepanel.clicked_y)
         else:
             print(f'controller would have moved to x,y = {self.view.sidepanel.clicked_x:.2f}, {self.view.sidepanel.clicked_y:.2f}')
+        self.optimized_position['x'] = self.view.sidepanel.clicked_x
+        self.optimized_position['y'] = self.view.sidepanel.clicked_y
 
-    def go_to_z_button(self, event = None):
+    def go_to_z(self, event = None):
         if self.model.controller:
-            self.model.controller.go_to_position(z = float(self.view.sidepanel.z_entry.get()))
+            self.model.controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
         else:
-            print(f'controller would have moved to z = {float(self.view.sidepanel.z_entry.get()):.2f}')
+            print(f'controller would have moved to z = {self.view.sidepanel.z_entry_text.get():.2f}')
+        self.optimized_position['z'] = self.view.sidepanel.z_entry_text.get()
+
+    def set_color_map(self, event = None):
+        #Is there a way for this function to exist entirely in the view code instead of here?
+        self.view.scan_view.cmap = self.view.sidepanel.mpl_color_map_entry.get()
+        if len(self.model.data) > 0:
+            self.view.scan_view.update(self.model)
+            self.view.canvas.draw()
 
     def log_scan_image(self, event = None):
+        #Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.log_data = not self.view.scan_view.log_data
         if len(self.model.data) > 0:
             self.view.scan_view.update(self.model)
@@ -259,11 +349,21 @@ class MainTkApplication():
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.go_to_z_button['state'] = 'normal'
         self.view.sidepanel.gotoButton['state'] = 'normal'
+        self.view.sidepanel.saveScanButton['state'] = 'normal'
+
+        self.view.sidepanel.optimize_x_button['state'] = 'normal'
+        self.view.sidepanel.optimize_x_button['state'] = 'normal'
+        self.view.sidepanel.optimize_x_button['state'] = 'normal'
 
     def start_scan(self, event = None):
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.go_to_z_button['state'] = 'disabled'
         self.view.sidepanel.gotoButton['state'] = 'disabled'
+        self.view.sidepanel.saveScanButton['state'] = 'disabled'
+
+        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
 
         #clear the figure
         self.view.scan_view.reset()
@@ -279,13 +379,47 @@ class MainTkApplication():
 
         self.model.set_scan_range(xmin, xmax, ymin, ymax)
         self.model.step_size = float(self.view.sidepanel.step_size_entry.get())
-        self.model.set_num_data_samples_per_batch(int(self.view.sidepanel.n_sample_size_entry.get()))
+        self.model.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
 
-        self.model.reset()
-        self.model.start()
+        self.model.reset() #clears the data
+        self.model.start() #starts the DAQ
+        self.model.set_to_starting_position() #moves the stage to starting position
 
         self.scan_thread = Thread(target=self.scan_thread_function)
         self.scan_thread.start()
+
+    def save_scan(self, event = None):
+       myformats = [('Numpy Array', '*.npy')]
+       afile = tk.filedialog.asksaveasfilename(filetypes = myformats, defaultextension = '.npy')
+       print(afile)
+       if afile is None:
+           return #selection was canceled.
+       with open(afile, 'wb') as f_object:
+          np.save(f_object, self.model.data)
+
+    def optimize(self, axis):
+        opt_range = float(self.view.sidepanel.optimize_range_entry.get())
+        opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
+        old_optimized_value = self.optimized_position[axis]
+
+        min = old_optimized_value - opt_range
+        max = old_optimized_value + opt_range
+        self.model.start()
+        data = self.model.scan_axis(axis, min, max, opt_step_size)
+        self.model.stop()
+        axis_vals = np.arange(min, max, opt_step_size)
+        #we actually want to fit this to a gaussian and
+        #use the central value.
+        ### TODO
+        self.optimized_position[axis] = np.average(axis_vals, weights=data)
+
+        self.view.show_optimization_plot(f'Optimize {axis}',
+                                         old_optimized_value,
+                                         self.optimized_position[axis],
+                                         axis_vals,
+                                         data )
+
+        self.view.sidepanel.update_go_to_position(**{axis:self.optimized_position[axis]})
 
     def on_closing(self):
         try:
