@@ -415,23 +415,29 @@ class MainTkApplication():
         opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
         old_optimized_value = self.optimized_position[axis]
 
-        min = old_optimized_value - opt_range
-        max = old_optimized_value + opt_range
-        self.model.start()
-        data = self.model.scan_axis(axis, min, max, opt_step_size)
-        self.model.stop()
-        axis_vals = np.arange(min, max, opt_step_size)
-
-        p0 = [np.max(data), old_optimized_value, 1.0]
-        try:
-            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=p0)
-            self.optimized_position[axis] = coeff[1]
-        except RuntimeError as e:
-            logger.info(e)
-            #fall back to position of maximum value
-            self.optimized_position[axis] = axis_vals[np.argmax(data)]
-            coeff = None
-
+        # min_val = old_optimized_value - opt_range
+        # max_val = old_optimized_value + opt_range
+        # self.model.start()
+        # data = self.model.scan_axis(axis, min_val, max_val, opt_step_size)
+        # self.model.stop()
+        # axis_vals = np.arange(min_val, max_val, opt_step_size)
+        #
+        # p0 = [np.max(data), old_optimized_value, 1.0]
+        # try:
+        #     coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=p0)
+        #     self.optimized_position[axis] = coeff[1]
+        # except RuntimeError as e:
+        #     logger.info(e)
+        #     #fall back to position of maximum value
+        #     self.optimized_position[axis] = axis_vals[np.argmax(data)]
+        #     coeff = None
+        
+        self.model.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
+        data, axis_vals, opt_pos, coeff = self.model.optimize_position(axis,
+                                                                       old_optimized_value,
+                                                                       opt_range,
+                                                                       opt_step_size)
+        self.optimized_position[axis] = opt_pos
         self.view.show_optimization_plot(f'Optimize {axis}',
                                          old_optimized_value,
                                          self.optimized_position[axis],

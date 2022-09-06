@@ -1,9 +1,14 @@
 import abc
 import numpy as np
+import scipy.optimize
 import time
 import logging
 
 logger = logging.getLogger(__name__)
+
+def gauss(x, *p):
+    A, mu, sigma = p
+    return A*np.exp(-(x-mu)**2/(2.*sigma**2))
 
 class BasePiezoScanner(abc.ABC):
     def __init__(self, controller = None):
@@ -97,6 +102,24 @@ class BasePiezoScanner(abc.ABC):
     def reset(self):
         self.data = []
 
+    def optimize_position(self, axis, start_pos, opt_range = 2, step_size = 0.25):
+        min_val = start_pos - opt_range
+        max_val = start_pos + opt_range
+        self.start()
+        data = self.scan_axis(axis, min_val, max_val, step_size)
+        self.stop()
+        axis_vals = np.arange(min_val, max_val, step_size)
+
+        optimal_position = axis_vals[np.argmax(data)]
+        coeff = None
+        p0 = [np.max(data), optimal_position, 1.0]
+        try:
+            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=p0)
+            optimal_position = coeff[1]
+        except RuntimeError as e:
+            print(e)
+
+        return data, axis_vals, optimal_position, coeff
 
 class NiDaqPiezoScanner(BasePiezoScanner):
     def __init__(self, nidaqsampler, controller):
