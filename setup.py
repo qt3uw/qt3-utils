@@ -20,6 +20,7 @@ requirements = [
     'nidaqmx',
     'numpy',
     'matplotlib',
+    'scipy',
     'qcsapphire',
     'qt3rfsynthcontrol',
     'nipiezojenapy'

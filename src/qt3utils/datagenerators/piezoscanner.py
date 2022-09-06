@@ -85,8 +85,7 @@ class BasePiezoScanner(abc.ABC):
         for val in np.arange(min, max, step_size):
             if self.controller:
                 logger.info(f'go to position {axis}: {val:.2f}')
-                if self.controller:
-                    self.controller.go_to_position(**{axis:val})
+                self.controller.go_to_position(**{axis:val})
             cr = np.mean(self.sample_count_rate())
             scan.append(cr)
             logger.info(f'count rate: {cr}')
