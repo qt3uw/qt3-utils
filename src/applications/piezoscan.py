@@ -7,10 +7,8 @@ import logging
 from threading import Thread
 
 import numpy as np
-from matplotlib.lines import Line2D
+import scipy.optimize
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
 matplotlib.use('Agg')
@@ -57,10 +55,18 @@ parser.add_argument('--piezo-read-channels', metavar = '<ch0,ch1,ch2>', default 
                     help='List of analog input channels used to read the piezo position')
 parser.add_argument('-r', '--randomtest', action = 'store_true',
                     help='When true, program will run showing random numbers. This is for development testing.')
+parser.add_argument('-q', '--quiet', action = 'store_true',
+                    help='When true,logger level will be set to warning. Otherwise, set to "info".')
 parser.add_argument('-cmap', metavar = '<MPL color>', default = 'Reds',
                     help='Set the MatplotLib colormap scale')
 args = parser.parse_args()
 
+if args.quiet is False:
+    logging.basicConfig(level=logging.INFO)
+
+def gauss(x, *p):
+    A, mu, sigma = p
+    return A*np.exp(-(x-mu)**2/(2.*sigma**2))
 
 class ScanImage:
     def __init__(self, mplcolormap = 'Reds'):
@@ -249,15 +255,22 @@ class MainApplicationView():
     def show_optimization_plot(self, title, old_opt_value,
                                      new_opt_value,
                                      x_vals,
-                                     y_vals):
+                                     y_vals, fit_coeff = None):
         win = tk.Toplevel()
         win.title(title)
         fig, ax = plt.subplots()
         ax.set_xlabel('position (um)')
-        ax.set_ylabel('count rate')
-        ax.plot(x_vals, y_vals)
-        ax.axvline(old_opt_value, linestyle='--', color='red')
-        ax.axvline(new_opt_value, linestyle='-', color='blue')
+        ax.set_ylabel('count rate (Hz)')
+        ax.plot(x_vals, y_vals, label='data')
+        ax.ticklabel_format(style='sci',scilimits=(0,3))
+        ax.axvline(old_opt_value, linestyle='--', color='red', label=f'old position {old_opt_value:.2f}')
+        ax.axvline(new_opt_value, linestyle='-', color='blue', label=f'new position {new_opt_value:.2f}')
+
+        if fit_coeff is not None:
+            y_fit = gauss(x_vals, *fit_coeff)
+            ax.plot(x_vals, y_fit, label='fit', color='orange')
+
+        ax.legend()
 
         canvas = FigureCanvasTkAgg(fig, master=win)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -391,7 +404,7 @@ class MainTkApplication():
     def save_scan(self, event = None):
        myformats = [('Numpy Array', '*.npy')]
        afile = tk.filedialog.asksaveasfilename(filetypes = myformats, defaultextension = '.npy')
-       print(afile)
+       logger.info(afile)
        if afile is None:
            return #selection was canceled.
        with open(afile, 'wb') as f_object:
@@ -408,16 +421,23 @@ class MainTkApplication():
         data = self.model.scan_axis(axis, min, max, opt_step_size)
         self.model.stop()
         axis_vals = np.arange(min, max, opt_step_size)
-        #we actually want to fit this to a gaussian and
-        #use the central value.
-        ### TODO
-        self.optimized_position[axis] = np.average(axis_vals, weights=data)
+
+        p0 = [np.max(data), old_optimized_value, 1.0]
+        try:
+            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=p0)
+            self.optimized_position[axis] = coeff[1]
+        except RuntimeError as e:
+            logger.info(e)
+            #fall back to position of maximum value
+            self.optimized_position[axis] = axis_vals[np.argmax(data)]
+            coeff = None
 
         self.view.show_optimization_plot(f'Optimize {axis}',
                                          old_optimized_value,
                                          self.optimized_position[axis],
                                          axis_vals,
-                                         data )
+                                         data,
+                                         coeff)
 
         self.view.sidepanel.update_go_to_position(**{axis:self.optimized_position[axis]})
 
