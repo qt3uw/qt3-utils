@@ -312,7 +312,7 @@ class MainTkApplication():
 
 
     def run(self):
-        self.root.title("Confocal Scanner")
+        self.root.title("QT3Scan: Piezo Controlled NIDAQ Digital Count Rate Scanner")
         self.root.deiconify()
         self.root.mainloop()
 

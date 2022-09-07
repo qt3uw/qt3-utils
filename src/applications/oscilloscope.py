@@ -146,7 +146,7 @@ class MainTkApplication():
         self.animation = None
 
     def run(self):
-        self.root.title("NI DAQ Edge Count Meter")
+        self.root.title("QT3Scope: NIDAQ Digital Input Count Rate")
         self.root.deiconify()
         self.root.mainloop()
 
