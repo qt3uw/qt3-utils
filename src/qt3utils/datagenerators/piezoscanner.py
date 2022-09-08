@@ -7,8 +7,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 def gauss(x, *p):
-    A, mu, sigma = p
-    return A*np.exp(-(x-mu)**2/(2.*sigma**2))
+    C, mu, sigma = p
+    return C*np.exp(-(x-mu)**2/(2.*sigma**2))
 
 class BasePiezoScanner(abc.ABC):
     def __init__(self, controller = None):
@@ -102,9 +102,33 @@ class BasePiezoScanner(abc.ABC):
     def reset(self):
         self.data = []
 
-    def optimize_position(self, axis, start_pos, opt_range = 2, step_size = 0.25):
-        min_val = start_pos - opt_range
-        max_val = start_pos + opt_range
+    def optimize_position(self, axis, center_position, width = 2, step_size = 0.25):
+        '''
+        Performs a scan over a particular axis about `center_position`.
+
+        The scan ranges from center_position +- width and progresses with step_size.
+
+        Returns a tuple of
+           (raw_data, axis_positions, optimal_position, fit_coeff)
+
+        where
+           raw_data is an array of count rates at each position
+           axis_positions is an array of position values along the specified axis
+           optimal_position is a float position that represents the brightest position along the scan
+           fit_coeff is an array of coefficients (C, mu, sigma) that describe
+                 the best-fit gaussian shape to the raw_data
+                 C * np.exp( -(raw_data-mu)**2 / (2.*sigma**2) )
+        example:
+           ([r0, r1, ...], [x0, x1, ...], x_optimal, [C, mu, sigma])
+
+        In cases where the data cannot be succesfully fit to a gaussian function,
+        the optimial_position returned is the absolute brightest position in the scan,
+        and the fit_coeff is set to None.
+        When the fit is sucessful, x_optimal = mu.
+
+        '''
+        min_val = center_position - width
+        max_val = center_position + width
         self.start()
         data = self.scan_axis(axis, min_val, max_val, step_size)
         self.stop()
