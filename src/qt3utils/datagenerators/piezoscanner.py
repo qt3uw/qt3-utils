@@ -16,10 +16,10 @@ class BasePiezoScanner(abc.ABC):
         self.running = False
 
         self.current_y = 0
-        self.ymin = 0.01
-        self.ymax = 40.01
-        self.xmin = 0.01
-        self.xmax = 40.01
+        self.ymin = 0.0
+        self.ymax = 80.0
+        self.xmin = 0.0
+        self.xmax = 80.0
         self.step_size = 0.5
 
         self.data = []
@@ -129,6 +129,13 @@ class BasePiezoScanner(abc.ABC):
         '''
         min_val = center_position - width
         max_val = center_position + width
+        if self.controller:
+            min_val = np.max([min_val, self.controller.minimum_allowed_position])
+            max_val = np.min([max_val, self.controller.maximum_allowed_position])
+        else:
+            min_val = np.max([min_val, 0.0])
+            max_val = np.min([max_val, 80.0])
+
         self.start()
         data = self.scan_axis(axis, min_val, max_val, step_size)
         self.stop()
