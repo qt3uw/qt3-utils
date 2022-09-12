@@ -18,7 +18,6 @@ import qt3utils.nidaq
 import qt3utils.datagenerators as datasources
 import nipiezojenapy
 
-logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description='NI DAQ (PCIx 6363) / Jena Piezo Scanner',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -61,8 +60,11 @@ parser.add_argument('-cmap', metavar = '<MPL color>', default = 'Reds',
                     help='Set the MatplotLib colormap scale')
 args = parser.parse_args()
 
+logger = logging.getLogger(__name__)
+logging.basicConfig()
+
 if args.quiet is False:
-    logging.basicConfig(level=logging.INFO)
+    logger.setLevel(logging.INFO)
 
 def gauss(x, *p):
     A, mu, sigma = p
@@ -82,6 +84,7 @@ class ScanImage:
 
         if self.log_data:
             data = np.log10(model.data)
+            data[np.isinf(data)] = 0 #protect against +-inf
         else:
             data = model.data
 
@@ -108,10 +111,11 @@ class ScanImage:
 
     def onclick(self, event):
         if event.inaxes is self.ax:
+            #todo: draw a circle around clicked point? Maybe with a high alpha, so that its faint
             self.onclick_callback(event)
 
 class SidePanel():
-    def __init__(self, root):
+    def __init__(self, root, scan_range):
         frame = tk.Frame(root)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -121,8 +125,8 @@ class SidePanel():
         tk.Label(frame, text="x range (um)").grid(row=row, column=0)
         self.x_min_entry = tk.Entry(frame, width=10)
         self.x_max_entry = tk.Entry(frame, width=10)
-        self.x_min_entry.insert(10, 0.01)
-        self.x_max_entry.insert(10, 40.01)
+        self.x_min_entry.insert(10, scan_range[0])
+        self.x_max_entry.insert(10, scan_range[1])
         self.x_min_entry.grid(row=row, column=1)
         self.x_max_entry.grid(row=row, column=2)
 
@@ -130,8 +134,8 @@ class SidePanel():
         tk.Label(frame, text="y range (um)").grid(row=row, column=0)
         self.y_min_entry = tk.Entry(frame, width=10)
         self.y_max_entry = tk.Entry(frame, width=10)
-        self.y_min_entry.insert(10, 0.01)
-        self.y_max_entry.insert(10, 40.01)
+        self.y_min_entry.insert(10, scan_range[0])
+        self.y_max_entry.insert(10, scan_range[1])
         self.y_min_entry.grid(row=row, column=1)
         self.y_max_entry.grid(row=row, column=2)
 
@@ -162,15 +166,15 @@ class SidePanel():
         row += 1
         tk.Label(frame, text="Position").grid(row=row, column=0, pady=10)
 
-        self.go_to_x_position_text = tk.StringVar()
-        self.go_to_x_position_text.set("x: ")
-        self.go_to_y_position_text = tk.StringVar()
-        self.go_to_y_position_text.set("y: ")
+        self.go_to_x_position_text = tk.DoubleVar()
+        #self.go_to_x_position_text.set("x: ")
+        self.go_to_y_position_text = tk.DoubleVar()
+        #self.go_to_y_position_text.set("y: ")
         self.clicked_x = None
         self.clicked_x = None
 
-        tk.Label(frame, textvariable=self.go_to_x_position_text).grid(row=row, column=1, pady=5)
-        tk.Label(frame, textvariable=self.go_to_y_position_text).grid(row=row, column=2, pady=5)
+        tk.Entry(frame, textvariable=self.go_to_x_position_text, width=7).grid(row=row, column=1, pady=5)
+        tk.Entry(frame, textvariable=self.go_to_y_position_text, width=7).grid(row=row, column=2, pady=5)
 
         row += 1
         self.gotoButton = tk.Button(frame, text="Go To Position")
@@ -221,10 +225,10 @@ class SidePanel():
 
     def update_go_to_position(self, x = None, y = None, z = None):
         if x is not None:
-            self.go_to_x_position_text.set(f'x: {x:.2f}')
+            self.go_to_x_position_text.set(np.round(x,4))
             self.clicked_x = x
         if y is not None:
-            self.go_to_y_position_text.set(f'y: {y:.2f}')
+            self.go_to_y_position_text.set(np.round(y,4))
             self.clicked_y = y
         if z is not None:
             self.z_entry_text.set(np.round(z,4))
@@ -235,12 +239,12 @@ class SidePanel():
 
 
 class MainApplicationView():
-    def __init__(self, main_frame):
+    def __init__(self, main_frame, scan_range = [0,80]):
         frame = tk.Frame(main_frame)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.scan_view = ScanImage(args.cmap)
-        self.sidepanel = SidePanel(main_frame)
+        self.sidepanel = SidePanel(main_frame, scan_range)
         self.scan_view.set_onclick_callback(self.sidepanel.mpl_onclick_callback)
 
         self.canvas = FigureCanvasTkAgg(self.scan_view.fig, master=frame)
@@ -286,8 +290,9 @@ class MainTkApplication():
     def __init__(self, data_model):
         self.root = tk.Tk()
         self.model = data_model
-
-        self.view = MainApplicationView(self.root)
+        scan_range = [data_model.controller.minimum_allowed_position,
+                      data_model.controller.maximum_allowed_position]
+        self.view = MainApplicationView(self.root, scan_range)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
         self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
         self.view.sidepanel.log10Button.bind("<Button>", self.log_scan_image)
@@ -308,7 +313,7 @@ class MainTkApplication():
             self.optimized_position['z'] = self.model.controller.get_current_position()[2]
         else:
             self.optimized_position['z'] = 20
-        self.view.sidepanel.z_entry_text.set(self.optimized_position['z'])
+        self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'],4))
 
 
     def run(self):
@@ -347,9 +352,6 @@ class MainTkApplication():
 
     def stop_scan(self, event = None):
         self.model.stop()
-        self.view.sidepanel.startButton['state'] = 'normal'
-        self.view.sidepanel.go_to_z_button['state'] = 'normal'
-        self.view.sidepanel.gotoButton['state'] = 'normal'
 
     def scan_thread_function(self):
 
@@ -365,8 +367,8 @@ class MainTkApplication():
         self.view.sidepanel.saveScanButton['state'] = 'normal'
 
         self.view.sidepanel.optimize_x_button['state'] = 'normal'
-        self.view.sidepanel.optimize_x_button['state'] = 'normal'
-        self.view.sidepanel.optimize_x_button['state'] = 'normal'
+        self.view.sidepanel.optimize_y_button['state'] = 'normal'
+        self.view.sidepanel.optimize_z_button['state'] = 'normal'
 
     def start_scan(self, event = None):
         self.view.sidepanel.startButton['state'] = 'disabled'
@@ -375,8 +377,8 @@ class MainTkApplication():
         self.view.sidepanel.saveScanButton['state'] = 'disabled'
 
         self.view.sidepanel.optimize_x_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
 
         #clear the figure
         self.view.scan_view.reset()
@@ -405,22 +407,38 @@ class MainTkApplication():
        myformats = [('Numpy Array', '*.npy')]
        afile = tk.filedialog.asksaveasfilename(filetypes = myformats, defaultextension = '.npy')
        logger.info(afile)
-       if afile is None:
+       if afile is None or afile == '':
            return #selection was canceled.
        with open(afile, 'wb') as f_object:
           np.save(f_object, self.model.data)
 
     def optimize(self, axis):
+        #todo - make a separate thread function for this in
+        #order to disable the buttons and re-anable after the scan
+        #the buttons don't update until the function returns bc of the way tkinter works
         opt_range = float(self.view.sidepanel.optimize_range_entry.get())
         opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
         old_optimized_value = self.optimized_position[axis]
 
         self.model.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
+
+        self.view.sidepanel.startButton['state'] = 'disabled'
+        self.view.sidepanel.stopButton['state'] = 'disabled'
+        self.view.sidepanel.go_to_z_button['state'] = 'disabled'
+        self.view.sidepanel.gotoButton['state'] = 'disabled'
+        self.view.sidepanel.saveScanButton['state'] = 'disabled'
+
+        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
+
         data, axis_vals, opt_pos, coeff = self.model.optimize_position(axis,
                                                                        old_optimized_value,
                                                                        opt_range,
                                                                        opt_step_size)
         self.optimized_position[axis] = opt_pos
+        self.model.controller.go_to_position(**{axis:opt_pos})
+
         self.view.show_optimization_plot(f'Optimize {axis}',
                                          old_optimized_value,
                                          self.optimized_position[axis],
@@ -429,6 +447,17 @@ class MainTkApplication():
                                          coeff)
 
         self.view.sidepanel.update_go_to_position(**{axis:self.optimized_position[axis]})
+
+        self.view.sidepanel.startButton['state'] = 'normal'
+        self.view.sidepanel.stopButton['state'] = 'normal'
+        self.view.sidepanel.go_to_z_button['state'] = 'normal'
+        self.view.sidepanel.gotoButton['state'] = 'normal'
+        self.view.sidepanel.saveScanButton['state'] = 'normal'
+
+        self.view.sidepanel.optimize_x_button['state'] = 'normal'
+        self.view.sidepanel.optimize_y_button['state'] = 'normal'
+        self.view.sidepanel.optimize_z_button['state'] = 'normal'
+
 
     def on_closing(self):
         try:
@@ -441,7 +470,8 @@ class MainTkApplication():
 
 def build_data_scanner():
     if args.randomtest:
-        scanner = datasources.RandomPiezoScanner(controller=None)
+        controller = nipiezojenapy.BaseControl()
+        scanner = datasources.RandomPiezoScanner(controller=controller)
     else:
         controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
                                   write_channels = args.piezo_write_channels.split(','),
