@@ -16,6 +16,7 @@ import nidaqmx
 
 import qt3utils.nidaq
 import qt3utils.datagenerators as datasources
+import qt3utils.datagenerators.piezoscanner
 import nipiezojenapy
 
 
@@ -66,9 +67,6 @@ logging.basicConfig()
 if args.quiet is False:
     logger.setLevel(logging.INFO)
 
-def gauss(x, *p):
-    A, mu, sigma = p
-    return A*np.exp(-(x-mu)**2/(2.*sigma**2))
 
 class ScanImage:
     def __init__(self, mplcolormap = 'Reds'):
@@ -167,11 +165,7 @@ class SidePanel():
         tk.Label(frame, text="Position").grid(row=row, column=0, pady=10)
 
         self.go_to_x_position_text = tk.DoubleVar()
-        #self.go_to_x_position_text.set("x: ")
         self.go_to_y_position_text = tk.DoubleVar()
-        #self.go_to_y_position_text.set("y: ")
-        self.clicked_x = None
-        self.clicked_x = None
 
         tk.Entry(frame, textvariable=self.go_to_x_position_text, width=7).grid(row=row, column=1, pady=5)
         tk.Entry(frame, textvariable=self.go_to_y_position_text, width=7).grid(row=row, column=2, pady=5)
@@ -226,10 +220,8 @@ class SidePanel():
     def update_go_to_position(self, x = None, y = None, z = None):
         if x is not None:
             self.go_to_x_position_text.set(np.round(x,4))
-            self.clicked_x = x
         if y is not None:
             self.go_to_y_position_text.set(np.round(y,4))
-            self.clicked_y = y
         if z is not None:
             self.z_entry_text.set(np.round(z,4))
 
@@ -271,7 +263,7 @@ class MainApplicationView():
         ax.axvline(new_opt_value, linestyle='-', color='blue', label=f'new position {new_opt_value:.2f}')
 
         if fit_coeff is not None:
-            y_fit = gauss(x_vals, *fit_coeff)
+            y_fit = qt3utils.datagenerators.piezoscanner.gauss(x_vals, *fit_coeff)
             ax.plot(x_vals, y_fit, label='fit', color='orange')
 
         ax.legend()
@@ -323,11 +315,11 @@ class MainTkApplication():
 
     def go_to_position(self, event = None):
         if self.model.controller:
-            self.model.controller.go_to_position(x = self.view.sidepanel.clicked_x, y = self.view.sidepanel.clicked_y)
+            self.model.controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
         else:
-            print(f'controller would have moved to x,y = {self.view.sidepanel.clicked_x:.2f}, {self.view.sidepanel.clicked_y:.2f}')
-        self.optimized_position['x'] = self.view.sidepanel.clicked_x
-        self.optimized_position['y'] = self.view.sidepanel.clicked_y
+            print(f'controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
+        self.optimized_position['x'] = self.view.sidepanel.go_to_x_position_text.get()
+        self.optimized_position['y'] = self.view.sidepanel.go_to_y_position_text.get()
 
     def go_to_z(self, event = None):
         if self.model.controller:
