@@ -7,8 +7,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 def gauss(x, *p):
-    C, mu, sigma = p
-    return C*np.exp(-(x-mu)**2/(2.*sigma**2))
+    C, mu, sigma, offset = p
+    return C*np.exp(-(x-mu)**2/(2.*sigma**2)) + offset
 
 class BasePiezoScanner(abc.ABC):
     def __init__(self, controller = None):
@@ -143,9 +143,9 @@ class BasePiezoScanner(abc.ABC):
 
         optimal_position = axis_vals[np.argmax(data)]
         coeff = None
-        p0 = [np.max(data), optimal_position, 1.0]
+        params = [np.max(data), optimal_position, 1.0, np.min(data)]
         try:
-            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=p0)
+            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=params)
             optimal_position = coeff[1]
         except RuntimeError as e:
             print(e)
