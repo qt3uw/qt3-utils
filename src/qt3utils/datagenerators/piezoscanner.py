@@ -1,9 +1,14 @@
 import abc
 import numpy as np
+import scipy.optimize
 import time
 import logging
 
 logger = logging.getLogger(__name__)
+
+def gauss(x, *p):
+    C, mu, sigma, offset = p
+    return C*np.exp(-(x-mu)**2/(2.*sigma**2)) + offset
 
 class BasePiezoScanner(abc.ABC):
     def __init__(self, controller = None):
@@ -11,10 +16,10 @@ class BasePiezoScanner(abc.ABC):
         self.running = False
 
         self.current_y = 0
-        self.ymin = 0.01
-        self.ymax = 40.01
-        self.xmin = 0.01
-        self.xmax = 40.01
+        self.ymin = 0.0
+        self.ymax = 80.0
+        self.xmin = 0.0
+        self.xmax = 80.0
         self.step_size = 0.5
 
         self.data = []
@@ -27,6 +32,8 @@ class BasePiezoScanner(abc.ABC):
 
     def start(self):
         self.running = True
+
+    def set_to_starting_position(self):
         self.current_y = self.ymin
         if self.controller:
             self.controller.go_to_position(x = self.xmin, y = self.ymin)
@@ -74,21 +81,76 @@ class BasePiezoScanner(abc.ABC):
         pass
 
     def scan_x(self):
+
+        scan = self.scan_axis('x', self.xmin, self.xmax, self.step_size)
+        self.data.append(scan)
+
+    def scan_axis(self, axis, min, max, step_size):
         scan = []
-        for x in np.arange(self.xmin, self.xmax, self.step_size):
+        for val in np.arange(min, max, step_size):
             if self.controller:
-                logger.info(f'go to position {x}')
-                self.controller.go_to_position(x=x)
+                logger.info(f'go to position {axis}: {val:.2f}')
+                self.controller.go_to_position(**{axis:val})
             cr = np.mean(self.sample_count_rate())
             scan.append(cr)
             logger.info(f'count rate: {cr}')
             if self.controller:
                 logger.info(f'current position: {self.controller.get_current_position()}')
-        self.data.append(scan)
+
+        return scan
 
     def reset(self):
         self.data = []
 
+    def optimize_position(self, axis, center_position, width = 2, step_size = 0.25):
+        '''
+        Performs a scan over a particular axis about `center_position`.
+
+        The scan ranges from center_position +- width and progresses with step_size.
+
+        Returns a tuple of
+           (raw_data, axis_positions, optimal_position, fit_coeff)
+
+        where
+           raw_data is an array of count rates at each position
+           axis_positions is an array of position values along the specified axis
+           optimal_position is a float position that represents the brightest position along the scan
+           fit_coeff is an array of coefficients (C, mu, sigma) that describe
+                 the best-fit gaussian shape to the raw_data
+                 C * np.exp( -(raw_data-mu)**2 / (2.*sigma**2) )
+        example:
+           ([r0, r1, ...], [x0, x1, ...], x_optimal, [C, mu, sigma])
+
+        In cases where the data cannot be succesfully fit to a gaussian function,
+        the optimial_position returned is the absolute brightest position in the scan,
+        and the fit_coeff is set to None.
+        When the fit is sucessful, x_optimal = mu.
+
+        '''
+        min_val = center_position - width
+        max_val = center_position + width
+        if self.controller:
+            min_val = np.max([min_val, self.controller.minimum_allowed_position])
+            max_val = np.min([max_val, self.controller.maximum_allowed_position])
+        else:
+            min_val = np.max([min_val, 0.0])
+            max_val = np.min([max_val, 80.0])
+
+        self.start()
+        data = self.scan_axis(axis, min_val, max_val, step_size)
+        self.stop()
+        axis_vals = np.arange(min_val, max_val, step_size)
+
+        optimal_position = axis_vals[np.argmax(data)]
+        coeff = None
+        params = [np.max(data), optimal_position, 1.0, np.min(data)]
+        try:
+            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=params)
+            optimal_position = coeff[1]
+        except RuntimeError as e:
+            print(e)
+
+        return data, axis_vals, optimal_position, coeff
 
 class NiDaqPiezoScanner(BasePiezoScanner):
     def __init__(self, nidaqsampler, controller):
