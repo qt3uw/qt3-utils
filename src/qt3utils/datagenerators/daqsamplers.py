@@ -3,6 +3,7 @@ import logging
 
 import numpy as np
 import nidaqmx
+import nidaqmx.errors
 
 import qt3utils.nidaq
 
@@ -77,19 +78,59 @@ class NiDaqSampler(SamplerInterface):
                        num_data_samples_per_batch = 1000,
                        clock_terminal = None,
                        read_write_timeout = 10,
-                       signal_counter = 'ctr2'
+                       signal_counter = 'ctr2',
+                       sampling_mode = 'continuous',
+                       trigger_terminal = None
                        ):
+        '''
+        NI DAQ Connections
+        * signal_terminal - terminal connected to TTL pulses that indicate a photon (PFI0)
+        * clock_terminal - terminal connected to the clock_pulser_channel (PFI12)
+        * trigger_terminal - terminal connected to the trigger_pulser_channel (PFI1)
 
+        For some applications, you only need the signal terminal -- such as the qt3scope / qt3scan applications.
+
+        For ODMR experiments, you'll likely need to configure a clock and trigger terminal.
+
+        sample_mode = either 'continous' or 'finite' are allowed.
+
+        IF 'continous' sampling mode is chosen, the data buffer size will equal num_data_samples_per_batch.
+        The user of this object is responsible for ensuring enough time has elapsed before reading out the buffer.
+        That is, if conditions of the experiment change (such as RF frequency), you should wait enough time
+        such that the data buffer contains only data taken at the same experimental condition. The amount of
+        time that should be waited is at least num_data_samples_per_batch / clock_rate.
+
+        If 'finite' sampling mode is chosen, then the signal counter NIDAQ task will start and stop
+        with each read of the DAQ. Also, the code will wait the appropriate amount of time before
+        reading the buffer. The drawback of the finite method is the overhead to create, start and stop
+        NIDAQ task objects. Thus, the continuous mode sampling should be faster.
+
+        '''
         self.daq_name = daq_name
         self.signal_terminal = signal_terminal
         self.clock_rate = clock_rate
         self.clock_terminal = clock_terminal
+        self.trigger_terminal = trigger_terminal
         self.signal_counter = signal_counter
         self.read_write_timeout = read_write_timeout
         self.num_data_samples_per_batch = num_data_samples_per_batch
         self.running = False
-
         self.read_lock = False
+
+        assert sampling_mode in ['continuous', 'finite']
+
+        if sampling_mode == 'continuous':
+            self.sampling_mode = nidaqmx.constants.AcquisitionType.CONTINUOUS
+        else:
+            self.sampling_mode = nidaqmx.constants.AcquisitionType.FINITE
+
+        self.sample_data = collections.deque(maxlen = self.num_data_samples_per_batch)
+
+    def _continuous_sampling_callback(self, task_handle, every_n_samples_event_type,
+        number_of_samples, callback_data):
+         self.sample_data.extend(self.nidaq_config.counter_task.read(number_of_samples_per_channel=self.num_data_samples_per_batch))
+        return 0
+
 
     def _configure_daq(self):
         self.nidaq_config = qt3utils.nidaq.EdgeCounter(self.daq_name)
@@ -105,8 +146,11 @@ class NiDaqSampler(SamplerInterface):
             source_terminal = self.signal_terminal,
             N_samples_to_acquire_or_buffer_size = self.num_data_samples_per_batch,
             clock_terminal = clock_terminal,
-            trigger_terminal = None,
-            sampling_mode = nidaqmx.constants.AcquisitionType.FINITE)
+            trigger_terminal = self.trigger_terminal,
+            sampling_mode = self.sampling_mode)
+
+        if self.sampling_mode == nidaqmx.constants.AcquisitionType.CONTINUOUS:
+            self.nidaq_config.counter_task.register_every_n_samples_acquired_into_buffer_event(self.num_data_samples_per_batch, self._continuous_sampling_callback)
 
         self.nidaq_config.create_counter_reader()
 
@@ -117,22 +161,36 @@ class NiDaqSampler(SamplerInterface):
 
         self.read_lock = True
         data_buffer = np.zeros(self.num_data_samples_per_batch)
-        logger.info('starting counter task')
-        self.nidaq_config.counter_task.start()
-        #DO WE NEED TO PAUSE HERE FOR DATA ACQUISITION?
-        #another method will probably be to configure the task to continuously fill a buffer and read it
-        #out... then we don't need to start and stop, right? TODO
-        #and, with continuous acquisition, there might not need to be any time.sleep
-        time.sleep(1.05*self.num_data_samples_per_batch / self.clock_rate)
-        logger.info(f'pausing for {1.05*self.num_data_samples_per_batch / self.clock_rate:.6f} seconds')
-        logger.info('reading data')
-        samples_read = self.nidaq_config.counter_reader.read_many_sample_double(
-                                data_buffer,
-                                number_of_samples_per_channel=self.num_data_samples_per_batch,
-                                timeout=self.read_write_timeout)
-        logger.info(f'returned {samples_read} samples')
-        self.nidaq_config.counter_task.stop()
-        self.read_lock = False
+        samples_read = 0
+
+        try:
+
+            logger.info('starting counter task')
+            if self.sampling_mode == nidaqmx.constants.AcquisitionType.FINITE:
+                self.nidaq_config.counter_task.start()
+                time.sleep(1.1*self.num_data_samples_per_batch / self.clock_rate)
+                logger.info(f'pausing for {1.1*self.num_data_samples_per_batch / self.clock_rate:.6f} seconds')
+            logger.info('reading data')
+            #todo: consider using nidaqmx.Task.read function here instead.
+            #it probably only saves the need to configure a buffer though.
+
+            #todo: consider using nidaqmx.Task.register_every_n_samples_acquired_into_buffer_event
+            #to register a callback function.
+            #the simple solution would be to register a callback that simply stores
+            #the most recent buffer values.
+            #then any other user of this object can just read the data.
+            samples_read = self.nidaq_config.counter_reader.read_many_sample_double(
+                                    data_buffer,
+                                    number_of_samples_per_channel=self.num_data_samples_per_batch,
+                                    timeout=self.read_write_timeout)
+            logger.info(f'returned {samples_read} samples')
+            if self.sampling_mode == nidaqmx.constants.AcquisitionType.FINITE:
+                self.nidaq_config.counter_task.stop()
+        except nidaqmx.errors.DaqError as e:
+            logging.warning(e)
+
+        finally:
+            self.read_lock = False
         return data_buffer, samples_read
 
     def start(self):
@@ -141,6 +199,8 @@ class NiDaqSampler(SamplerInterface):
 
         self._configure_daq()
         self.nidaq_config.clock_task.start()
+        if self.sampling_mode == nidaqmx.constants.AcquisitionType.CONTINUOUS:
+            self.nidaq_config.counter_task.start()
         self.running = True
 
     def _burn_and_log_exception(self, f):
@@ -156,7 +216,8 @@ class NiDaqSampler(SamplerInterface):
                 time.sleep(0.1) #wait for current read to complete
 
             self._burn_and_log_exception(self.nidaq_config.clock_task.stop)
-            #self._burn_and_log_exception(self.nidaq_config.counter_task.stop) #will need to stop task if we move to continuous buffered acquisition
+            if self.sampling_mode == nidaqmx.constants.AcquisitionType.CONTINUOUS:
+                self._burn_and_log_exception(self.nidaq_config.counter_task.stop) #will need to stop task if we move to continuous buffered acquisition
             self._burn_and_log_exception(self.nidaq_config.clock_task.close) #close the task to free resource on NIDAQ
             self._burn_and_log_exception(self.nidaq_config.counter_task.close)
 
