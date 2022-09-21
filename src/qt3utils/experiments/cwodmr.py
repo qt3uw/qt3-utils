@@ -19,13 +19,10 @@ def aggregate_data(data_buffer, cwodmr):
 
 class CWODMR:
 
-    def __init__(self, pulser, rfsynth, edge_counter_config,
+    def __init__(self, pulser, rfsynth, ni_daq_sampler,
                        rf_pulser_channel = 'B',
-                       photon_counter_nidaq_terminal = 'PFI12',
                        clock_pulser_channel = 'C',
-                       clock_nidaq_terminal = 'PFI0',
                        trigger_pulser_channel = 'D',
-                       trigger_nidaq_terminal = 'PFI1',
                        freq_low = 2820e6,
                        freq_high = 2920e6,
                        freq_step = 1e6,
@@ -39,17 +36,14 @@ class CWODMR:
         Hardware Settings
             pulser - a qcsapphire.Pulser object (future: support for PulseBlaster)
             rfsynth - a qt3rfsynthcontrol.Pulser object
-            edge_counter_config - a qt3utils.nidaq.config.EdgeCounter object
+            ni_daq_sampler - a qt3utils.datagenerators.NiDaqSampler object
 
             External Pulser Connections
             * rf_pulser_channel output controls a RF switch
             * clock_pulser_channel output provides a clock input to the NI DAQ card
             * trigger_pulser_channel output provides a rising edge trigger for the NI DAQ card
 
-            NI DAQ Connections
-            * photon_counter_nidaq_terminal - terminal connected to TTL pulses that indicate a photon
-            * clock_nidaq_terminal - terminal connected to the clock_pulser_channel
-            * trigger_nidaq_terminal - terminal connected to the trigger_pulser_channel
+
 
         Experimental parameters
 
@@ -93,12 +87,8 @@ class CWODMR:
         self.clock_pulser_channel = clock_pulser_channel
         self.trigger_pulser_channel = trigger_pulser_channel
 
-        self.photon_counter_nidaq_terminal = photon_counter_nidaq_terminal
-        self.clock_nidaq_terminal = clock_nidaq_terminal
-        self.trigger_nidaq_terminal  = trigger_nidaq_terminal
-
         self.clock_period = 200e-9
-        self.edge_counter_config = edge_counter_config
+        self.ni_daq_sampler = ni_daq_sampler
 
     def experimental_conditions(self):
         '''
