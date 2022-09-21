@@ -131,9 +131,9 @@ class EdgeCounter:
         }
 
     def configure_counter_period_measure(self, daq_counter = 'ctr2',
-                                               source_terminal = 'PFI12',
+                                               source_terminal = 'PFI0',
                                                N_samples_to_acquire_or_buffer_size = 1e6,
-                                               clock_terminal = 'PFI0',
+                                               clock_terminal = 'PFI12',
                                                sampling_mode = nidaqmx.constants.AcquisitionType.FINITE,
                                                trigger_terminal = None):
 
