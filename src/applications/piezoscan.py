@@ -404,35 +404,17 @@ class MainTkApplication():
        with open(afile, 'wb') as f_object:
           np.save(f_object, self.model.data)
 
-    def optimize(self, axis):
-        #todo - make a separate thread function for this in
-        #order to disable the buttons and re-anable after the scan
-        #the buttons don't update until the function returns bc of the way tkinter works
-        opt_range = float(self.view.sidepanel.optimize_range_entry.get())
-        opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
-        old_optimized_value = self.optimized_position[axis]
-
-        self.model.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
-
-        self.view.sidepanel.startButton['state'] = 'disabled'
-        self.view.sidepanel.stopButton['state'] = 'disabled'
-        self.view.sidepanel.go_to_z_button['state'] = 'disabled'
-        self.view.sidepanel.gotoButton['state'] = 'disabled'
-        self.view.sidepanel.saveScanButton['state'] = 'disabled'
-
-        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
+    def optimize_thread_function(self, axis, central, range, step_size):
 
         data, axis_vals, opt_pos, coeff = self.model.optimize_position(axis,
-                                                                       old_optimized_value,
-                                                                       opt_range,
-                                                                       opt_step_size)
+                                                                       central,
+                                                                       range,
+                                                                       step_size)
         self.optimized_position[axis] = opt_pos
         self.model.controller.go_to_position(**{axis:opt_pos})
 
         self.view.show_optimization_plot(f'Optimize {axis}',
-                                         old_optimized_value,
+                                         central,
                                          self.optimized_position[axis],
                                          axis_vals,
                                          data,
@@ -450,6 +432,27 @@ class MainTkApplication():
         self.view.sidepanel.optimize_y_button['state'] = 'normal'
         self.view.sidepanel.optimize_z_button['state'] = 'normal'
 
+    def optimize(self, axis):
+
+        opt_range = float(self.view.sidepanel.optimize_range_entry.get())
+        opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
+        old_optimized_value = self.optimized_position[axis]
+
+        self.model.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
+
+        self.view.sidepanel.startButton['state'] = 'disabled'
+        self.view.sidepanel.stopButton['state'] = 'disabled'
+        self.view.sidepanel.go_to_z_button['state'] = 'disabled'
+        self.view.sidepanel.gotoButton['state'] = 'disabled'
+        self.view.sidepanel.saveScanButton['state'] = 'disabled'
+
+        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
+
+        self.optimize_thread = Thread(target=self.optimize_thread_function,
+                                      args = (axis, old_optimized_value, opt_range, opt_step_size))
+        self.optimize_thread.start()
 
     def on_closing(self):
         try:
