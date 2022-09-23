@@ -21,9 +21,9 @@ class CWODMR:
 
     def __init__(self, pulser, rfsynth, edge_counter_config,
                        rf_pulser_channel = 'B',
-                       photon_counter_nidaq_terminal = 'PFI12',
+                       photon_counter_nidaq_terminal = 'PFI0',
                        clock_pulser_channel = 'C',
-                       clock_nidaq_terminal = 'PFI0',
+                       clock_nidaq_terminal = 'PFI12',
                        trigger_pulser_channel = 'D',
                        trigger_nidaq_terminal = 'PFI1',
                        freq_low = 2820e6,
