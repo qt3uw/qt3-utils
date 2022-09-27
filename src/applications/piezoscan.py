@@ -345,13 +345,25 @@ class MainTkApplication():
     def stop_scan(self, event = None):
         self.model.stop()
 
-    def scan_thread_function(self):
+    def scan_thread_function(self, xmin, xmax, ymin, ymax, step_size, N):
 
-        while self.model.still_scanning():
-            self.model.scan_x()
-            self.view.scan_view.update(self.model)
-            self.view.canvas.draw()
-            self.model.move_y()
+        self.model.set_scan_range(xmin, xmax, ymin, ymax)
+        self.model.step_size = step_size
+        self.model.set_num_data_samples_per_batch(N)
+
+        try:
+            self.model.reset() #clears the data
+            self.model.start() #starts the DAQ
+            self.model.set_to_starting_position() #moves the stage to starting position
+
+            while self.model.still_scanning():
+                self.model.scan_x()
+                self.view.scan_view.update(self.model)
+                self.view.canvas.draw()
+                self.model.move_y()
+        except nidaqmx.errors.DaqError as e:
+            logger.info(e)
+            logger.info('Check for other applications using resources. If not, you may need to restart the application.')
 
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.go_to_z_button['state'] = 'normal'
@@ -375,52 +387,52 @@ class MainTkApplication():
         #clear the figure
         self.view.scan_view.reset()
 
+        #get the scan settings
         xmin = float(self.view.sidepanel.x_min_entry.get())
         xmax = float(self.view.sidepanel.x_max_entry.get())
         ymin = float(self.view.sidepanel.y_min_entry.get())
         ymax = float(self.view.sidepanel.y_max_entry.get())
 
-        #might need a way to refresh the figure to handle mutliple scans / zooming
-        #especially if the x/y range is changed.
-        #https://stackoverflow.com/questions/41458139/refresh-matplotlib-figure-in-a-tkinter-app
+        args = [xmin, xmax, ymin, ymax]
+        args.append(float(self.view.sidepanel.step_size_entry.get()))
+        args.append(int(self.view.sidepanel.n_sample_size_value.get()))
 
-        self.model.set_scan_range(xmin, xmax, ymin, ymax)
-        self.model.step_size = float(self.view.sidepanel.step_size_entry.get())
-        self.model.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
-
-        self.model.reset() #clears the data
-        self.model.start() #starts the DAQ
-        self.model.set_to_starting_position() #moves the stage to starting position
-
-        self.scan_thread = Thread(target=self.scan_thread_function)
+        self.scan_thread = Thread(target=self.scan_thread_function,
+                                  args = args)
         self.scan_thread.start()
 
     def save_scan(self, event = None):
-       myformats = [('Numpy Array', '*.npy')]
-       afile = tk.filedialog.asksaveasfilename(filetypes = myformats, defaultextension = '.npy')
-       logger.info(afile)
-       if afile is None or afile == '':
+        myformats = [('Numpy Array', '*.npy')]
+        afile = tk.filedialog.asksaveasfilename(filetypes = myformats, defaultextension = '.npy')
+        logger.info(afile)
+        if afile is None or afile == '':
            return #selection was canceled.
-       with open(afile, 'wb') as f_object:
+        with open(afile, 'wb') as f_object:
           np.save(f_object, self.model.data)
+
+        self.view.sidepanel.saveScanButton['state'] = 'normal'
 
     def optimize_thread_function(self, axis, central, range, step_size):
 
-        data, axis_vals, opt_pos, coeff = self.model.optimize_position(axis,
-                                                                       central,
-                                                                       range,
-                                                                       step_size)
-        self.optimized_position[axis] = opt_pos
-        self.model.controller.go_to_position(**{axis:opt_pos})
+        try:
+            data, axis_vals, opt_pos, coeff = self.model.optimize_position(axis,
+                                                                           central,
+                                                                           range,
+                                                                           step_size)
+            self.optimized_position[axis] = opt_pos
+            self.model.controller.go_to_position(**{axis:opt_pos})
+            self.view.show_optimization_plot(f'Optimize {axis}',
+                                             central,
+                                             self.optimized_position[axis],
+                                             axis_vals,
+                                             data,
+                                             coeff)
+            self.view.sidepanel.update_go_to_position(**{axis:self.optimized_position[axis]})
 
-        self.view.show_optimization_plot(f'Optimize {axis}',
-                                         central,
-                                         self.optimized_position[axis],
-                                         axis_vals,
-                                         data,
-                                         coeff)
+        except nidaqmx.errors.DaqError as e:
+            logger.info(e)
+            logger.info('Check for other applications using resources. If not, you may need to restart the application.')
 
-        self.view.sidepanel.update_go_to_position(**{axis:self.optimized_position[axis]})
 
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.stopButton['state'] = 'normal'
