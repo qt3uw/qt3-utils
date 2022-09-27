@@ -21,6 +21,7 @@ class BasePiezoScanner(abc.ABC):
         self.xmin = 0.0
         self.xmax = 80.0
         self.step_size = 0.5
+        self.raster_line_pause = 0.0
 
         self.data = []
         self.controller = controller
@@ -87,6 +88,8 @@ class BasePiezoScanner(abc.ABC):
 
     def scan_axis(self, axis, min, max, step_size):
         scan = []
+        self.controller.go_to_position(**{axis:min})
+        time.sleep(self.raster_line_pause)
         for val in np.arange(min, max, step_size):
             if self.controller:
                 logger.info(f'go to position {axis}: {val:.2f}')
@@ -156,6 +159,7 @@ class NiDaqPiezoScanner(BasePiezoScanner):
     def __init__(self, nidaqsampler, controller):
         super().__init__(controller)
         self.nidaqsampler = nidaqsampler
+        self.raster_line_pause = 0.150  #wait 150ms for the piezo stage to settle before a line scan
 
     def set_num_data_samples_per_batch(self, N):
         self.nidaqsampler.num_data_samples_per_batch = N
