@@ -183,7 +183,8 @@ class PulsedODMR:
         self.pulser.system.period(self.clock_period)
 
         on_count_aom_channel = 1
-        off_count_aom_channel = np.round(self.full_cycle_width/self.clock_period,8).astype(int) - on_count_aom_channel
+        half_cycle_width = self.full_cycle_width / 2
+        off_count_aom_channel = np.round(half_cycle_width/self.clock_period,8).astype(int) - on_count_aom_channel
         channel = self.pulser.channel(self.aom_pulser_channel)
         channel.mode('dcycle')
         channel.width(self.aom_width)
@@ -205,9 +206,9 @@ class PulsedODMR:
 
         delay_rf_channel = np.round(delay_rf_channel,8)
         self.delay_rf_channel = delay_rf_channel #retain value for analysis
-        
+
         on_count_rf_channel = 1
-        off_count_rf_channel = np.round(2*self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
+        off_count_rf_channel = np.round(self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
         channel = self.pulser.channel(self.rf_pulser_channel)
         channel.mode('dcycle')
         channel.width(rf_width)
@@ -225,7 +226,7 @@ class PulsedODMR:
         channel.width(np.round(self.trigger_width,8))
         channel.delay(0)
         channel.pcounter(1)
-        channel.ocounter(np.round(2*self.full_cycle_width/self.clock_period).astype(int) - 1)
+        channel.ocounter(np.round(self.full_cycle_width/self.clock_period).astype(int) - 1)
 
         self.pulser.channel(self.aom_pulser_channel).state(1)
         self.pulser.channel(self.rf_pulser_channel).state(1)
