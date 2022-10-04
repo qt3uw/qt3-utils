@@ -361,6 +361,9 @@ class MainTkApplication():
                 self.view.scan_view.update(self.model)
                 self.view.canvas.draw()
                 self.model.move_y()
+
+            self.model.stop()
+
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
