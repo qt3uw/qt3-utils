@@ -23,9 +23,9 @@ class Rabi:
     def __init__(self, pulser, rfsynth, edge_counter_config,
                        aom_pulser_channel = 'A',
                        rf_pulser_channel = 'B',
-                       photon_counter_nidaq_terminal = 'PFI12',
+                       photon_counter_nidaq_terminal = 'PFI0',
                        clock_pulser_channel = 'C',
-                       clock_nidaq_terminal = 'PFI0',
+                       clock_nidaq_terminal = 'PFI12',
                        trigger_pulser_channel = 'D',
                        trigger_nidaq_terminal = 'PFI1',
                        rf_width_low = 100e-9,
@@ -38,7 +38,7 @@ class Rabi:
                        rf_response_time = 200e-9,
                        pre_rf_pad = 100e-9,
                        post_rf_pad = 100e-9,
-                       full_cycle_width = 20e-6,
+                       full_cycle_width = 30e-6,
                        rfsynth_channel = 0,
                        rf_pulse_justify = 'center',
                        t1_measurement = False):
@@ -146,6 +146,7 @@ class Rabi:
             'rf_response_time':self.rf_response_time,
             'post_rf_pad':self.post_rf_pad,
             'pre_rf_pad':self.pre_rf_pad,
+            'rf_pulse_justify': self.rf_pulse_justify,
             'full_cycle_width':self.full_cycle_width,
             'clock_period':self.clock_period
         }
@@ -188,7 +189,8 @@ class Rabi:
         self.pulser.system.period(self.clock_period)
 
         on_count_aom_channel = 1
-        off_count_aom_channel = np.round(self.full_cycle_width/self.clock_period,8).astype(int) - on_count_aom_channel
+        half_cycle_width = self.full_cycle_width / 2
+        off_count_aom_channel = np.round(half_cycle_width/self.clock_period,8).astype(int) - on_count_aom_channel
         channel = self.pulser.channel(self.aom_pulser_channel)
         channel.mode('dcycle')
         channel.width(self.aom_width)
@@ -198,17 +200,17 @@ class Rabi:
         rf_width = np.round(rf_width,8)
 
         if self.rf_pulse_justify == 'center':
-            delay_rf_channel = self.aom_width + (self.full_cycle_width - self.aom_width)/2 - rf_width/2 - self.rf_response_time
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - rf_width/2 - self.rf_response_time
         if self.rf_pulse_justify == 'left':
             delay_rf_channel = self.aom_width + self.aom_response_time + self.pre_rf_pad - self.rf_response_time
         if self.rf_pulse_justify == 'right':
-            delay_rf_channel = self.full_cycle_width - self.post_rf_pad - rf_width - self.rf_response_time + self.aom_response_time
+            delay_rf_channel = half_cycle_width - self.post_rf_pad - rf_width - self.rf_response_time + self.aom_response_time
 
         #todo: check to be sure the RF pulse is fully outside of the aom response + pad time, raise exception if violated
 
         delay_rf_channel = np.round(delay_rf_channel,8)
         on_count_rf_channel = 1
-        off_count_rf_channel = np.round(2*self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
+        off_count_rf_channel = np.round(self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
         channel = self.pulser.channel(self.rf_pulser_channel)
         channel.mode('dcycle')
         channel.width(rf_width)
