@@ -194,13 +194,13 @@ class PulsedODMR:
         rf_width = np.round(rf_width,8)
 
         if self.rf_pulse_justify == 'center':
-            delay_rf_channel = self.aom_width + (self.full_cycle_width - self.aom_width)/2 - rf_width/2 - self.rf_response_time
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - rf_width/2 - self.rf_response_time
         if self.rf_pulse_justify == 'start_center':
-            delay_rf_channel = self.full_cycle_width/2 - self.rf_response_time
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_response_time
         if self.rf_pulse_justify == 'left':
             delay_rf_channel = self.aom_width + self.aom_response_time + self.pre_rf_pad - self.rf_response_time
         if self.rf_pulse_justify == 'right':
-            delay_rf_channel = self.full_cycle_width - self.post_rf_pad - rf_width - self.rf_response_time + self.aom_response_time
+            delay_rf_channel = half_cycle_width - self.post_rf_pad - rf_width - self.rf_response_time + self.aom_response_time
 
         #todo: check to be sure the RF pulse is fully outside of the aom response + pad time, raise exception if violated
 
