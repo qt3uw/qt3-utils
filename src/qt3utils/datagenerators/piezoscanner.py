@@ -156,11 +156,12 @@ class BasePiezoScanner(abc.ABC):
         return data, axis_vals, optimal_position, coeff
 
 class NiDaqPiezoScanner(BasePiezoScanner):
-    def __init__(self, nidaqsampler, controller):
+    def __init__(self, nidaqsampler, controller, num_data_samples_per_batch = 50):
         super().__init__(controller)
         self.nidaqsampler = nidaqsampler
         self.raster_line_pause = 0.150  #wait 150ms for the piezo stage to settle before a line scan
-
+        self.set_num_data_samples_per_batch(num_data_samples_per_batch)
+        
     def set_num_data_samples_per_batch(self, N):
         self.nidaqsampler.num_data_samples_per_batch = N
 

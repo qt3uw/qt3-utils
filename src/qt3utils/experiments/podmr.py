@@ -22,9 +22,9 @@ class PulsedODMR:
     def __init__(self, pulser, rfsynth, edge_counter_config,
                        aom_pulser_channel = 'A',
                        rf_pulser_channel = 'B',
-                       photon_counter_nidaq_terminal = 'PFI12',
+                       photon_counter_nidaq_terminal = 'PFI0',
                        clock_pulser_channel = 'C',
-                       clock_nidaq_terminal = 'PFI0',
+                       clock_nidaq_terminal = 'PFI12',
                        trigger_pulser_channel = 'D',
                        trigger_nidaq_terminal = 'PFI1',
                        freq_low = 2820e6,
@@ -177,13 +177,14 @@ class PulsedODMR:
             int: N_clock_ticks_per_cycle
 
         '''
-        assert self.rf_pulse_justify in ['left', 'center', 'right']
+        assert self.rf_pulse_justify in ['left', 'center', 'right', 'start_center']
 
         self.reset_pulser() # based on experience, we have to do this in order for the system to behave correctly... :(
         self.pulser.system.period(self.clock_period)
 
         on_count_aom_channel = 1
-        off_count_aom_channel = np.round(self.full_cycle_width/self.clock_period,8).astype(int) - on_count_aom_channel
+        half_cycle_width = self.full_cycle_width / 2
+        off_count_aom_channel = np.round(half_cycle_width/self.clock_period,8).astype(int) - on_count_aom_channel
         channel = self.pulser.channel(self.aom_pulser_channel)
         channel.mode('dcycle')
         channel.width(self.aom_width)
@@ -193,17 +194,21 @@ class PulsedODMR:
         rf_width = np.round(rf_width,8)
 
         if self.rf_pulse_justify == 'center':
-            delay_rf_channel = self.aom_width + (self.full_cycle_width - self.aom_width)/2 - rf_width/2 - self.rf_response_time
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - rf_width/2 - self.rf_response_time
+        if self.rf_pulse_justify == 'start_center':
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_response_time
         if self.rf_pulse_justify == 'left':
             delay_rf_channel = self.aom_width + self.aom_response_time + self.pre_rf_pad - self.rf_response_time
         if self.rf_pulse_justify == 'right':
-            delay_rf_channel = self.full_cycle_width - self.post_rf_pad - rf_width - self.rf_response_time + self.aom_response_time
+            delay_rf_channel = half_cycle_width - self.post_rf_pad - rf_width - self.rf_response_time + self.aom_response_time
 
         #todo: check to be sure the RF pulse is fully outside of the aom response + pad time, raise exception if violated
 
         delay_rf_channel = np.round(delay_rf_channel,8)
+        self.delay_rf_channel = delay_rf_channel #retain value for analysis
+
         on_count_rf_channel = 1
-        off_count_rf_channel = np.round(2*self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
+        off_count_rf_channel = np.round(self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
         channel = self.pulser.channel(self.rf_pulser_channel)
         channel.mode('dcycle')
         channel.width(rf_width)
@@ -221,7 +226,7 @@ class PulsedODMR:
         channel.width(np.round(self.trigger_width,8))
         channel.delay(0)
         channel.pcounter(1)
-        channel.ocounter(np.round(2*self.full_cycle_width/self.clock_period).astype(int) - 1)
+        channel.ocounter(np.round(self.full_cycle_width/self.clock_period).astype(int) - 1)
 
         self.pulser.channel(self.aom_pulser_channel).state(1)
         self.pulser.channel(self.rf_pulser_channel).state(1)
