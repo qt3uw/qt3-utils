@@ -282,8 +282,8 @@ class MainTkApplication():
     def __init__(self, data_model):
         self.root = tk.Tk()
         self.model = data_model
-        scan_range = [data_model.controller.minimum_allowed_position,
-                      data_model.controller.maximum_allowed_position]
+        scan_range = [data_model.stage_controller.minimum_allowed_position,
+                      data_model.stage_controller.maximum_allowed_position]
         self.view = MainApplicationView(self.root, scan_range)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
         self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
@@ -301,8 +301,8 @@ class MainTkApplication():
         self.scan_thread = None
 
         self.optimized_position = {'x':0, 'y':0, 'z':-1}
-        if self.model.controller:
-            self.optimized_position['z'] = self.model.controller.get_current_position()[2]
+        if self.model.stage_controller:
+            self.optimized_position['z'] = self.model.stage_controller.get_current_position()[2]
         else:
             self.optimized_position['z'] = 20
         self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'],4))
@@ -314,18 +314,18 @@ class MainTkApplication():
         self.root.mainloop()
 
     def go_to_position(self, event = None):
-        if self.model.controller:
-            self.model.controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
+        if self.model.stage_controller:
+            self.model.stage_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
         else:
-            print(f'controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
+            print(f'stage_controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
         self.optimized_position['x'] = self.view.sidepanel.go_to_x_position_text.get()
         self.optimized_position['y'] = self.view.sidepanel.go_to_y_position_text.get()
 
     def go_to_z(self, event = None):
-        if self.model.controller:
-            self.model.controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
+        if self.model.stage_controller:
+            self.model.stage_controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
         else:
-            print(f'controller would have moved to z = {self.view.sidepanel.z_entry_text.get():.2f}')
+            print(f'stage_controller would have moved to z = {self.view.sidepanel.z_entry_text.get():.2f}')
         self.optimized_position['z'] = self.view.sidepanel.z_entry_text.get()
 
     def set_color_map(self, event = None):
@@ -423,7 +423,7 @@ class MainTkApplication():
                                                                            range,
                                                                            step_size)
             self.optimized_position[axis] = opt_pos
-            self.model.controller.go_to_position(**{axis:opt_pos})
+            self.model.stage_controller.go_to_position(**{axis:opt_pos})
             self.view.show_optimization_plot(f'Optimize {axis}',
                                              central,
                                              self.optimized_position[axis],
@@ -480,10 +480,10 @@ class MainTkApplication():
 
 def build_data_scanner():
     if args.randomtest:
-        controller = nipiezojenapy.BaseControl()
-        scanner = datasources.RandomPiezoScanner(controller=controller)
+        stage_controller = nipiezojenapy.BaseControl()
+        scanner = datasources.RandomPiezoScanner(stage_controller=stage_controller)
     else:
-        controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
+        stage_controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
                                   write_channels = args.piezo_write_channels.split(','),
                                   read_channels = args.piezo_read_channels.split(','))
 
@@ -495,7 +495,7 @@ def build_data_scanner():
                                                             args.rwtimeout,
                                                             args.signal_counter)
 
-        scanner = datasources.NiDaqPiezoScanner(data_acq, controller)
+        scanner = datasources.NiDaqPiezoScanner(data_acq, stage_controller)
 
     return scanner
 
