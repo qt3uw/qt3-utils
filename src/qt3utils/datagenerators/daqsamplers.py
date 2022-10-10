@@ -8,7 +8,7 @@ import qt3utils.nidaq
 
 logger = logging.getLogger(__name__)
 
-class SamplerInterface:
+class RateCounterInterface:
     def stop(self):
         pass
 
@@ -27,7 +27,7 @@ class SamplerInterface:
         pass
 
 
-class RandomSampler(SamplerInterface):
+class RandomRateCounter(RateCounterInterface):
 
     '''
     This random source acts like a light source with variable intensity.
@@ -69,7 +69,7 @@ class RandomSampler(SamplerInterface):
             yield np.mean(self.sample_count_rate())
 
 
-class NiDaqSampler(SamplerInterface):
+class NiDaqDigitalInputRateCounter(RateCounterInterface):
 
     def __init__(self, daq_name = 'Dev1',
                        signal_terminal = 'PFI0',
