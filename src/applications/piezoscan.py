@@ -487,13 +487,13 @@ def build_data_scanner():
                                   write_channels = args.piezo_write_channels.split(','),
                                   read_channels = args.piezo_read_channels.split(','))
 
-        data_acq = datasources.NiDaqSampler(args.daq_name,
-                             args.signal_terminal,
-                             args.clock_rate,
-                             args.num_data_samples_per_batch,
-                             args.clock_terminal,
-                             args.rwtimeout,
-                             args.signal_counter)
+        data_acq = datasources.NiDaqDigitalInputRateCounter(args.daq_name,
+                                                            args.signal_terminal,
+                                                            args.clock_rate,
+                                                            args.num_data_samples_per_batch,
+                                                            args.clock_terminal,
+                                                            args.rwtimeout,
+                                                            args.signal_counter)
 
         scanner = datasources.NiDaqPiezoScanner(data_acq, controller)
 
