@@ -1,3 +1,3 @@
-from .daqsamplers import RandomSampler
-from .daqsamplers import NiDaqSampler
+from .daqsamplers import RandomRateCounter
+from .daqsamplers import NiDaqDigitalInputRateCounter
 from .piezoscanner import NiDaqPiezoScanner, RandomPiezoScanner
