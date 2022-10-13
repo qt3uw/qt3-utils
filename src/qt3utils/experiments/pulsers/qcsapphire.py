@@ -136,12 +136,12 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
                        clock_period = 200e-9,
                        trigger_width = 500e-9,
                        rf_width = 5e-6,
-                       aom_width = 3e-6,
+                       aom_width = 5e-6,
                        aom_response_time = 800e-9,
                        rf_response_time = 200e-9,
                        pre_rf_pad = 100e-9,
                        post_rf_pad = 100e-9,
-                       full_cycle_width = 20e-6,
+                       full_cycle_width = 30e-6,
                        rf_pulse_justify = 'center'):
         """
         qcsapphire_pulser_controller - a qcsapphire.Pulser object
