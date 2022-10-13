@@ -150,7 +150,7 @@ class Rabi:
 
         #first check that the pulser width is large enough
         try:
-            self.pulser.check_pulse_width(self.rf_width_high)
+            self.pulser.raise_for_pulse_width(self.rf_width_high)
             #quesiton: should we automatically increase the pulser width or force the user to do it?
         except PulseTrainWidthError as e:
             logger.error(f'The largest requested RF width pulse, self.rf_width_high = {self.rf_width_high}, is too large.')

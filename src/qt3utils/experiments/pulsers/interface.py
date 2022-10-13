@@ -9,5 +9,5 @@ class ExperimentPulser:
         pass
     def experimental_conditions(self):
         pass
-    def check_pulse_width(self, *args, **kwargs):
+    def raise_for_pulse_width(self, *args, **kwargs):
         pass
