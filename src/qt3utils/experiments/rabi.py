@@ -29,7 +29,8 @@ class Rabi:
                        rf_width_high = 10e-6,
                        rf_width_step = 50e-9,
                        rf_power = -20,
-                       rf_frequency = 2870e6):
+                       rf_frequency = 2870e6,
+                       rfsynth_channel = 0):
         '''
         The input parameters to this object specify the conditions
         of an experiment and the hardware system setup.
@@ -180,7 +181,7 @@ class Rabi:
                 # compute the total number of samples to be acquired and the DAQ time
                 # these will be the same for each RF frequency through the scan
                 self.N_clock_ticks_per_frequency = int(self.N_clock_ticks_per_cycle * self.N_cycles)
-                self.daq_time = self.N_clock_ticks_per_frequency * self.clock_period
+                self.daq_time = self.N_clock_ticks_per_frequency * self.pulser.clock_period
                 logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} total samples')
                 logger.debug(f'  sample period of {self.pulser.clock_period} seconds')
                 logger.debug(f'  acquisition time of {self.daq_time} seconds')
