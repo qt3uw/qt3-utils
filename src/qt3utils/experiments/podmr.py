@@ -19,40 +19,24 @@ def aggregate_data(data_buffer, experiment):
 
 class PulsedODMR:
 
-    def __init__(self, pulser, rfsynth, edge_counter_config,
-                       aom_pulser_channel = 'A',
-                       rf_pulser_channel = 'B',
+    def __init__(self, podmr_pulser, rfsynth, edge_counter_config,
                        photon_counter_nidaq_terminal = 'PFI0',
-                       clock_pulser_channel = 'C',
                        clock_nidaq_terminal = 'PFI12',
-                       trigger_pulser_channel = 'D',
                        trigger_nidaq_terminal = 'PFI1',
                        freq_low = 2820e6,
                        freq_high = 2920e6,
                        freq_step = 1e6,
                        rf_power = -20,
-                       rf_width = 5e-6,
-                       aom_width = 3e-6,
-                       aom_response_time = 800e-9,
-                       rf_response_time = 200e-9,
-                       pre_rf_pad = 100e-9,
-                       post_rf_pad = 100e-9,
-                       full_cycle_width = 20e-6,
-                       rf_pulse_justify = 'center',
                        rfsynth_channel = 0):
         '''
         The input parameters to this object specify the conditions
         of an experiment and the hardware system setup.
 
         Hardware Settings
-            pulser - a qcsapphire.Pulser object (future: support for PulseBlaster)
+            podmr_pulser - a qt3utils.experiments.pulsers.interface.ODMRPulser object (such as qt3utils.experiments.pulsers.qcsapphire.QCSapphPulsedODMRPulser)
             rfsynth - a qt3rfsynthcontrol.Pulser object
+            The rfsynth_channel specifies which output channel from the Windfreak RF SynthHD is used to provde the RF signal (either 0 or 1)
             edge_counter_config - a qt3utils.nidaq.config.EdgeCounter object
-
-            External Pulser Connections
-            * rf_pulser_channel output controls a RF switch
-            * clock_pulser_channel output provides a clock input to the NI DAQ card
-            * trigger_pulser_channel output provides a rising edge trigger for the NI DAQ card
 
             NI DAQ Connections
             * photon_counter_nidaq_terminal - terminal connected to TTL pulses that indicate a photon
@@ -64,21 +48,6 @@ class PulsedODMR:
             The frequency parameters define the range and step size of the scan.
                 The scan is inclusive of freq_low and freq_high.
             The rf_power specifices the power of the MW source in units of dB mWatt.
-
-        Ancillary parameters
-
-            The rf_width specifies the amount of time the RF / MW signal is on
-            during each data acquisition cycle.  For Pulsed ODMR, this should be
-            equal to a pi-pulse, as estimated via Rabi experiment.
-
-            A cycle is one full sequence
-            of the pulse train used in the experiment. For PulsedODMR, a cycle is
-            {AOM on, AOM off/RF on, AOM on, AOM off/RF off}.
-
-            The rfsynth_channel specifies which output channel from the Windfreak
-            RF SynthHD is used to provde the RF signal (either 0 or 1)
-
-
 
         The user is responsible for analyzing the data. However, during acquisition,
         a callback function can be supplied in order to perform an analysis
@@ -93,37 +62,18 @@ class PulsedODMR:
         self.freq_high = freq_high
         self.freq_step = freq_step
         self.rf_power = rf_power
-        self.rf_width = rf_width
 
-        self.aom_width = np.round(aom_width, 9)
-        self.aom_response_time = np.round(aom_response_time, 9)
-        self.post_rf_pad = np.round(post_rf_pad, 9)
-        self.pre_rf_pad = np.round(pre_rf_pad, 9)
-
-        self.pulser = pulser
-        #assert (type(self.pulser) = qcsapphire.Pulser) or (type(self.pulser) = pulseblaster.Pulser)
-        self.aom_width = np.round(aom_width, 8)
-        self.aom_response_time = np.round(aom_response_time, 8)
-        self.rf_response_time = np.round(rf_response_time, 8)
-        self.post_rf_pad = np.round(post_rf_pad, 8)
-        self.pre_rf_pad = np.round(pre_rf_pad, 8)
-        self.full_cycle_width = np.round(full_cycle_width, 8)
-        self.rf_pulse_justify = rf_pulse_justify
+        self.pulser = podmr_pulser
+        #assert (type(self.pulser) = qt3utils.experiments.pulsers.interface.ODMRPulser
 
         self.rfsynth = rfsynth
         self.rfsynth_channel = rfsynth_channel
         #assert(type(self.rfsynth) = qt3rfsynthcontrol.QT3SynthHD)
-        self.aom_pulser_channel = aom_pulser_channel
-        self.rf_pulser_channel = rf_pulser_channel
-        self.clock_pulser_channel = clock_pulser_channel
-        self.trigger_pulser_channel = trigger_pulser_channel
 
         self.photon_counter_nidaq_terminal = photon_counter_nidaq_terminal
         self.clock_nidaq_terminal = clock_nidaq_terminal
         self.trigger_nidaq_terminal  = trigger_nidaq_terminal
 
-        self.clock_period = 200e-9
-        self.trigger_width = 500e-9
         self.edge_counter_config = edge_counter_config
 
     def experimental_conditions(self):
@@ -135,241 +85,8 @@ class PulsedODMR:
             'freq_high':self.freq_high,
             'freq_step':self.freq_step,
             'rf_power':self.rf_power,
-            'rf_width':self.rf_width,
-            'aom_width':self.aom_width,
-            'aom_response_time':self.aom_response_time,
-            'post_rf_pad':self.post_rf_pad,
-            'pre_rf_pad':self.pre_rf_pad,
-            'full_cycle_width':self.full_cycle_width,
-            'rf_pulse_justify':self.rf_pulse_justify,
-            'clock_period':self.clock_period
+            'pulser':self.pulser.experimental_conditions()
         }
-
-    def reset_pulser(self, num_resets = 2):
-
-        # the QC Sapphire can enter weird states sometimes.
-        # Observation shows that multiple resets, followed by some delay
-        # results in a steady state for the pulser
-        for i in range(num_resets):
-            self.pulser.set_all_state_off()
-            time.sleep(1)
-        self.pulser.query('*RST')
-        self.pulser.system.mode('normal')
-
-    def set_pulser_state(self, rf_width):
-        '''
-        Sets the pulser to generate a signals on all channels -- AOM channel,
-        RF channel, clock channel and trigger channel.
-
-        Allows the user to set a different rf_width after object instantiation.
-
-        This method is used during the data aquisition phase (see self.run()),
-        but is also "public" to allow the user to setup the pulser and observe
-        the output signals before starting acquisition.
-
-        Note that the pulser will be in the OFF state after calling this function.
-        Call pulser.system.state(1) for the QCSapphire to start the pulser.
-
-        A cycle is one full sequence of the pulse train used in the experiment.
-        For Rabi, a cycle is {AOM on, AOM off/RF on, AOM on, AOM off/RF off}.
-
-        returns
-            int: N_clock_ticks_per_cycle
-
-        '''
-        assert self.rf_pulse_justify in ['left', 'center', 'right', 'start_center']
-
-        self.reset_pulser() # based on experience, we have to do this in order for the system to behave correctly... :(
-        self.pulser.system.period(self.clock_period)
-
-        on_count_aom_channel = 1
-        half_cycle_width = self.full_cycle_width / 2
-        off_count_aom_channel = np.round(half_cycle_width/self.clock_period,8).astype(int) - on_count_aom_channel
-        channel = self.pulser.channel(self.aom_pulser_channel)
-        channel.mode('dcycle')
-        channel.width(self.aom_width)
-        channel.pcounter(on_count_aom_channel)
-        channel.ocounter(off_count_aom_channel)
-
-        rf_width = np.round(rf_width,8)
-
-        if self.rf_pulse_justify == 'center':
-            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - rf_width/2 - self.rf_response_time
-        if self.rf_pulse_justify == 'start_center':
-            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_response_time
-        if self.rf_pulse_justify == 'left':
-            delay_rf_channel = self.aom_width + self.aom_response_time + self.pre_rf_pad - self.rf_response_time
-        if self.rf_pulse_justify == 'right':
-            delay_rf_channel = half_cycle_width - self.post_rf_pad - rf_width - self.rf_response_time + self.aom_response_time
-
-        #todo: check to be sure the RF pulse is fully outside of the aom response + pad time, raise exception if violated
-
-        delay_rf_channel = np.round(delay_rf_channel,8)
-        self.delay_rf_channel = delay_rf_channel #retain value for analysis
-
-        on_count_rf_channel = 1
-        off_count_rf_channel = np.round(self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
-        channel = self.pulser.channel(self.rf_pulser_channel)
-        channel.mode('dcycle')
-        channel.width(rf_width)
-        channel.delay(delay_rf_channel)
-        channel.pcounter(on_count_rf_channel)
-        channel.ocounter(off_count_rf_channel)
-
-        channel = self.pulser.channel(self.clock_pulser_channel)
-        channel.mode('normal')
-        channel.width(np.round(self.clock_period/2, 8))
-        channel.delay(0)
-
-        channel = self.pulser.channel(self.trigger_pulser_channel)
-        channel.mode('dcycle')
-        channel.width(np.round(self.trigger_width,8))
-        channel.delay(0)
-        channel.pcounter(1)
-        channel.ocounter(np.round(self.full_cycle_width/self.clock_period).astype(int) - 1)
-
-        self.pulser.channel(self.aom_pulser_channel).state(1)
-        self.pulser.channel(self.rf_pulser_channel).state(1)
-        self.pulser.channel(self.clock_pulser_channel).state(1)
-        self.pulser.channel(self.trigger_pulser_channel).state(1)
-
-        return np.round(self.full_cycle_width / self.clock_period).astype(int)
-
-    def set_pulser_state_old(self, rf_width):
-        '''
-        Sets the pulser to generate a signals on all channels -- RF channel,
-        clock channel and trigger channel.
-
-        Allows the user to set a different rf_width after object instantiation.
-
-        This method is used during the data aquisition phase (see self.run()),
-        but it "public" to allow the user to setup the pulser and observe
-        the output signals before starting acquisition.
-
-        Note that the pulser will be in the OFF state after calling this function.
-        Call pulser.system.state(1) for the QCSapphire to start the pulser.
-
-        A cycle is one full sequence of the pulse train used in the experiment.
-        For CWODMR, a cycle is {RF on for rf_width time, RF off for rf_width time}.
-
-        returns
-            int: N_clock_ticks_per_cycle
-
-        '''
-        rf_width = np.round(rf_width, 9)
-
-        # assert np.isclose(rf_width % self.clock_period, 0)
-        # assert np.isclose(self.aom_width % self.clock_period, 0)
-        # fails in some cases due to machine errors... TODO fix this
-
-        # assert rf_width >= self.clock_period
-        # assert self.aom_width >= self.clock_period
-
-
-        clock_width = self.clock_period / 2
-        aom_dc_on = int(self.aom_width / self.clock_period)
-        rf_dc_on = int(rf_width / self.clock_period)
-        aom_delay = 0
-        rf_post_pad = int(self.post_rf_pad / self.clock_period)
-        N_clock_ticks_per_cycle = 2*aom_dc_on + 2*rf_dc_on + 2*rf_post_pad
-        rf_delay = self.aom_width + self.aom_response_time + self.pre_rf_pad
-
-        rf_dc_off = N_clock_ticks_per_cycle - rf_dc_on
-        rf_wait_count = 0
-        aom_wait_count = 0
-        aom_dc_off = rf_dc_on + rf_post_pad
-
-        self._setup_qcsapphire_pulser(  self.clock_period,
-                                        self.aom_pulser_channel,
-                                        self.aom_width,
-                                        aom_delay,
-                                        aom_dc_on,
-                                        aom_dc_off,
-                                        aom_wait_count,
-                                        self.rf_pulser_channel,
-                                        rf_width ,
-                                        rf_delay,
-                                        rf_dc_on,
-                                        rf_dc_off,
-                                        rf_wait_count,
-                                        self.clock_pulser_channel,
-                                        clock_width,
-                                        self.trigger_pulser_channel,
-                                        clock_width)
-
-        return int(N_clock_ticks_per_cycle)
-
-
-    def _setup_qcsapphire_pulser(self, period = 200e-9,
-                                      aom_channel = 'A',
-                                      aom_width = 1e-6,
-                                      aom_delay = 0,
-                                      aom_dc_on = 5,
-                                      aom_dc_off = 2,
-                                      aom_wait_count = 0,
-                                      rf_channel = 'B',
-                                      rf_width = 400e-9,
-                                      rf_delay = 1000e-9,
-                                      rf_dc_on = 1,
-                                      rf_dc_off = 13,
-                                      rf_wait_count = 0,
-                                      clock_channel = 'C',
-                                      clock_width = 100e-9,
-                                      trigger_channel = 'D',
-                                      trigger_width = 1e-6):
-
-        self.pulser.query('*RCL 0') #restores system default
-        self.pulser.system.period(period)
-        self.pulser.system.mode('normal')
-
-        # force inputs not to exceed resolution of pulser
-        # should this be done inside the qcsapphire object?
-        aom_width = np.round(aom_width, 9)
-        aom_delay = np.round(aom_delay, 9)
-        rf_width = np.round(rf_width, 9)
-        rf_delay = np.round(rf_delay, 9)
-        clock_width = np.round(clock_width, 9)
-
-        ch_aom = self.pulser.channel(aom_channel)
-        ch_aom.cmode('dcycle')
-        ch_aom.width(aom_width)
-        ch_aom.delay(aom_delay)
-        ch_aom.output.amplitude(5.0)
-        ch_aom.pcounter(aom_dc_on)
-        ch_aom.ocounter(aom_dc_off)
-        ch_aom.wcounter(aom_wait_count)
-        ch_aom.sync('T0')
-        self.pulser.multiplex([aom_channel], aom_channel)
-        ch_aom.state(1)
-
-        ch_rf = self.pulser.channel(rf_channel)
-        ch_rf.cmode('dcycle')
-        ch_rf.width(rf_width)
-        ch_rf.delay(rf_delay)
-        ch_rf.output.amplitude(5.0)
-        ch_rf.pcounter(rf_dc_on)
-        ch_rf.ocounter(rf_dc_off)
-        ch_rf.wcounter(rf_wait_count)
-        ch_rf.sync('T0')
-        self.pulser.multiplex([rf_channel], rf_channel)
-        ch_rf.state(1)
-
-        ch_clock = self.pulser.channel(clock_channel)
-        ch_clock.width(clock_width)
-        ch_clock.sync('T0')
-        self.pulser.multiplex([clock_channel], clock_channel)
-        ch_clock.state(1)
-
-        ch_trig = self.pulser.channel(trigger_channel)
-        ch_trig.width(trigger_width)
-        ch_trig.cmode('dcycle')
-        ch_trig.pcounter(1)
-        ch_trig.ocounter(2*aom_dc_on + 2*aom_dc_off - 1)
-        ch_trig.wcounter(0)
-        ch_trig.delay(0)
-        ch_trig.sync('T0')
-        self.pulser.multiplex([trigger_channel], trigger_channel)
-        ch_trig.state(1)
 
     def _stop_and_close_daq_tasks(self):
         try:
@@ -382,8 +99,7 @@ class PulsedODMR:
             pass
 
     def run(self, N_cycles = 500000,
-                  post_process_function = aggregate_data,
-                  reverse = False):
+                  post_process_function = aggregate_data):
         '''
         Performs the PulsedODMR scan over the specificed range of frequencies.
 
@@ -398,7 +114,7 @@ class PulsedODMR:
 
         For each frequency, the number of data read from the NI DAQ will be
         N_clock_ticks_per_cycle * N_cycles, where N_clock_ticks_per_cycle
-        is the value returned by self.set_pulser_state(self.rf_width).
+        is the value returned by self.pulser.program_pulser_state().
 
         These data are found in a data_buffer within this method. They
         may be analyzed with a function passed to the argument `post_process_function`,
@@ -422,10 +138,6 @@ class PulsedODMR:
         The remaining (fixed) values for analysis can be obtained from the
         self.experimental_conditions function.
 
-        The 'reverse' option runs the scan in order of high frequency to low.
-        This might be useful for debugging. There was some suspicion that the DAQ configuration
-        contained a delay that caused errors in the data acquisition. Running in
-        reverse would allow one to see the effects.
 
         '''
 
@@ -437,13 +149,13 @@ class PulsedODMR:
         self.rfsynth.rf_on(self.rfsynth_channel)
         time.sleep(1) #wait for RF box to fully turn on
 
-        self.N_clock_ticks_per_cycle = self.set_pulser_state(self.rf_width)
-        self.pulser.system.state(1) #start the pulser
+        self.N_clock_ticks_per_cycle = self.pulser.program_pulser_state()
+        self.pulser.start() #start the pulser
 
         # compute the total number of samples to be acquired and the DAQ time
         # these will be the same for each RF frequency through the scan
         self.N_clock_ticks_per_frequency = int(self.N_clock_ticks_per_cycle * self.N_cycles)
-        self.daq_time = self.N_clock_ticks_per_frequency * self.clock_period
+        self.daq_time = self.N_clock_ticks_per_frequency * self.pulser.clock_period
 
         self.edge_counter_config.configure_counter_period_measure(
             source_terminal = self.photon_counter_nidaq_terminal,
@@ -455,8 +167,6 @@ class PulsedODMR:
 
         data = []
         rf_frequency_list = np.arange(self.freq_low, self.freq_high + self.freq_step, self.freq_step)
-        if reverse:
-            rf_frequency_list = list(reversed(rf_frequency_list))
 
         for rf_freq in rf_frequency_list:
 
@@ -465,7 +175,7 @@ class PulsedODMR:
 
             logger.info(f'RF frequency: {self.current_rf_freq*1e-9} GHz')
             logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} samples')
-            logger.debug(f'   Sample period of {self.clock_period} seconds')
+            logger.debug(f'   Sample period of {self.pulser.clock_period} seconds')
             logger.debug(f'   acquisition time of {self.daq_time} seconds')
 
             data_buffer = np.zeros(self.N_clock_ticks_per_frequency)
