@@ -8,20 +8,22 @@ class QCSapphCWODMRPulser(ODMRPulser):
                        rf_channel = 'B',
                        clock_channel = 'C',
                        trigger_channel = 'D',
+                       rf_width = 5e-6,
                        clock_period = 200e-9,
-                       trigger_width = 300e-9):
+                       trigger_width = 500e-9):
         """
         qcsapphire_pulser_controller - a qcsapphire.Pulser object
         rf_channel output controls a RF switch
         clock_channel output provides a clock input to the NI DAQ card
         trigger_channel output provides a rising edge trigger for the NI DAQ card
         """
+        self.pulser = qcsapphire_pulser_controller
         self.rf_channel = rf_channel
         self.clock_channel = clock_channel
         self.trigger_channel = trigger_channel
-        self.pulser = qcsapphire_pulser_controller
-        self.clock_period = clock_period
-        self.trigger_width = trigger_width
+        self.rf_width = np.round(rf_width, 8)
+        self.clock_period = np.round(clock_period, 8)
+        self.trigger_width = np.round(trigger_width, 8)
 
     def reset_pulser(self, num_resets = 2):
 
@@ -34,9 +36,9 @@ class QCSapphCWODMRPulser(ODMRPulser):
         self.pulser.query('*RST')
         self.pulser.system.mode('normal')
 
-    def set_pulser_state(self, rf_width):
+    def program_pulser_state(self, rf_width = None):
         '''
-        Sets the pulser to generate a signals on all channels --
+        Program the pulser to generate a signals on all channels --
         RF channel, clock channel and trigger channel.
 
         Allows the user to set a different rf_width after object instantiation.
@@ -67,8 +69,8 @@ class QCSapphCWODMRPulser(ODMRPulser):
         clock_channel.delay(0)
 
         #set up the RF pulse
-        rf_width = np.round(rf_width,8)
-        self.rf_width = rf_width
+        if rf_width:
+            self.rf_width = np.round(rf_width,8)
 
         on_count_rf_channel = 1
         #if we support CWODMR setup where RF on duty cycle != 50%, would allow for user
@@ -79,7 +81,7 @@ class QCSapphCWODMRPulser(ODMRPulser):
 
         rf_channel = self.pulser.channel(self.rf_channel)
         rf_channel.mode('dcycle')
-        rf_channel.width(rf_width)
+        rf_channel.width(self.rf_width)
         rf_channel.delay(0)
         rf_channel.pcounter(on_count_rf_channel)
         rf_channel.ocounter(off_count_rf_channel)
@@ -95,6 +97,143 @@ class QCSapphCWODMRPulser(ODMRPulser):
         return np.round(self.full_cycle_width / self.clock_period).astype(int)
 
     def _set_state(self, state = 1):
+        self.pulser.channel(self.rf_channel).state(state)
+        self.pulser.channel(self.clock_channel).state(state)
+        self.pulser.channel(self.trigger_channel).state(state)
+        self.pulser.system.state(state)
+
+    def start(self):
+        self._set_state(1)
+
+    def stop(self):
+        self._set_state(0)
+
+
+class QCSapphPulsedODMRPulser(ODMRPulser):
+
+    def __init__(self, qcsapphire_pulser_controller,
+                       aom_channel = 'A',
+                       rf_channel = 'B',
+                       clock_channel = 'C',
+                       trigger_channel = 'D',
+                       clock_period = 200e-9,
+                       trigger_width = 500e-9,
+                       rf_width = 5e-6,
+                       aom_width = 3e-6,
+                       aom_response_time = 800e-9,
+                       rf_response_time = 200e-9,
+                       pre_rf_pad = 100e-9,
+                       post_rf_pad = 100e-9,
+                       full_cycle_width = 20e-6,
+                       rf_pulse_justify = 'center'):
+        """
+        qcsapphire_pulser_controller - a qcsapphire.Pulser object
+        rf_channel output controls a RF switch
+        clock_channel output provides a clock input to the NI DAQ card
+        trigger_channel output provides a rising edge trigger for the NI DAQ card
+        """
+        self.pulser = qcsapphire_pulser_controller
+        self.aom_channel = aom_channel
+        self.rf_channel = rf_channel
+        self.clock_channel = clock_channel
+        self.trigger_channel = trigger_channel
+
+        self.aom_width = np.round(aom_width, 8)
+        self.rf_width = np.round(rf_width, 8)
+        self.aom_response_time = np.round(aom_response_time, 8)
+        self.rf_response_time = np.round(rf_response_time, 8)
+        self.post_rf_pad = np.round(post_rf_pad, 8)
+        self.pre_rf_pad = np.round(pre_rf_pad, 8)
+        self.full_cycle_width = np.round(full_cycle_width, 8)
+        self.rf_pulse_justify = rf_pulse_justify
+
+        self.clock_period = np.round(clock_period, 8)
+        self.trigger_width = np.round(trigger_width, 8)
+        
+    def reset_pulser(self, num_resets = 2):
+
+        # the QC Sapphire can enter weird states sometimes.
+        # Observation shows that multiple resets, followed by some delay
+        # results in a steady state for the pulser
+        for i in range(num_resets):
+            self.pulser.set_all_state_off()
+            time.sleep(1)
+        self.pulser.query('*RST')
+        self.pulser.system.mode('normal')
+
+    def program_pulser_state(self, rf_width = None):
+        '''
+        Sets the pulser to generate a signals on all channels -- AOM channel,
+        RF channel, clock channel and trigger channel.
+
+        Allows the user to set a different rf_width after object instantiation.
+
+        Note that the pulser will be in the OFF state after calling this function.
+        Call self.start() for the QCSapphire to start the pulser.
+
+        A cycle is one full sequence of the pulse train used in the experiment.
+        For pulsed ODMR, a cycle is {AOM on, AOM off/RF on, AOM on, AOM off/RF off}.
+
+        returns
+            int: N_clock_ticks_per_cycle
+
+        '''
+        assert self.rf_pulse_justify in ['left', 'center', 'right', 'start_center']
+
+        self.reset_pulser() # based on experience, we have to do this in order for the system to behave correctly... :(
+        self.pulser.system.period(self.clock_period)
+
+        on_count_aom_channel = 1
+        half_cycle_width = self.full_cycle_width / 2
+        off_count_aom_channel = np.round(half_cycle_width/self.clock_period,8).astype(int) - on_count_aom_channel
+        channel = self.pulser.channel(self.aom_channel)
+        channel.mode('dcycle')
+        channel.width(self.aom_width)
+        channel.pcounter(on_count_aom_channel)
+        channel.ocounter(off_count_aom_channel)
+
+        if rf_width: #update to a different rf_width
+            self.rf_width = np.round(rf_width,8)
+
+        if self.rf_pulse_justify == 'center':
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_width/2 - self.rf_response_time
+        if self.rf_pulse_justify == 'start_center':
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_response_time
+        if self.rf_pulse_justify == 'left':
+            delay_rf_channel = self.aom_width + self.aom_response_time + self.pre_rf_pad - self.rf_response_time
+        if self.rf_pulse_justify == 'right':
+            delay_rf_channel = half_cycle_width - self.post_rf_pad - self.rf_width - self.rf_response_time + self.aom_response_time
+
+        #todo: check to be sure the RF pulse is fully outside of the aom response + pad time, raise exception if violated
+
+        delay_rf_channel = np.round(delay_rf_channel,8)
+        self.delay_rf_channel = delay_rf_channel #retain value for analysis
+
+        on_count_rf_channel = 1
+        off_count_rf_channel = np.round(self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
+        channel = self.pulser.channel(self.rf_channel)
+        channel.mode('dcycle')
+        channel.width(self.rf_width)
+        channel.delay(delay_rf_channel)
+        channel.pcounter(on_count_rf_channel)
+        channel.ocounter(off_count_rf_channel)
+
+        channel = self.pulser.channel(self.clock_channel)
+        channel.mode('normal')
+        channel.width(np.round(self.clock_period/2, 8))
+        channel.delay(0)
+
+        channel = self.pulser.channel(self.trigger_channel)
+        channel.mode('dcycle')
+        channel.width(np.round(self.trigger_width,8))
+        channel.delay(0)
+        channel.pcounter(1)
+        channel.ocounter(np.round(self.full_cycle_width/self.clock_period).astype(int) - 1)
+
+        return np.round(self.full_cycle_width / self.clock_period).astype(int)
+
+    def _set_state(self, state = 1):
+        self.pulser.channel(self.aom_channel).state(state)
         self.pulser.channel(self.rf_channel).state(state)
         self.pulser.channel(self.clock_channel).state(state)
         self.pulser.channel(self.trigger_channel).state(state)
