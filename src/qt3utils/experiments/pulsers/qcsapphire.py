@@ -35,7 +35,7 @@ class QCSapphCWODMRPulser(ExperimentPulser):
             'clock_period':self.clock_period
         }
 
-    def check_pulse_width(self, rf_width, *args, **kwargs):
+    def raise_for_pulse_width(self, rf_width, *args, **kwargs):
         #there should be a minimum rf_width here, related to minimum clock period.
         pass
 
@@ -84,10 +84,10 @@ class QCSapphCWODMRPulser(ExperimentPulser):
 
         #set up the RF pulse
         if rf_width:
-            self.check_pulse_width(rf_width)
+            self.raise_for_pulse_width(rf_width)
             self.rf_width = np.round(rf_width,8)
         else:
-            self.check_pulse_width(self.rf_width)
+            self.raise_for_pulse_width(self.rf_width)
 
         on_count_rf_channel = 1
         #if we support CWODMR setup where RF on duty cycle != 50%, would allow for user
@@ -193,7 +193,7 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
         self.pulser.query('*RST')
         self.pulser.system.mode('normal')
 
-    def check_pulse_width(self, rf_width):
+    def raise_for_pulse_width(self, rf_width):
         #the following enforces that the full cycle width is large enough
         requested_total_width = self.aom_width
         requested_total_width += self.aom_response_time
@@ -222,10 +222,10 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
 
         '''
         if rf_width: #update to a different rf_width
-            self.check_pulse_width(rf_width)
+            self.raise_for_pulse_width(rf_width)
             self.rf_width = np.round(rf_width,8)
         else:
-            self.check_pulse_width(self.rf_width)
+            self.raise_for_pulse_width(self.rf_width)
 
         assert self.rf_pulse_justify in ['left', 'center', 'right', 'start_center']
         half_cycle_width = self.full_cycle_width / 2
