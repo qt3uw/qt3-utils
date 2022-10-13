@@ -87,8 +87,7 @@ class CWODMR:
             'freq_high':self.freq_high,
             'freq_step':self.freq_step,
             'rf_power':self.rf_power,
-            'pulser.rf_width':self.pulser.rf_width,
-            'pulser.clock_period':self.pulser.clock_period
+            'pulser':self.pulser.experimental_conditions()
         }
 
     def run(self, N_cycles = 500000,
