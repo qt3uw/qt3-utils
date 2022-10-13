@@ -150,7 +150,7 @@ class CWODMR:
         self.rfsynth.rf_on(self.rfsynth_channel)
         time.sleep(0.05) #wait for RF box to fully turn on
 
-        self.N_clock_ticks_per_cycle = self.pulser.set_pulser_state(self.rf_width)
+        self.N_clock_ticks_per_cycle = self.pulser.program_pulser_state(self.rf_width)
         self.pulser.start() #start the pulser
 
         # compute the total number of samples to be acquired and the DAQ time

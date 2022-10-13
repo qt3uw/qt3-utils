@@ -1,7 +1,7 @@
 
 class ODMRPulser:
 
-    def set_pulser_state(self, frequency):
+    def program_pulser_state(self, rf_width):
         pass
     def start(self):
         pass
@@ -10,7 +10,7 @@ class ODMRPulser:
 
 class RabiPulser:
 
-    def set_pulser_state(self, width):
+    def program_pulser_state(self, rf_width):
         pass
     def start(self):
         pass
@@ -19,7 +19,7 @@ class RabiPulser:
 
 class Pulser:
 
-    def set_pulser_state(self, *args, **kwargs):
+    def program_pulser_state(self, *args, **kwargs):
         pass
     def start(self):
         pass
