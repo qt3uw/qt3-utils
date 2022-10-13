@@ -27,7 +27,6 @@ class CWODMR:
                        freq_high = 2920e6,
                        freq_step = 1e6,
                        rf_power = -20,
-                       rf_width = 5e-6,
                        rfsynth_channel = 0):
         '''
         The input parameters to this object specify the conditions
@@ -37,6 +36,7 @@ class CWODMR:
             cwodmr_pulser - a qt3utils.experiments.pulsers.interface.ODMRPulser object (such as qt3utils.experiments.pulsers.qcsapphire.QCSapphCWODMRPulser)
             rfsynth - a qt3rfsynthcontrol.Pulser object
             edge_counter_config - a qt3utils.nidaq.config.EdgeCounter object
+            The rfsynth_channel specifies which output channel from the Windfreak RF SynthHD is used to provde the RF signal (either 0 or 1)
 
             NI DAQ Connections
             * photon_counter_nidaq_terminal - terminal connected to TTL pulses that indicate a photon
@@ -49,15 +49,6 @@ class CWODMR:
                 The scan is inclusive of freq_low and freq_high.
             The rf_power specifices the power of the MW source in units of dB mWatt.
 
-        Ancillary parameters
-
-            The rf_width specifies the amount of time the RF / MW signal is on
-            during each data acquisition cycle. A cycle is one full sequence
-            of the pulse train used in the experiment. For CWODMR, a cycle is
-            RF on for rf_width time and RF off for rf_width time.
-
-            The rfsynth_channel specifies which output channel from the Windfreak
-            RF SynthHD is used to provde the RF signal (either 0 or 1)
 
         Additionally, it is assumed that a 532 nm laser is continuously on. If you have
         an AOM in your setup, you'll need to hold that on using an external power supply.
@@ -75,7 +66,6 @@ class CWODMR:
         self.freq_high = freq_high
         self.freq_step = freq_step
         self.rf_power = rf_power
-        self.rf_width = rf_width
         self.pulser = cwodmr_pulser
         #assert (type(self.pulser) = qcsapphire.Pulser) or (type(self.pulser) = pulseblaster.Pulser)
         self.rfsynth = rfsynth
@@ -97,7 +87,7 @@ class CWODMR:
             'freq_high':self.freq_high,
             'freq_step':self.freq_step,
             'rf_power':self.rf_power,
-            'rf_width':self.rf_width,
+            'pulser.rf_width':self.pulser.rf_width,
             'pulser.clock_period':self.pulser.clock_period
         }
 
@@ -108,7 +98,7 @@ class CWODMR:
 
         For each frequency, some number of cycles of data are acquired. A cycle
         is one full sequence of the pulse train used in the experiment. For CWODMR,
-        a cycle is {RF on for rf_width time, RF off for rf_width time}.
+        a cycle is {RF on for pulser.rf_width time, RF off for pulser.rf_width time}.
 
         The N_cycles specifies the total number of these cycles to
         acquire at each frequency. The choice depends on the desired resolution or signal-to-noise
@@ -117,7 +107,7 @@ class CWODMR:
 
         For each frequency, the number of data points read from the NI DAQ will be
         N_clock_ticks_per_cycle * N_cycles, where N_clock_ticks_per_cycle
-        is the value returned by self.set_pulser_state(self.rf_width).
+        is the value returned by self.pulser.program_pulser_state().
 
         These data are found in a data_buffer within this method. They
         may be analyzed with a function passed to post_process_function,
@@ -150,7 +140,7 @@ class CWODMR:
         self.rfsynth.rf_on(self.rfsynth_channel)
         time.sleep(0.05) #wait for RF box to fully turn on
 
-        self.N_clock_ticks_per_cycle = self.pulser.program_pulser_state(self.rf_width)
+        self.N_clock_ticks_per_cycle = self.pulser.program_pulser_state()
         self.pulser.start() #start the pulser
 
         # compute the total number of samples to be acquired and the DAQ time
