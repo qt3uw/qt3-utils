@@ -33,7 +33,7 @@ class PulsedODMR:
         of an experiment and the hardware system setup.
 
         Hardware Settings
-            cwodmr_pulser - a qt3utils.experiments.pulsers.interface.ODMRPulser object (such as qt3utils.experiments.pulsers.qcsapphire.QCSapphPulsedODMRPulser)
+            podmr_pulser - a qt3utils.experiments.pulsers.interface.ODMRPulser object (such as qt3utils.experiments.pulsers.qcsapphire.QCSapphPulsedODMRPulser)
             rfsynth - a qt3rfsynthcontrol.Pulser object
             The rfsynth_channel specifies which output channel from the Windfreak RF SynthHD is used to provde the RF signal (either 0 or 1)
             edge_counter_config - a qt3utils.nidaq.config.EdgeCounter object
@@ -85,14 +85,7 @@ class PulsedODMR:
             'freq_high':self.freq_high,
             'freq_step':self.freq_step,
             'rf_power':self.rf_power,
-            'pulser.rf_width':self.pulser.rf_width,
-            'pulser.aom_width':self.pulser.aom_width,
-            'pulser.aom_response_time':self.pulser.aom_response_time,
-            'pulser.post_rf_pad':self.pulser.post_rf_pad,
-            'pulser.pre_rf_pad':self.pulser.pre_rf_pad,
-            'pulser.full_cycle_width':self.pulser.full_cycle_width,
-            'pulser.rf_pulse_justify':self.pulser.rf_pulse_justify,
-            'pulser.clock_period':self.pulser.clock_period
+            'pulser':self.pulser.experimental_conditions()
         }
 
     def _stop_and_close_daq_tasks(self):
