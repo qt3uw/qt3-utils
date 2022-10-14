@@ -4,7 +4,15 @@ from qt3utils.experiments.pulsers.interface import ExperimentPulser
 from qt3utils.errors import PulseTrainWidthError
 
 class QCSapphCWODMRPulser(ExperimentPulser):
+    '''
+    Programs the pulse sequences needed for CWODMR.
 
+    Provides an
+      * always ON channel for an AOM.
+      * 50% duty cycle pulse for RF switch
+      * clock signal for use with a data acquisition card
+      * trigger signal for use with a data acquisition card
+    '''
     def __init__(self, qcsapphire_pulser_controller,
                        rf_channel = 'B',
                        clock_channel = 'C',
@@ -127,7 +135,21 @@ class QCSapphCWODMRPulser(ExperimentPulser):
 
 
 class QCSapphPulsedODMRPulser(ExperimentPulser):
+    '''
+    Programs the pulse sequences needed for pulsed ODMR.
 
+    AOM on / RF off , AOM off / RF on , AOM on / RF off , AOM off / RF off
+
+    Provides
+      * AOM channel with user-specified width
+      * RF channel with user-specified width
+      * RF pulse left, center, or right justified pulse
+      * padding between the AOM and RF pulses
+      * support for specifying AOM/RF hardware response times in order to fine-tune position of pulses
+      * control of the full cycle width
+      * clock signal for use with a data acquisition card
+      * trigger signal for use with a data acquisition card
+    '''
     def __init__(self, qcsapphire_pulser_controller,
                        aom_channel = 'A',
                        rf_channel = 'B',
