@@ -314,3 +314,144 @@ class PulseBlasterPulsedODMR(PulseBlaster):
 
         if requested_total_width >= self.full_cycle_width / 2:
             raise PulseTrainWidthError(f"full cycle width, {self.full_cycle_width / 2}, is not large enough to support requested pulse sequence, {requested_total_width}.")
+
+
+class PulseBlasterRamsey(PulseBlaster):
+    '''
+    Programs the pulse sequences needed for pulsed ODMR.
+
+    AOM on / RF off , AOM off / RF on , free precession time, AOM off / RF on , AOM on / RF off , AOM off / RF off
+
+    Provides
+      * AOM channel with user-specified width
+      * RF channel with user-specified width
+      * RF pulse left, center, or right justified pulse
+      * padding between the AOM and RF pulses
+      * support for specifying AOM/RF hardware response times in order to fine-tune position of pulses
+      * control of the full cycle width
+      * clock signal for use with a data acquisition card
+      * trigger signal for use with a data acquisition card
+    '''
+    def __init__(self, pb_board_number = 1,
+                       aom_channel = 0,
+                       rf_channel = 1,
+                       clock_channel = 2,
+                       trigger_channel = 3,
+                       clock_period = 200e-9,
+                       trigger_width = 500e-9,
+                       rf_width = 0.5e-6,
+                       aom_width = 5e-6,
+                       aom_response_time = 800e-9,
+                       rf_response_time = 200e-9,
+                       pre_rf_pad = 100e-9,
+                       post_rf_pad = 100e-9,
+                       free_precession_time = 5e-6):
+        """
+        Hardware configuration
+
+            pb_board_number - the board number (0, 1, ...)
+            rf_channel output controls a RF switch
+            clock_channel output provides a clock input to the NI DAQ card
+            trigger_channel output provides a rising edge trigger for the NI DAQ card
+
+        The hardware response times should be measured accurately for your setup.
+        These values will affect your measurement as the response times are built
+        into the calculation of when to start TTL pulses and the actual free precession time
+        experience by your system.
+
+            aom_response_time - the delay between the TTL pulse and the actual laser signal. Should be measured for each experimental setup.
+            rf_response_time - the delay between the TTL pulse and the RF signal. Should be measured for each experimental setup.
+
+        Fixed parameters during a Ramsey experiment
+
+            rf_width -- should be the pi/2 pulse length
+            pre_rf_pad - pad time between initialization laser pulse and first pi/2 pulse
+            post_rf_pad - pad time between second pi/2 pulse and readout laser pulse
+            aom_width - width of the initialization and readout laser pulse
+
+        The free precession time is varied during a Ramsey experiment
+            free_precession_time - will likely be changed via calls program_pulser_state method.
+
+        """
+        self.pb_board_number = pb_board_number
+        self.aom_channel = aom_channel
+        self.rf_channel = rf_channel
+        self.clock_channel = clock_channel
+        self.trigger_channel = trigger_channel
+
+        self.aom_width = np.round(aom_width, 8)
+        self.rf_width = np.round(rf_width, 8)
+        self.aom_response_time = np.round(aom_response_time, 8)
+        self.rf_response_time = np.round(rf_response_time, 8)
+        self.post_rf_pad = np.round(post_rf_pad, 8)
+        self.pre_rf_pad = np.round(pre_rf_pad, 8)
+        self.full_cycle_width = None
+        self.free_precession_time = free_precession_time
+
+        self.clock_period = np.round(clock_period, 8)
+        self.trigger_width = np.round(trigger_width, 8)
+
+    def program_pulser_state(self, free_precession_time = None, *args, **kwargs):
+        '''
+        free_precession_time is in seconds
+        '''
+        if free_precession_time:
+            self.raise_for_pulse_width(free_precession_time)
+            self.free_precession_time = np.round(free_precession_time,8)
+        else:
+            self.raise_for_pulse_width(self.free_precession_time)
+
+        half_cycle_width = self.aom_width + self.aom_response_time
+        half_cycle_width += self.pre_rf_pad
+        half_cycle_width += self.rf_width
+        half_cycle_width += self.free_precession_time
+        half_cycle_width += self.rf_width
+        half_cycle_width += self.post_rf_pad
+
+        self.full_cycle_width  = half_cycle_width * 2
+
+        left_rf_pulse_start = self.aom_width + self.aom_response_time + self.pre_rf_pad - self.rf_response_time
+        right_rf_pulse_start = left_rf_pulse_start  + self.rf_width + self.free_precession_time
+
+        hardware_pins = [self.aom_channel, self.rf_channel,
+                         self.clock_channel, self.trigger_channel]
+        self.open()
+
+        pb = PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
+
+        if pulseblaster.spinapi.pb_start_programming(self.pb_board_number) != 0:
+            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+
+        pb.on(self.trigger_channel, 0, int(self.trigger_width*1e9))
+        pb.make_clock(self.clock_channel, int(self.clock_period*1e9))
+
+        pb.on(self.aom_channel, 0, int(self.aom_width*1e9))
+        pb.on(self.rf_channel, left_rf_pulse_start, int(self.rf_width*1e9))
+        pb.on(self.rf_channel, right_rf_pulse_start, int(self.rf_width*1e9))
+        pb.on(self.aom_channel, int(half_cycle_width*1e9), int(self.aom_width*1e9))
+
+        pb.program([],float('inf'))
+
+        if pulseblaster.spinapi.pb_stop_programming() != 0:
+            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+
+        self.close()
+        return np.round(self.full_cycle_width / self.clock_period).astype(int)
+
+    def experimental_conditions(self):
+        '''
+        Returns a dictionary of paramters that are pertinent for the relevant experiment
+        '''
+        return {
+            'rf_width':self.rf_width,
+            'aom_width':self.aom_width,
+            'aom_response_time':self.aom_response_time,
+            'post_rf_pad':self.post_rf_pad,
+            'pre_rf_pad':self.pre_rf_pad,
+            'full_cycle_width':self.full_cycle_width,
+            'free_precession_time':self.free_precession_time,
+            'clock_period':self.clock_period
+        }
+
+    def raise_for_pulse_width(self, free_precession_time):
+        pass
