@@ -23,7 +23,8 @@ requirements = [
     'scipy',
     'qcsapphire',
     'qt3rfsynthcontrol',
-    'nipiezojenapy'
+    'nipiezojenapy',
+    'pulseblaster'
 ]
 
 # The README.md file content is included in the package metadata as long description and will be

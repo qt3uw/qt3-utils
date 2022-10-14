@@ -36,8 +36,8 @@ class QCSapphCWODMRPulser(ExperimentPulser):
         }
 
     def raise_for_pulse_width(self, rf_width, *args, **kwargs):
-        #there should be a minimum rf_width here, related to minimum clock period.
-        pass
+        if rf_width < 10e-9:
+            raise PulseTrainWidthError(f'RF width too small {int(rf_width)} < 10 ns')
 
     def reset_pulser(self, num_resets = 2):
 
