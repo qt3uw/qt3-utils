@@ -9,11 +9,7 @@ except NameError as e:
     print('Pulse Blaster software has not been properly installed.')
 
 from qt3utils.experiments.pulsers.interface import ExperimentPulser
-<<<<<<< HEAD
 from qt3utils.errors import PulseBlasterInitError, PulseBlasterError, PulseTrainWidthError
-=======
-from qt3utils.errors import PulseBlasterInitError, PulseTrainWidthError
->>>>>>> 1461443 (Adds PulseBlasterRamHahnDD for programming Ramsey, Hahn Echo and Dynamical Decoupling experiments)
 
 class PulseBlaster(ExperimentPulser):
 
@@ -475,7 +471,7 @@ class PulseBlasterRamHahnDD(PulseBlaster):
             self.n_refocussing_pi_pulses = _prev_n_refocussing_pi_pulses
             raise e
 
-        self.rf_start_and_duration, half_cycle_width = compute_rf_pulse_sequence(self.free_precession_time,
+        self.rf_start_and_duration, half_cycle_width = self.compute_rf_pulse_sequence(self.free_precession_time,
                                                                                  self.n_refocussing_pi_pulses)
 
         self.full_cycle_width  = half_cycle_width * 2
@@ -486,8 +482,7 @@ class PulseBlasterRamHahnDD(PulseBlaster):
 
         pb = PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
 
-        if pulseblaster.spinapi.pb_start_programming(self.pb_board_number) != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        self.start_programming()
 
         pb.on(self.trigger_channel, 0, int(self.trigger_width*1e9))
         pb.make_clock(self.clock_channel, int(self.clock_period*1e9))
@@ -499,8 +494,7 @@ class PulseBlasterRamHahnDD(PulseBlaster):
 
         pb.program([],float('inf'))
 
-        if pulseblaster.spinapi.pb_stop_programming() != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        self.stop_programming()
 
         self.close()
         return np.round(self.full_cycle_width / self.clock_period).astype(int)
