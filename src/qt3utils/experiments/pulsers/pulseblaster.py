@@ -4,37 +4,50 @@ from pulseblaster.PBInd import PBInd
 import pulseblaster.spinapi
 
 from qt3utils.experiments.pulsers.interface import ExperimentPulser
-from qt3utils.errors import PulseBlasterInitError
+from qt3utils.errors import PulseBlasterInitError, PulseBlasterError, PulseTrainWidthError
 
 class PulseBlaster(ExperimentPulser):
 
     def start(self):
         self.open()
-        if pulseblaster.spinapi.pb_start() != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        ret = pulseblaster.spinapi.pb_start()
+        if ret != 0:
+            raise PulseBlasterError(f'{ret}: {pulseblaster.spinapi.pb_get_error()}')
         self.close()
 
     def stop(self):
         self.open()
-        if pulseblaster.spinapi.pb_stop() != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        ret = pulseblaster.spinapi.pb_stop()
+        if ret != 0:
+            raise PulseBlasterError(f'{ret}: {pulseblaster.spinapi.pb_get_error()}')
         self.close()
 
     def reset(self):
         self.open()
-        if pulseblaster.spinapi.pb_reset() != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        ret = pulseblaster.spinapi.pb_reset()
+        if ret != 0:
+            raise PulseBlasterError(f'{ret}: {pulseblaster.spinapi.pb_get_error()}')
         self.close()
 
     def close(self):
-        if pulseblaster.spinapi.pb_close() != 0:
+        ret = pulseblaster.spinapi.pb_close()
+        if ret != 0:
+            raise PulseBlasterError(f'{ret}: {pulseblaster.spinapi.pb_get_error()}')
+
+    def stop_programming(self):
+        if pulseblaster.spinapi.pb_stop_programming() != 0:
+            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+
+    def start_programming(self):
+        if pulseblaster.spinapi.pb_start_programming(0) != 0:
             raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
 
     def open(self):
         pulseblaster.spinapi.pb_select_board(self.pb_board_number)
-        if pulseblaster.spinapi.pb_init() != 0:
+        ret = pulseblaster.spinapi.pb_init()
+        if ret != 0:
             self.close() #if opening fails, attempt to close before raising error
-            raise PulseBlasterInitError(pulseblaster.spinapi.pb_get_error())
+            raise PulseBlasterInitError(f'{ret}: {pulseblaster.spinapi.pb_get_error()}')
         pulseblaster.spinapi.pb_core_clock(100*pulseblaster.spinapi.MHz)
 
 class PulseBlasterHoldAOM(PulseBlaster):
@@ -73,13 +86,11 @@ class PulseBlasterHoldAOM(PulseBlaster):
         hardware_pins = [self.aom_channel]
         self.open()
         pb = PBInd(pins = hardware_pins, on_time = int(self.cycle_width*1e9))
-        if pulseblaster.spinapi.pb_start_programming(self.pb_board_number) != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        self.start_programming()
 
         pb.on(self.aom_channel, 0, int(self.cycle_width*1e9))
         pb.program([],float('inf'))
-        if pulseblaster.spinapi.pb_stop_programming() != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        self.stop_programming()
 
         self.close()
         return np.round(elf.cycle_width / self.clock_period).astype(int)
@@ -155,11 +166,8 @@ class PulseBlasterCWODMR(PulseBlaster):
                          self.clock_channel, self.trigger_channel]
 
         self.open()
-
         pb = PBInd(pins = hardware_pins, on_time = int(cycle_length*1e9))
-
-        if pulseblaster.spinapi.pb_start_programming(self.pb_board_number) != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        self.start_programming()
 
         pb.on(self.trigger_channel, 0, int(self.trigger_width*1e9))
         pb.make_clock(self.clock_channel, int(self.clock_period*1e9))
@@ -167,9 +175,7 @@ class PulseBlasterCWODMR(PulseBlaster):
         pb.on(self.rf_channel, 0, int(self.rf_width*1e9))
 
         pb.program([],float('inf'))
-
-        if pulseblaster.spinapi.pb_stop_programming() != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        self.stop_programming()
 
         self.close()
         return np.round(cycle_length / self.clock_period).astype(int)
@@ -270,22 +276,16 @@ class PulseBlasterPulsedODMR(PulseBlaster):
         self.open()
 
         pb = PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
-
-        if pulseblaster.spinapi.pb_start_programming(self.pb_board_number) != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
+        self.start_programming()
 
         pb.on(self.trigger_channel, 0, int(self.trigger_width*1e9))
         pb.make_clock(self.clock_channel, int(self.clock_period*1e9))
-
         pb.on(self.aom_channel, 0, int(self.aom_width*1e9))
-        pb.on(self.rf_channel, delay_rf_channel, int(self.rf_width*1e9))
+        pb.on(self.rf_channel, int(delay_rf_channel*1e9), int(self.rf_width*1e9))
         pb.on(self.aom_channel, int(half_cycle_width*1e9), int(self.aom_width*1e9))
-
         pb.program([],float('inf'))
 
-        if pulseblaster.spinapi.pb_stop_programming() != 0:
-            raise PulseBlasterError(pulseblaster.spinapi.pb_get_error())
-
+        self.stop_programming()
         self.close()
         return np.round(self.full_cycle_width / self.clock_period).astype(int)
 
