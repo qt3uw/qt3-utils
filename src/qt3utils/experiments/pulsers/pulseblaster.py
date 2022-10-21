@@ -87,6 +87,7 @@ class PulseBlasterHoldAOM(PulseBlaster):
 
     def program_pulser_state(self, *args, **kwargs):
         '''
+        returns a 0 instead of the number of samples acquired per full signal cycle
         '''
         hardware_pins = [self.aom_channel]
         self.open()
@@ -98,7 +99,7 @@ class PulseBlasterHoldAOM(PulseBlaster):
         self.stop_programming()
 
         self.close()
-        return np.round(elf.cycle_width / self.clock_period).astype(int)
+        return 0
 
     def experimental_conditions(self):
         '''
@@ -320,7 +321,7 @@ class PulseBlasterPulsedODMR(PulseBlaster):
         requested_total_width += self.post_rf_pad
 
         if requested_total_width >= self.full_cycle_width / 2:
-            raise PulseTrainWidthError(f"full cycle width, {self.full_cycle_width / 2}, is not large enough to support requested pulse sequence, {requested_total_width}.")
+            raise PulseTrainWidthError(f"half cycle width, {self.full_cycle_width / 2}, is not large enough to support requested pulse sequence, {requested_total_width}.")
 
 
 class PulseBlasterRamHahnDD(PulseBlaster):
@@ -514,8 +515,7 @@ class PulseBlasterRamHahnDD(PulseBlaster):
             'clock_period':self.clock_period
         }
 
-    def raise_for_pulse_width(self, free_precession_time, n_refocussing_pi_pulses):
-
+    def raise_for_pulse_width(self, free_precession_time, n_refocussing_pi_pulses = 0):
 
         if free_precession_time < n_refocussing_pi_pulses * self.rf_pi_pulse_width:
             raise PulseTrainWidthError(f"""free precession time, {free_precession_time}, is not
