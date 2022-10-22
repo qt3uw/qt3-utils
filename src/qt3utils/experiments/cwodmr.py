@@ -157,42 +157,47 @@ class CWODMR:
 
         data = []
 
-        for rf_freq in np.arange(self.freq_low, self.freq_high + self.freq_step, self.freq_step):
-
-            self.current_rf_freq = np.round(rf_freq, 9)
-            self.rfsynth.set_power(self.rfsynth_channel, self.rf_power)
-            self.rfsynth.set_frequency(self.rfsynth_channel, self.current_rf_freq)
-
-            logger.info(f'RF frequency: {self.current_rf_freq} Hz')
-            logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} samples')
-            logger.debug(f'   Sample period of {self.pulser.clock_period} seconds')
-            logger.debug(f'   acquisition time of {self.daq_time} seconds')
-
-            data_buffer = np.zeros(self.N_clock_ticks_per_frequency)
-
-            self.edge_counter_config.counter_task.wait_until_done()
-            self.edge_counter_config.counter_task.start()
-            time.sleep(self.daq_time*1.1) #pause for acquisition
-
-            read_samples = self.edge_counter_config.counter_reader.read_many_sample_double(
-                                    data_buffer,
-                                    number_of_samples_per_channel=self.N_clock_ticks_per_frequency,
-                                    timeout=5)
-
-            #should we assert that we read all samples? read_samples == self.N_clock_ticks_per_frequency
-            self.edge_counter_config.counter_task.stop()
-            if post_process_function:
-                data_buffer = post_process_function(data_buffer, self)
-
-            #should we make this a dictionary with self.current_rf_freq as the key?
-            data.append([self.current_rf_freq,
-                         data_buffer])
-
         try:
-            self.edge_counter_config.counter_task.close()
-        except: #add catch for NIDAQError and log message
-            pass
+            for rf_freq in np.arange(self.freq_low, self.freq_high + self.freq_step, self.freq_step):
 
-        self.rfsynth.rf_off(self.rfsynth_channel)
+                self.current_rf_freq = np.round(rf_freq, 9)
+                self.rfsynth.set_power(self.rfsynth_channel, self.rf_power)
+                self.rfsynth.set_frequency(self.rfsynth_channel, self.current_rf_freq)
 
-        return data
+                logger.info(f'RF frequency: {self.current_rf_freq} Hz')
+                logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} samples')
+                logger.debug(f'   Sample period of {self.pulser.clock_period} seconds')
+                logger.debug(f'   acquisition time of {self.daq_time} seconds')
+
+                data_buffer = np.zeros(self.N_clock_ticks_per_frequency)
+
+                self.edge_counter_config.counter_task.wait_until_done()
+                self.edge_counter_config.counter_task.start()
+                time.sleep(self.daq_time*1.1) #pause for acquisition
+
+                read_samples = self.edge_counter_config.counter_reader.read_many_sample_double(
+                                        data_buffer,
+                                        number_of_samples_per_channel=self.N_clock_ticks_per_frequency,
+                                        timeout=5)
+
+                #should we assert that we read all samples? read_samples == self.N_clock_ticks_per_frequency
+                self.edge_counter_config.counter_task.stop()
+                if post_process_function:
+                    data_buffer = post_process_function(data_buffer, self)
+
+                #should we make this a dictionary with self.current_rf_freq as the key?
+                data.append([self.current_rf_freq,
+                             data_buffer])
+
+        except KeyboardInterrupt as e:
+            logger.error(e)
+
+        finally:
+            try:
+                self.edge_counter_config.counter_task.close()
+            except Exception as e:
+                logger.error(e)
+
+            self.rfsynth.rf_off(self.rfsynth_channel)
+
+            return data
