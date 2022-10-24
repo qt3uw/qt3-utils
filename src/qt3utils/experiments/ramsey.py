@@ -1,30 +1,13 @@
 import logging
 import time
 import numpy as np
-import qt3utils.analysis.aggregation
-from qt3utils.errors import PulseTrainWidthError
 import nidaqmx.errors
+
+import qt3utils.experiments.podmr.simple_measure_contrast
+from qt3utils.errors import PulseTrainWidthError
 
 logger = logging.getLogger(__name__)
 
-#must define this function before class
-def aggregate_data(data_buffer, experiment):
-    '''
-    Calls qt3utils.analysis.aggregation.reshape_sum_trace, where
-        cwodmr.N_cycles = N_rows
-        cwodmr.N_clock_ticks_per_cycle = N_samples_per_row
-
-    '''
-    return qt3utils.analysis.aggregation.reshape_sum_trace(data_buffer,
-                                                           experiment.N_cycles,
-                                                           experiment.N_clock_ticks_per_cycle)
-def simple_signal_background(trace):
-    signal = trace[-len(trace)//2:]
-    background = trace[:len(trace)//2]
-    return np.sum(signal)/np.sum(background)
-
-def measure_contrast(data_buffer, experiment):
-    return simple_signal_background(aggregate_data(data_buffer, experiment))
 
 class Ramsey:
 
@@ -117,7 +100,7 @@ class Ramsey:
             pass
 
     def run(self, N_cycles = 50000,
-                  post_process_function = aggregate_data):
+                  post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
         '''
         Performs the scan over the specificed range of free precession times.
 

@@ -58,7 +58,8 @@ class T1Coherence:
 
         ## TODO: assert conditions on rf width low, high and step sizes
         # to be compatible with pulser.
-
+        raise NotImplementedError('This class is old and was never finished. Need to reimplement.')
+        
         self.laser_delay_low = np.round(laser_delay_low, 9)
         self.laser_delay_high = np.round(laser_delay_high, 9)
         self.laser_delay_step = np.round(laser_delay_step, 9)
