@@ -1,25 +1,17 @@
 import logging
 import time
 import numpy as np
-import qt3utils.analysis.aggregation
-from qt3utils.errors import PulseTrainWidthError
 import nidaqmx.errors
+
+import qt3utils.experiments.common
+import qt3utils.experiments.podmr.simple_measure_contrast
+
+from qt3utils.errors import PulseTrainWidthError
 
 logger = logging.getLogger(__name__)
 
-#must define this function before class Rabi
-def aggregate_data(data_buffer, rabi):
-    '''
-    Calls qt3utils.analysis.aggregation.reshape_sum_trace, where
-        cwodmr.N_cycles = N_rows
-        cwodmr.N_clock_ticks_per_cycle = N_samples_per_row
 
-    '''
-    return qt3utils.analysis.aggregation.reshape_sum_trace(data_buffer,
-                                                           rabi.N_cycles,
-                                                           rabi.N_clock_ticks_per_cycle)
-
-class Rabi:
+class Rabi(qt3utils.experiments.common.Experiment):
 
     def __init__(self, podmr_pulser, rfsynth, edge_counter_config,
                        photon_counter_nidaq_terminal = 'PFI0',
@@ -106,7 +98,7 @@ class Rabi:
             pass
 
     def run(self, N_cycles = 50000,
-                  post_process_function = aggregate_data):
+                  post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
         '''
         Performs the scan over the specificed range of RF widths.
 

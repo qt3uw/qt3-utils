@@ -1,23 +1,18 @@
 import logging
 import time
 import numpy as np
-import qt3utils.analysis.aggregation
+
+import qt3utils.experiments.common
 
 logger = logging.getLogger(__name__)
 
+def simple_measure_contrast(data_buffer, experiment):
+    trace = qt3utils.experiments.common.aggregate_sum(data_buffer, experiment)
+    background = trace[:len(trace)//2]
+    signal = trace[len(trace)//2:]
+    return np.sum(signal)/np.sum(background)
 
-def aggregate_data(data_buffer, experiment):
-    '''
-    Calls qt3utils.analysis.aggregation.reshape_sum_trace, where
-        cwodmr.N_cycles = N_rows
-        cwodmr.N_clock_ticks_per_cycle = N_samples_per_row
-
-    '''
-    return qt3utils.analysis.aggregation.reshape_sum_trace(data_buffer,
-                                                           experiment.N_cycles,
-                                                           experiment.N_clock_ticks_per_cycle)
-
-class PulsedODMR:
+class PulsedODMR(qt3utils.experiments.common.Experiment):
 
     def __init__(self, podmr_pulser, rfsynth, edge_counter_config,
                        photon_counter_nidaq_terminal = 'PFI0',
@@ -99,7 +94,7 @@ class PulsedODMR:
             pass
 
     def run(self, N_cycles = 500000,
-                  post_process_function = aggregate_data):
+                  post_process_function = simple_measure_contrast):
         '''
         Performs the PulsedODMR scan over the specificed range of frequencies.
 
