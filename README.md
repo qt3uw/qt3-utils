@@ -8,7 +8,7 @@ various spin-control experiments on quantum systems, such as NV centers in diamo
 
  * TTL pulsers
    * Quantum Composer Sapphire
-   * [Future] Spin Core PulseBlaster
+   * Spin Core PulseBlaster
  * Excelitas SPCM for photon detection
  * NI-DAQ card (PCIx 6363) for data acquisition and control
  * Jena System's Piezo Actuator Stage Control Amplifier
@@ -29,6 +29,7 @@ need to manually install the following packages
 * [gadamc/qcsapphire](https://github.com/gadamc/qcsapphire)
 * [gadamc/qt3RFSynthControl](https://github.com/gadamc/qt3RFSynthControl)
 * [gadamc/nipiezeojenapy](https://github.com/gadamc/nipiezeojenapy)
+* [zeeshawnkazi/pulseblaster](https://github.com/zeeshawnkazi/pulseblaster)
 
 ## Installation
 
