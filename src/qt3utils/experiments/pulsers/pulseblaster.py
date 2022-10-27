@@ -74,17 +74,6 @@ class PulseBlasterHoldAOM(PulseBlaster):
         self.aom_channel = aom_channel
         self.cycle_width = np.round(cycle_width, 8)
 
-        # #should this all go inside the program_pulser_state method?
-        # #and we can always ensure that the board program is closed
-        # #if we did that, we would need to initialize and close
-        # #communication around each call to start and stop
-        # pulseblaster.spinapi.pb_select_board(self.pb_board_number)
-        # if pulseblaster.spinapi.pb_init() != 0:
-        #     self.close()
-        #     if pulseblaster.spinapi.pb_init() != 0:
-        #         raise PulseBlasterInitError(pulseblaster.spinapi.pb_get_error())
-        # pulseblaster.spinapi.pb_core_clock(100*pulseblaster.spinapi.MHz)
-
     def program_pulser_state(self, *args, **kwargs):
         '''
         returns a 0 instead of the number of samples acquired per full signal cycle
@@ -145,16 +134,6 @@ class PulseBlasterCWODMR(PulseBlaster):
         self.clock_period = np.round(clock_period, 8)
         self.trigger_width = np.round(trigger_width, 8)
 
-        # #should this all go inside the program_pulser_state method?
-        # #and we can always ensure that the board program is closed
-        # #if we did that, we would need to initialize and close
-        # #communication around each call to start and stop
-        # pulseblaster.spinapi.pb_select_board(self.pb_board_number)
-        # if pulseblaster.spinapi.pb_init() != 0:
-        #     self.close()
-        #     if pulseblaster.spinapi.pb_init() != 0:
-        #         raise PulseBlasterInitError(pulseblaster.spinapi.pb_get_error())
-        # pulseblaster.spinapi.pb_core_clock(100*pulseblaster.spinapi.MHz)
 
     def program_pulser_state(self, rf_width = None, *args, **kwargs):
         '''
