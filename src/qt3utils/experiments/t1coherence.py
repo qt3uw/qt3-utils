@@ -59,7 +59,7 @@ class T1Coherence:
         ## TODO: assert conditions on rf width low, high and step sizes
         # to be compatible with pulser.
         raise NotImplementedError('This class is old and was never finished. Need to reimplement.')
-        
+
         self.laser_delay_low = np.round(laser_delay_low, 9)
         self.laser_delay_high = np.round(laser_delay_high, 9)
         self.laser_delay_step = np.round(laser_delay_step, 9)
@@ -100,7 +100,7 @@ class T1Coherence:
         Sets the pulser to generate a signals on all channels -- AOM channel,
         RF channel, clock channel and trigger channel.
 
-        Allows the user to set a different rf_width after object instantiation.
+        Allows the user to set a different rf_pulse_duration after object instantiation.
 
         This method is used during the data aquisition phase (see self.run()),
         but is also "public" to allow the user to setup the pulser and observe
