@@ -93,7 +93,7 @@ class CWODMR(qt3utils.experiments.common.Experiment):
 
         For each frequency, some number of cycles of data are acquired. A cycle
         is one full sequence of the pulse train used in the experiment. For CWODMR,
-        a cycle is {RF on for pulser.rf_width time, RF off for pulser.rf_width time}.
+        a cycle is {RF on for pulser.rf_pulse_duration time, RF off for pulser.rf_pulse_duration time}.
 
         The N_cycles specifies the total number of these cycles to
         acquire at each frequency. The choice depends on the desired resolution or signal-to-noise
