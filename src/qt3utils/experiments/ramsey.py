@@ -3,7 +3,7 @@ import time
 import numpy as np
 import nidaqmx.errors
 
-import qt3utils.experiments.podmr.simple_measure_contrast
+import qt3utils.experiments.podmr
 from qt3utils.errors import PulseTrainWidthError
 
 logger = logging.getLogger(__name__)
@@ -89,15 +89,15 @@ class Ramsey:
             'pulser':self.pulser.experimental_conditions()
         }
 
-    def _stop_and_close_daq_tasks(self):
-        try:
-            self.edge_counter_config.counter_task.stop()
-        except:
-            pass
-        try:
-            self.edge_counter_config.counter_task.close()
-        except:
-            pass
+    # def _stop_and_close_daq_tasks(self):
+    #     try:
+    #         self.edge_counter_config.counter_task.stop()
+    #     except:
+    #         pass
+    #     try:
+    #         self.edge_counter_config.counter_task.close()
+    #     except:
+    #         pass
 
     def run(self, N_cycles = 50000,
                   post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
@@ -167,8 +167,8 @@ class Ramsey:
         data = []
         tau_list = np.arange(self.tau_low, self.tau_high + self.tau_step, self.tau_step)
 
-        for tau in tau_list:
-            try:
+        try:
+            for tau in tau_list:
                 self.current_tau = np.round(tau, 9)
                 logger.info(f'Free Precession Time, tau: {self.current_tau} seconds')
 
@@ -205,7 +205,7 @@ class Ramsey:
 
                 #should we assert that we read all samples? read_samples == self.N_clock_ticks_per_frequency
 
-                self._stop_and_close_daq_tasks()
+                self.edge_counter_config.counter_task.stop()
                 self.pulser.stop()
 
                 if post_process_function:
@@ -214,9 +214,18 @@ class Ramsey:
                 #should we make this a dictionary with self.current_tau as the key?
                 data.append([self.current_tau, data_buffer])
 
-            except nidaqmx.errors.Error as e:
-                logger.warning(e)
-                logger.warning(f'Skipping {self.current_tau}')
-        #self.rfsynth.rf_off(self.rfsynth_channel)
+        except KeyboardInterrupt as e:
+            logger.error(e)
+            raise e
+
+        finally:
+            try:
+                self.edge_counter_config.counter_task.close()
+            except Exception as e:
+                logger.error(e)
+            #rfsynth.rf_off(self.rfsynth_channel)
+            data = np.array(data)
+
+            return data
 
         return data

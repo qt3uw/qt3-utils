@@ -4,7 +4,7 @@ import numpy as np
 import nidaqmx.errors
 
 import qt3utils.experiments.common
-import qt3utils.experiments.podmr.simple_measure_contrast
+import qt3utils.experiments.podmr
 
 from qt3utils.errors import PulseTrainWidthError
 
@@ -120,15 +120,15 @@ class Rabi(qt3utils.experiments.common.Experiment):
             'pulser':self.pulser.experimental_conditions()
         }
 
-    def _stop_and_close_daq_tasks(self):
-        try:
-            self.edge_counter_config.counter_task.stop()
-        except:
-            pass
-        try:
-            self.edge_counter_config.counter_task.close()
-        except:
-            pass
+    # def _stop_and_close_daq_tasks(self):
+    #     try:
+    #         self.edge_counter_config.counter_task.stop()
+    #     except:
+    #         pass
+    #     try:
+    #         self.edge_counter_config.counter_task.close()
+    #     except:
+    #         pass
 
     def run(self, N_cycles = 50000,
                   post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
@@ -195,8 +195,8 @@ class Rabi(qt3utils.experiments.common.Experiment):
         data = []
         rf_width_list = np.arange(self.rf_width_low, self.rf_width_high + self.rf_width_step, self.rf_width_step)
 
-        for rf_width in rf_width_list:
-            try:
+        try:
+            for rf_width in rf_width_list:
                 self.current_rf_width = np.round(rf_width, 9)
                 logger.info(f'RF Width: {self.current_rf_width} seconds')
 
@@ -211,7 +211,6 @@ class Rabi(qt3utils.experiments.common.Experiment):
                 logger.debug(f'  sample period of {self.pulser.clock_period} seconds')
                 logger.debug(f'  acquisition time of {self.daq_time} seconds')
 
-                #self._stop_and_close_daq_tasks() #be sure tasks are closed
                 self.edge_counter_config.configure_counter_period_measure(
                     source_terminal = self.photon_counter_nidaq_terminal,
                     N_samples_to_acquire_or_buffer_size = self.N_clock_ticks_per_frequency,
@@ -232,8 +231,8 @@ class Rabi(qt3utils.experiments.common.Experiment):
                                         timeout=5)
 
                 #should we assert that we read all samples? read_samples == self.N_clock_ticks_per_frequency
-
-                self._stop_and_close_daq_tasks()
+                #self._stop_and_close_daq_tasks()
+                self.edge_counter_config.counter_task.stop()
                 self.pulser.stop()
 
                 if post_process_function:
@@ -242,9 +241,18 @@ class Rabi(qt3utils.experiments.common.Experiment):
                 #should we make this a dictionary with self.current_rf_width as the key?
                 data.append([self.current_rf_width, data_buffer])
 
-            except nidaqmx.errors.Error as e:
-                logger.warning(e)
-                logger.warning(f'Skipping {self.current_rf_width}')
-        #self.rfsynth.rf_off(self.rfsynth_channel)
+        except KeyboardInterrupt as e:
+            logger.error(e)
+            raise e
+
+        finally:
+            try:
+                self.edge_counter_config.counter_task.close()
+            except Exception as e:
+                logger.error(e)
+            #rfsynth.rf_off(self.rfsynth_channel)
+            data = np.array(data)
+
+            return data
 
         return data

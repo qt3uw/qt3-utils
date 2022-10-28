@@ -34,7 +34,7 @@ parser.add_argument('-c', '--clock-rate', metavar = 'rate (Hz)', default = 10000
                     this value specifies the clock rate to use. Per the NI DAQ manual,
                     use a suitable clock rate for the device for best performance, which is an integer
                     multiple downsample of the digital sample clock.''')
-parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 25, type=int,
+parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 250, type=int,
                     help='''Number of data points to acquire per DAQ batch request.
                            Note that only ONE data point is shown in the scope.
                            After each request to the NI DAQ for data, the mean count
