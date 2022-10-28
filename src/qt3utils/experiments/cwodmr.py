@@ -86,7 +86,8 @@ class CWODMR(qt3utils.experiments.common.Experiment):
         }
 
     def run(self, N_cycles = 500000,
-                  post_process_function = simple_measure_contrast):
+                  post_process_function = simple_measure_contrast,
+                  random_order = False):
         '''
         Performs the CWODMR scan over the specificed range of frequencies.
 
@@ -152,8 +153,11 @@ class CWODMR(qt3utils.experiments.common.Experiment):
 
         data = []
 
+        freqs_to_scan = np.arange(self.freq_low, self.freq_high + self.freq_step, self.freq_step)
+        if random_order:
+            np.random.shuffle(freqs_to_scan)
         try:
-            for rf_freq in np.arange(self.freq_low, self.freq_high + self.freq_step, self.freq_step):
+            for rf_freq in freqs_to_scan:
 
                 self.current_rf_freq = np.round(rf_freq, 9)
                 self.rfsynth.set_power(self.rfsynth_channel, self.rf_power)
@@ -186,13 +190,19 @@ class CWODMR(qt3utils.experiments.common.Experiment):
 
         except KeyboardInterrupt as e:
             logger.error(e)
+            raise e
 
         finally:
+            try:
+                self.edge_counter_config.counter_task.stop()
+            except Exception as e:
+                logger.error(e)
             try:
                 self.edge_counter_config.counter_task.close()
             except Exception as e:
                 logger.error(e)
 
             self.rfsynth.rf_off(self.rfsynth_channel)
-
+            data = np.array(data)
+            data = data[data[:,0].argsort()] #sorts the data by values in zeroth column... this is necessary if random_order = True
             return data

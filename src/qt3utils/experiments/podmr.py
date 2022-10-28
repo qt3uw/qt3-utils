@@ -162,39 +162,50 @@ class PulsedODMR(qt3utils.experiments.common.Experiment):
 
         data = []
         rf_frequency_list = np.arange(self.freq_low, self.freq_high + self.freq_step, self.freq_step)
+        if random_order:
+            np.random.shuffle(rf_frequency_list)
 
-        for rf_freq in rf_frequency_list:
+        try:
+            for rf_freq in rf_frequency_list:
 
-            self.current_rf_freq = np.round(rf_freq, 9)
-            self.rfsynth.set_frequency(self.rfsynth_channel, self.current_rf_freq)
+                self.current_rf_freq = np.round(rf_freq, 9)
+                self.rfsynth.set_frequency(self.rfsynth_channel, self.current_rf_freq)
 
-            logger.info(f'RF frequency: {self.current_rf_freq*1e-9} GHz')
-            logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} samples')
-            logger.debug(f'   Sample period of {self.pulser.clock_period} seconds')
-            logger.debug(f'   acquisition time of {self.daq_time} seconds')
+                logger.info(f'RF frequency: {self.current_rf_freq*1e-9} GHz')
+                logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} samples')
+                logger.debug(f'   Sample period of {self.pulser.clock_period} seconds')
+                logger.debug(f'   acquisition time of {self.daq_time} seconds')
 
-            data_buffer = np.zeros(self.N_clock_ticks_per_frequency)
+                data_buffer = np.zeros(self.N_clock_ticks_per_frequency)
 
-            self.edge_counter_config.counter_task.wait_until_done()
-            self.edge_counter_config.counter_task.start()
-            time.sleep(self.daq_time*1.1) #pause for acquisition
+                self.edge_counter_config.counter_task.wait_until_done()
+                self.edge_counter_config.counter_task.start()
+                time.sleep(self.daq_time*1.1) #pause for acquisition
 
-            read_samples = self.edge_counter_config.counter_reader.read_many_sample_double(
-                                    data_buffer,
-                                    number_of_samples_per_channel=self.N_clock_ticks_per_frequency,
-                                    timeout=5)
+                read_samples = self.edge_counter_config.counter_reader.read_many_sample_double(
+                                        data_buffer,
+                                        number_of_samples_per_channel=self.N_clock_ticks_per_frequency,
+                                        timeout=5)
 
-            #should we assert that we read all samples? read_samples == self.N_clock_ticks_per_frequency
-            self.edge_counter_config.counter_task.stop()
-            if post_process_function:
-                data_buffer = post_process_function(data_buffer, self)
+                #should we assert that we read all samples? read_samples == self.N_clock_ticks_per_frequency
+                self.edge_counter_config.counter_task.stop()
+                if post_process_function:
+                    data_buffer = post_process_function(data_buffer, self)
 
-            #should we make this a dictionary with self.current_rf_freq as the key?
-            data.append([self.current_rf_freq,
-                         data_buffer])
+                #should we make this a dictionary with self.current_rf_freq as the key?
+                data.append([self.current_rf_freq,
+                             data_buffer])
+        except KeyboardInterrupt as e:
+            logger.error(e)
+            raise e
 
+        finally:
+            try:
+                self.edge_counter_config.counter_task.close()
+            except Exception as e:
+                logger.error(e)
+            #rfsynth.rf_off(self.rfsynth_channel)
+            data = np.array(data)
+            data = data[data[:,0].argsort()] #sorts the data by values in zeroth column... this is necessary if random_order = True
 
-        self._stop_and_close_daq_tasks()
-        #rfsynth.rf_off(self.rfsynth_channel)
-
-        return data
+            return data
