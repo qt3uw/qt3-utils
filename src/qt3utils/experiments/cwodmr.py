@@ -188,19 +188,19 @@ class CWODMR(qt3utils.experiments.common.Experiment):
                 data.append([self.current_rf_freq,
                              data_buffer])
 
-        except KeyboardInterrupt as e:
-            logger.error(e)
+        except Exception as e:
+            logger.error(f'{type(e)}: {e}')
             raise e
 
         finally:
             try:
                 self.edge_counter_config.counter_task.stop()
             except Exception as e:
-                logger.error(e)
+                logger.error(f'in finally.stop. {type(e)}: {e}')
             try:
                 self.edge_counter_config.counter_task.close()
             except Exception as e:
-                logger.error(e)
+                logger.error(f'in finally.close. {type(e)}: {e}')
 
             self.rfsynth.rf_off(self.rfsynth_channel)
             data = np.array(data)

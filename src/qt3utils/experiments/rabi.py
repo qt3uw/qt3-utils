@@ -241,15 +241,19 @@ class Rabi(qt3utils.experiments.common.Experiment):
                 #should we make this a dictionary with self.current_rf_width as the key?
                 data.append([self.current_rf_width, data_buffer])
 
-        except KeyboardInterrupt as e:
-            logger.error(e)
+        except Exception as e:
+            logger.error(f'{type(e)}: {e}')
             raise e
 
         finally:
             try:
+                self.edge_counter_config.counter_task.stop()
+            except Exception as e:
+                logger.error(f'in finally.stop. {type(e)}: {e}')
+            try:
                 self.edge_counter_config.counter_task.close()
             except Exception as e:
-                logger.error(e)
+                logger.error(f'in finally.close. {type(e)}: {e}')
             #rfsynth.rf_off(self.rfsynth_channel)
             data = np.array(data)
 
