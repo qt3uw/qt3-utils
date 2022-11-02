@@ -8,7 +8,7 @@ except NameError as e:
     print(e)
     print('Pulse Blaster software has not been properly installed.')
 
-from qt3utils.experiments.pulsers.interface import ExperimentPulser
+from qt3utils.pulsers.interface import ExperimentPulser
 from qt3utils.errors import PulseBlasterInitError, PulseBlasterError, PulseTrainWidthError
 
 class PulseBlaster(ExperimentPulser):

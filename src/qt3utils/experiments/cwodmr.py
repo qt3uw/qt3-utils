@@ -28,7 +28,7 @@ class CWODMR(qt3utils.experiments.common.Experiment):
         of an experiment and the hardware system setup.
 
         Hardware Settings
-            cwodmr_pulser - a qt3utils.experiments.pulsers.interface.ODMRPulser object (such as qt3utils.experiments.pulsers.qcsapphire.QCSapphCWODMRPulser)
+            cwodmr_pulser - a qt3utils.pulsers.interface.ODMRPulser object (such as qt3utils.pulsers.qcsapphire.QCSapphCWODMRPulser)
             rfsynth - a qt3rfsynthcontrol.Pulser object
             edge_counter_config - a qt3utils.nidaq.config.EdgeCounter object
             The rfsynth_channel specifies which output channel from the Windfreak RF SynthHD is used to provde the RF signal (either 0 or 1)
@@ -206,3 +206,6 @@ class CWODMR(qt3utils.experiments.common.Experiment):
             data = np.array(data)
             data = data[data[:,0].argsort()] #sorts the data by values in zeroth column... this is necessary if random_order = True
             return data
+
+    def build_spectrum_animator(self):
+        pass
