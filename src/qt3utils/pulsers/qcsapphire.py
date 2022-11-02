@@ -1,6 +1,6 @@
 import time
 import numpy as np
-from qt3utils.experiments.pulsers.interface import ExperimentPulser
+from qt3utils.pulsers.interface import ExperimentPulser
 from qt3utils.errors import PulseTrainWidthError
 
 class QCSapphCWODMRPulser(ExperimentPulser):

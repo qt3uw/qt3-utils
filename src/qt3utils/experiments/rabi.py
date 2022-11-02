@@ -2,7 +2,7 @@ import logging
 import time
 import numpy as np
 import nidaqmx.errors
-
+import nidaqmx.constants
 import qt3utils.experiments.common
 import qt3utils.experiments.podmr
 
@@ -61,7 +61,7 @@ class Rabi(qt3utils.experiments.common.Experiment):
         of an experiment and the hardware system setup.
 
         Hardware Settings
-            podmr_pulser - a qt3utils.experiments.pulsers.interface.ODMRPulser object (such as qt3utils.experiments.pulsers.qcsapphire.QCSapphPulsedODMRPulser)
+            podmr_pulser - a qt3utils.pulsers.interface.ODMRPulser object (such as qt3utils.pulsers.qcsapphire.QCSapphPulsedODMRPulser)
             rfsynth - a qt3rfsynthcontrol.Pulser object
             edge_counter_config - a qt3utils.nidaq.config.EdgeCounter object
 
@@ -130,6 +130,64 @@ class Rabi(qt3utils.experiments.common.Experiment):
     #     except:
     #         pass
 
+    def _acquire_data_at_parameter(self, rf_width, N_cycles = 10000,
+                              post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
+
+        self.N_cycles = int(N_cycles)
+
+        self.current_rf_width = np.round(rf_width, 9)
+        logger.info(f'RF Width: {self.current_rf_width} seconds')
+
+        self.N_clock_ticks_per_cycle = self.pulser.program_pulser_state(self.current_rf_width)
+        self.pulser.start()
+
+        # compute the total number of samples to be acquired and the DAQ time
+        # these will be the same for each RF frequency through the scan
+        self.N_clock_ticks_per_frequency = int(self.N_clock_ticks_per_cycle * self.N_cycles)
+        self.daq_time = self.N_clock_ticks_per_frequency * self.pulser.clock_period
+        logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} total samples')
+        logger.debug(f'  sample period of {self.pulser.clock_period} seconds')
+        logger.debug(f'  acquisition time of {self.daq_time} seconds')
+
+        self.edge_counter_config.configure_counter_period_measure(
+            source_terminal = self.photon_counter_nidaq_terminal,
+            N_samples_to_acquire_or_buffer_size = self.N_clock_ticks_per_frequency,
+            clock_terminal = self.clock_nidaq_terminal,
+            trigger_terminal = self.trigger_nidaq_terminal)
+
+        self.edge_counter_config.create_counter_reader()
+
+        data_buffer = np.zeros(self.N_clock_ticks_per_frequency)
+
+        self.edge_counter_config.counter_task.wait_until_done()
+        self.edge_counter_config.counter_task.start()
+        print(self.N_clock_ticks_per_frequency)
+        print(self.pulser.clock_period)
+        print(self.daq_time)
+        time.sleep(self.daq_time*1.5) #pause for acquisition
+
+        # data_buffer = self.edge_counter_config.counter_task.read(nidaqmx.constants.READ_ALL_AVAILABLE,
+        #                                                          nidaqmx.constants.WAIT_INFINITELY)
+        # data_buffer = np.array(data_buffer)
+        # print(data_buffer.shape)
+        read_samples = self.edge_counter_config.counter_reader.read_many_sample_double(
+                                data_buffer,
+                                number_of_samples_per_channel=self.N_clock_ticks_per_frequency,
+                                timeout=np.max([5,self.daq_time*10]))
+
+        #should we assert that we read all samples? read_samples == self.N_clock_ticks_per_frequency
+        #self._stop_and_close_daq_tasks()
+        self.edge_counter_config.counter_task.stop()
+        self.edge_counter_config.counter_task.close()
+
+        self.pulser.stop()
+
+        if post_process_function:
+            data_buffer = post_process_function(data_buffer, self)
+
+        #should we make this a dictionary with self.current_rf_width as the key?
+        return [self.current_rf_width, data_buffer]
+
     def run(self, N_cycles = 50000,
                   post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
         '''
@@ -182,8 +240,6 @@ class Rabi(qt3utils.experiments.common.Experiment):
             logger.error(f'The largest requested RF width pulse, self.rf_width_high = {self.rf_width_high}, is too large.')
             raise e
 
-        self.N_cycles = int(N_cycles)
-
         self.rfsynth.stop_sweep()
         self.rfsynth.trigger_mode('disabled')
         self.rfsynth.set_power(self.rfsynth_channel, self.rf_power)
@@ -197,49 +253,7 @@ class Rabi(qt3utils.experiments.common.Experiment):
 
         try:
             for rf_width in rf_width_list:
-                self.current_rf_width = np.round(rf_width, 9)
-                logger.info(f'RF Width: {self.current_rf_width} seconds')
-
-                self.N_clock_ticks_per_cycle = self.pulser.program_pulser_state(self.current_rf_width)
-                self.pulser.start()
-
-                # compute the total number of samples to be acquired and the DAQ time
-                # these will be the same for each RF frequency through the scan
-                self.N_clock_ticks_per_frequency = int(self.N_clock_ticks_per_cycle * self.N_cycles)
-                self.daq_time = self.N_clock_ticks_per_frequency * self.pulser.clock_period
-                logger.debug(f'Acquiring {self.N_clock_ticks_per_frequency} total samples')
-                logger.debug(f'  sample period of {self.pulser.clock_period} seconds')
-                logger.debug(f'  acquisition time of {self.daq_time} seconds')
-
-                self.edge_counter_config.configure_counter_period_measure(
-                    source_terminal = self.photon_counter_nidaq_terminal,
-                    N_samples_to_acquire_or_buffer_size = self.N_clock_ticks_per_frequency,
-                    clock_terminal = self.clock_nidaq_terminal,
-                    trigger_terminal = self.trigger_nidaq_terminal)
-
-                self.edge_counter_config.create_counter_reader()
-
-                data_buffer = np.zeros(self.N_clock_ticks_per_frequency)
-
-                self.edge_counter_config.counter_task.wait_until_done()
-                self.edge_counter_config.counter_task.start()
-                time.sleep(self.daq_time*1.1) #pause for acquisition
-
-                read_samples = self.edge_counter_config.counter_reader.read_many_sample_double(
-                                        data_buffer,
-                                        number_of_samples_per_channel=self.N_clock_ticks_per_frequency,
-                                        timeout=5)
-
-                #should we assert that we read all samples? read_samples == self.N_clock_ticks_per_frequency
-                #self._stop_and_close_daq_tasks()
-                self.edge_counter_config.counter_task.stop()
-                self.pulser.stop()
-
-                if post_process_function:
-                    data_buffer = post_process_function(data_buffer, self)
-
-                #should we make this a dictionary with self.current_rf_width as the key?
-                data.append([self.current_rf_width, data_buffer])
+                data.append(self._acquire_data_at_parameter(rf_width, N_cycles, post_process_function))
 
         except Exception as e:
             logger.error(f'{type(e)}: {e}')
