@@ -98,7 +98,7 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
             self.nidaq_config.configure_di_clock(clock_rate = self.clock_rate)
             clock_terminal = self.nidaq_config.clock_task_config['clock_terminal']
         else:
-            clock_terminal = clock_terminal
+            clock_terminal = self.clock_terminal
 
         self.nidaq_config.configure_counter_period_measure(
             daq_counter = self.signal_counter,
@@ -140,7 +140,8 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
             self.stop()
 
         self._configure_daq()
-        self.nidaq_config.clock_task.start()
+        if self.nidaq_config.clock_task:
+            self.nidaq_config.clock_task.start()
         self.running = True
 
     def _burn_and_log_exception(self, f):
@@ -155,9 +156,10 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
             while self.read_lock:
                 time.sleep(0.1) #wait for current read to complete
 
-            self._burn_and_log_exception(self.nidaq_config.clock_task.stop)
+            if self.nidaq_config.clock_task:
+                self._burn_and_log_exception(self.nidaq_config.clock_task.stop)
+                self._burn_and_log_exception(self.nidaq_config.clock_task.close) #close the task to free resource on NIDAQ
             #self._burn_and_log_exception(self.nidaq_config.counter_task.stop) #will need to stop task if we move to continuous buffered acquisition
-            self._burn_and_log_exception(self.nidaq_config.clock_task.close) #close the task to free resource on NIDAQ
             self._burn_and_log_exception(self.nidaq_config.counter_task.close)
 
         self.running = False
