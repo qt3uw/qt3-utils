@@ -100,6 +100,97 @@ class PulseBlasterHoldAOM(PulseBlaster):
         pass
 
 
+class PulseBlasterArb(PulseBlaster):
+
+    def __init__(self, pb_board_number = 1):
+
+        self.pb_board_number = pb_board_number
+        self.reset()
+
+    def reset(self):
+        self.clock_channels = {}
+        self.clock_period = None
+        self.channel_settings = []
+        self.full_cycle_width = 0
+
+    def set_clock_channels(self, pulse_blaster_channels, clock_period):
+        '''
+        pulse_blaster_channel can be an int or a list of ints
+        '''
+        if type(pulse_blaster_channels) == int:
+            pulse_blaster_channels = [pulse_blaster_channels]
+
+        self.clock_channels = pulse_blaster_channels
+        self.clock_period = np.round(clock_period,8)
+
+    def add_channels(self, pulse_blaster_channels, start_time, pulse_width):
+        '''
+        pulse_blaster_channel can be an int or a list of ints
+        start_time and pulse_width are in seconds (and will be rounded
+        to the nearest 10ns)
+
+        One side-effect of this function is that it will increase the object's
+        self.full_cycle_width value if a requested channel's start_time + pulse_width
+        exceeds the current full_cycle_width value.
+
+        Otherwise, one may also set the full cycle width manually with set_full_cycle_length.
+        '''
+        if type(pulse_blaster_channels) == int:
+            pulse_blaster_channels = [pulse_blaster_channels]
+
+        for pulse_blaster_channel in pulse_blaster_channels:
+            self.channel_settings.append({
+                'channel':pulse_blaster_channel,
+                'start':np.round(start_time, 8),
+                'width':np.round(pulse_width, 8)
+                })
+            if np.round(start_time, 8) + np.round(pulse_width, 8) > self.full_cycle_width:
+                self.full_cycle_width = np.round(start_time, 8) + np.round(pulse_width, 8)
+
+    def set_full_cycle_length(self, cycle_width):
+        '''
+        cycle_width is in units of seconds and will be rounded to the nearest 10ns.
+
+        Be sure to set this to a value greater than or equal to the time you need
+        for your individual channels.
+        '''
+        self.full_cycle_width = np.round(cycle_width, 8)
+
+    def program_pulser_state(self, *args, **kwargs):
+        '''
+        Programs the pulser based on the state of the object, as instructed
+        by calls to set_clock_channels, set_channels and set_full_cycle_length
+
+        '''
+        hardware_pins = self.clock_channels + [s['channel'] for s in self.channel_settings]
+
+        self.open()
+        pb = PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
+        self.start_programming()
+
+        for clock_channel in self.clock_channels:
+            pb.make_clock(clock_channel, int(self.clock_period*1e9))
+
+        for a_chan_setting in self.channel_settings:
+            pb.on(a_chan_setting['channel'], int(a_chan_setting['start']*1e9), int(a_chan_setting['width']*1e9))
+
+        pb.program([],float('inf'))
+        self.stop_programming()
+
+        self.close()
+        return np.round(self.full_cycle_width / self.clock_period).astype(int)
+
+    def experimental_conditions(self):
+        '''
+        Returns a dictionary of paramters that are pertinent for the relevant experiment
+        '''
+        return {
+            'full_cycle_width':self.full_cycle_width,
+            'clock_period':self.clock_period,
+            'channel_settings':self.channel_settings
+        }
+
+
 class PulseBlasterCWODMR(PulseBlaster):
     '''
     Programs the pulse sequences needed for CWODMR.
