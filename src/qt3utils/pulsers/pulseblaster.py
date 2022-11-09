@@ -115,7 +115,7 @@ class PulseBlasterCWODMR(PulseBlaster):
                        rf_channel = 1,
                        clock_channel = 2,
                        trigger_channel = 3,
-                       rf_width = 5e-6,
+                       rf_pulse_duration = 5e-6,
                        clock_period = 200e-9,
                        trigger_width = 500e-9):
         """
@@ -130,22 +130,22 @@ class PulseBlasterCWODMR(PulseBlaster):
         self.rf_channel = rf_channel
         self.clock_channel = clock_channel
         self.trigger_channel = trigger_channel
-        self.rf_width = np.round(rf_width, 8)
+        self.rf_pulse_duration = np.round(rf_pulse_duration, 8)
         self.clock_period = np.round(clock_period, 8)
         self.trigger_width = np.round(trigger_width, 8)
 
 
-    def program_pulser_state(self, rf_width = None, *args, **kwargs):
+    def program_pulser_state(self, rf_pulse_duration = None, *args, **kwargs):
         '''
-        rf_width is in seconds
+        rf_pulse_duration is in seconds
         '''
-        if rf_width:
-            self.raise_for_pulse_width(rf_width)
-            self.rf_width = np.round(rf_width,8)
+        if rf_pulse_duration:
+            self.raise_for_pulse_width(rf_pulse_duration)
+            self.rf_pulse_duration = np.round(rf_pulse_duration,8)
         else:
-            self.raise_for_pulse_width(self.rf_width)
+            self.raise_for_pulse_width(self.rf_pulse_duration)
 
-        cycle_length = 2*self.rf_width
+        cycle_length = 2*self.rf_pulse_duration
 
         hardware_pins = [self.aom_channel, self.rf_channel,
                          self.clock_channel, self.trigger_channel]
@@ -157,7 +157,7 @@ class PulseBlasterCWODMR(PulseBlaster):
         pb.on(self.trigger_channel, 0, int(self.trigger_width*1e9))
         pb.make_clock(self.clock_channel, int(self.clock_period*1e9))
         pb.on(self.aom_channel, 0, int(cycle_length*1e9))
-        pb.on(self.rf_channel, 0, int(self.rf_width*1e9))
+        pb.on(self.rf_channel, 0, int(self.rf_pulse_duration*1e9))
 
         pb.program([],float('inf'))
         self.stop_programming()
@@ -171,13 +171,13 @@ class PulseBlasterCWODMR(PulseBlaster):
         Returns a dictionary of paramters that are pertinent for the relevant experiment
         '''
         return {
-            'rf_width':self.rf_width,
+            'rf_pulse_duration':self.rf_pulse_duration,
             'clock_period':self.clock_period
         }
 
-    def raise_for_pulse_width(self, rf_width, *args, **kwargs):
-        if rf_width < 50e-9:
-            raise PulseTrainWidthError(f'RF width too small {int(rf_width)} < 50 ns')
+    def raise_for_pulse_width(self, rf_pulse_duration, *args, **kwargs):
+        if rf_pulse_duration < 50e-9:
+            raise PulseTrainWidthError(f'RF width too small {int(rf_pulse_duration)} < 50 ns')
 
 class PulseBlasterPulsedODMR(PulseBlaster):
     '''
@@ -202,7 +202,7 @@ class PulseBlasterPulsedODMR(PulseBlaster):
                        trigger_channel = 3,
                        clock_period = 200e-9,
                        trigger_width = 500e-9,
-                       rf_width = 5e-6,
+                       rf_pulse_duration = 5e-6,
                        aom_width = 5e-6,
                        aom_response_time = 800e-9,
                        rf_response_time = 200e-9,
@@ -223,7 +223,7 @@ class PulseBlasterPulsedODMR(PulseBlaster):
         self.trigger_channel = trigger_channel
 
         self.aom_width = np.round(aom_width, 8)
-        self.rf_width = np.round(rf_width, 8)
+        self.rf_pulse_duration = np.round(rf_pulse_duration, 8)
         self.aom_response_time = np.round(aom_response_time, 8)
         self.rf_response_time = np.round(rf_response_time, 8)
         self.post_rf_pad = np.round(post_rf_pad, 8)
@@ -234,29 +234,29 @@ class PulseBlasterPulsedODMR(PulseBlaster):
         self.clock_period = np.round(clock_period, 8)
         self.trigger_width = np.round(trigger_width, 8)
 
-#TODO  add def compute_rf_pulse_sequence(rf_width)
+#TODO  add def compute_rf_pulse_sequence(rf_pulse_duration)
 
-    def program_pulser_state(self, rf_width = None, *args, **kwargs):
+    def program_pulser_state(self, rf_pulse_duration = None, *args, **kwargs):
         '''
-        rf_width is in seconds
+        rf_pulse_duration is in seconds
         '''
-        if rf_width:
-            self.raise_for_pulse_width(rf_width)
-            self.rf_width = np.round(rf_width,8)
+        if rf_pulse_duration:
+            self.raise_for_pulse_width(rf_pulse_duration)
+            self.rf_pulse_duration = np.round(rf_pulse_duration,8)
         else:
-            self.raise_for_pulse_width(self.rf_width)
+            self.raise_for_pulse_width(self.rf_pulse_duration)
 
         assert self.rf_pulse_justify in ['left', 'center', 'right', 'start_center']
         half_cycle_width = self.full_cycle_width / 2
 
         if self.rf_pulse_justify == 'center':
-            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_width/2 - self.rf_response_time
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_pulse_duration/2 - self.rf_response_time
         if self.rf_pulse_justify == 'start_center':
             delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_response_time
         if self.rf_pulse_justify == 'left':
             delay_rf_channel = self.aom_width + self.aom_response_time + self.pre_rf_pad - self.rf_response_time
         if self.rf_pulse_justify == 'right':
-            delay_rf_channel = half_cycle_width - self.post_rf_pad - self.rf_width - self.rf_response_time + self.aom_response_time
+            delay_rf_channel = half_cycle_width - self.post_rf_pad - self.rf_pulse_duration - self.rf_response_time + self.aom_response_time
 
         hardware_pins = [self.aom_channel, self.rf_channel,
                          self.clock_channel, self.trigger_channel]
@@ -268,7 +268,7 @@ class PulseBlasterPulsedODMR(PulseBlaster):
         pb.on(self.trigger_channel, 0, int(self.trigger_width*1e9))
         pb.make_clock(self.clock_channel, int(self.clock_period*1e9))
         pb.on(self.aom_channel, 0, int(self.aom_width*1e9))
-        pb.on(self.rf_channel, int(delay_rf_channel*1e9), int(self.rf_width*1e9))
+        pb.on(self.rf_channel, int(delay_rf_channel*1e9), int(self.rf_pulse_duration*1e9))
         pb.on(self.aom_channel, int(half_cycle_width*1e9), int(self.aom_width*1e9))
         pb.program([],float('inf'))
 
@@ -281,7 +281,7 @@ class PulseBlasterPulsedODMR(PulseBlaster):
         Returns a dictionary of paramters that are pertinent for the relevant experiment
         '''
         return {
-            'rf_width':self.rf_width,
+            'rf_pulse_duration':self.rf_pulse_duration,
             'aom_width':self.aom_width,
             'aom_response_time':self.aom_response_time,
             'post_rf_pad':self.post_rf_pad,
@@ -291,12 +291,12 @@ class PulseBlasterPulsedODMR(PulseBlaster):
             'clock_period':self.clock_period
         }
 
-    def raise_for_pulse_width(self, rf_width):
+    def raise_for_pulse_width(self, rf_pulse_duration):
         #the following enforces that the full cycle width is large enough
         requested_total_width = self.aom_width
         requested_total_width += self.aom_response_time
         requested_total_width += self.pre_rf_pad
-        requested_total_width += rf_width
+        requested_total_width += rf_pulse_duration
         requested_total_width += self.post_rf_pad
 
         if requested_total_width >= self.full_cycle_width / 2:
