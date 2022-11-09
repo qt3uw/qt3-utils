@@ -181,13 +181,13 @@ def build_data_model():
     if args.randomtest:
         data_acquisition_model = datasources.RandomRateCounter()
     else:
-        data_acquisition_model = datasources.NiDaqDigitalInputRateCounter(args.daq_name,
-                                                                          args.signal_terminal,
-                                                                          args.clock_rate,
-                                                                          args.num_data_samples_per_batch,
-                                                                          args.clock_terminal,
-                                                                          args.rwtimeout,
-                                                                          args.signal_counter)
+        data_acquisition_model = datasources.NiDaqDigitalInputRateCounter(daq_name = args.daq_name,
+                                                                          signal_terminal = args.signal_terminal,
+                                                                          clock_rate = args.clock_rate,
+                                                                          num_data_samples_per_batch = args.num_data_samples_per_batch,
+                                                                          clock_terminal = args.clock_terminal,
+                                                                          read_write_timeout = args.rwtimeout,
+                                                                          signal_counter = args.signal_counter)
     return data_acquisition_model
 
 def run_console():
