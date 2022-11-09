@@ -10,26 +10,26 @@ from qt3utils.errors import PulseTrainWidthError
 
 logger = logging.getLogger(__name__)
 
-def signal_to_background(trace, pre_trigger, aom_width, rf_width, verbose=False,
+def signal_to_background(trace, pre_trigger, aom_width, rf_pulse_duration, verbose=False,
                         aom_width_duty = 1.0):
     '''
     Assumes trace produced by qt3utils.experiments.rabi.Rabi class and
     is the aggregated data for a particular RF width.
 
-    The inputs `pre_trigger`, `aom_width` and `rf_width` are all in units of index of the trace.
+    The inputs `pre_trigger`, `aom_width` and `rf_pulse_duration` are all in units of index of the trace.
     That is, they are in units of clock ticks.
 
     Assumes that trace is of shape
         * pre_trigger
         * aom_width: aom on / rf off (background)
-        * rf_width:  aom off / rf on
+        * rf_pulse_duration:  aom off / rf on
         * aom_width: aom on/ rf off  (signal)
 
     returns sum(signal) / sum(background)
 
     '''
     background_end = pre_trigger + int(aom_width*aom_width_duty)
-    signal_start = pre_trigger + aom_width + rf_width
+    signal_start = pre_trigger + aom_width + rf_pulse_duration
     signal_end = signal_start + int(aom_width*aom_width_duty)
 
     background = np.sum(trace[pre_trigger:background_end])
@@ -50,9 +50,9 @@ class Rabi(qt3utils.experiments.common.Experiment):
                        photon_counter_nidaq_terminal = 'PFI0',
                        clock_nidaq_terminal = 'PFI12',
                        trigger_nidaq_terminal = 'PFI1',
-                       rf_width_low = 100e-9,
-                       rf_width_high = 10e-6,
-                       rf_width_step = 50e-9,
+                       rf_pulse_duration_low = 100e-9,
+                       rf_pulse_duration_high = 10e-6,
+                       rf_pulse_duration_step = 50e-9,
                        rf_power = -20,
                        rf_frequency = 2870e6,
                        rfsynth_channel = 0):
@@ -73,7 +73,7 @@ class Rabi(qt3utils.experiments.common.Experiment):
         Experimental parameters
 
             The rf width parameters define the range and step size of the scan.
-                The scan is inclusive of rf_width_low and rf_width_high.
+                The scan is inclusive of rf_pulse_duration_low and rf_pulse_duration_high.
             The rf_power specifices the power of the MW source in units of dB mWatt.
 
         The user is responsible for analyzing the data. However, during acquisition,
@@ -89,9 +89,9 @@ class Rabi(qt3utils.experiments.common.Experiment):
         ## TODO: assert conditions on rf width low, high and step sizes
         # to be compatible with pulser.
 
-        self.rf_width_low = np.round(rf_width_low, 9)
-        self.rf_width_high = np.round(rf_width_high, 9)
-        self.rf_width_step = np.round(rf_width_step, 9)
+        self.rf_pulse_duration_low = np.round(rf_pulse_duration_low, 9)
+        self.rf_pulse_duration_high = np.round(rf_pulse_duration_high, 9)
+        self.rf_pulse_duration_step = np.round(rf_pulse_duration_step, 9)
         self.rf_power = rf_power
         self.rf_frequency = rf_frequency
 
@@ -112,9 +112,9 @@ class Rabi(qt3utils.experiments.common.Experiment):
         Returns a dictionary that captures the essential experimental conditions.
         '''
         return {
-            'rf_width_low':self.rf_width_low,
-            'rf_width_high':self.rf_width_high,
-            'rf_width_step':self.rf_width_step,
+            'rf_pulse_duration_low':self.rf_pulse_duration_low,
+            'rf_pulse_duration_high':self.rf_pulse_duration_high,
+            'rf_pulse_duration_step':self.rf_pulse_duration_step,
             'rf_power':self.rf_power,
             'rf_frequency':self.rf_frequency,
             'pulser':self.pulser.experimental_conditions()
@@ -204,10 +204,10 @@ class Rabi(qt3utils.experiments.common.Experiment):
 
         For each width, the number of data read from the NI DAQ will be
         N_clock_ticks_per_cycle * N_cycles, where N_clock_ticks_per_cycle
-        is the value returned by self.set_pulser_state(rf_width).
+        is the value returned by self.set_pulser_state(rf_pulse_duration).
 
         Given the way our pulser is configured, N_clock_ticks_per_cycle will
-        grow linearly by rf_width.
+        grow linearly by rf_pulse_duration.
 
         The acquired data are stored in a data_buffer within this method. They
         may be analyzed with a function passed to post_process_function,
@@ -234,10 +234,10 @@ class Rabi(qt3utils.experiments.common.Experiment):
 
         #first check that the pulser width is large enough
         try:
-            self.pulser.raise_for_pulse_width(self.rf_width_high)
+            self.pulser.raise_for_pulse_width(self.rf_pulse_duration_high)
             #quesiton: should we automatically increase the pulser width or force the user to do it?
         except PulseTrainWidthError as e:
-            logger.error(f'The largest requested RF width pulse, self.rf_width_high = {self.rf_width_high}, is too large.')
+            logger.error(f'The largest requested RF width pulse, self.rf_pulse_duration_high = {self.rf_pulse_duration_high}, is too large.')
             raise e
 
         self.rfsynth.stop_sweep()
@@ -249,7 +249,7 @@ class Rabi(qt3utils.experiments.common.Experiment):
         time.sleep(0.5) #wait for RF box
 
         data = []
-        rf_width_list = np.arange(self.rf_width_low, self.rf_width_high + self.rf_width_step, self.rf_width_step)
+        rf_pulse_duration_list = np.arange(self.rf_pulse_duration_low, self.rf_pulse_duration_high + self.rf_pulse_duration_step, self.rf_pulse_duration_step)
 
         try:
             for rf_width in rf_width_list:
