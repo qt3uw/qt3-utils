@@ -17,7 +17,7 @@ class QCSapphCWODMRPulser(ExperimentPulser):
                        rf_channel = 'B',
                        clock_channel = 'C',
                        trigger_channel = 'D',
-                       rf_width = 5e-6,
+                       rf_pulse_duration = 5e-6,
                        clock_period = 200e-9,
                        trigger_width = 500e-9):
         """
@@ -30,7 +30,7 @@ class QCSapphCWODMRPulser(ExperimentPulser):
         self.rf_channel = rf_channel
         self.clock_channel = clock_channel
         self.trigger_channel = trigger_channel
-        self.rf_width = np.round(rf_width, 8)
+        self.rf_pulse_duration = np.round(rf_pulse_duration, 8)
         self.clock_period = np.round(clock_period, 8)
         self.trigger_width = np.round(trigger_width, 8)
 
@@ -39,13 +39,13 @@ class QCSapphCWODMRPulser(ExperimentPulser):
         Returns a dictionary of paramters that are pertinent for the relevant experiment
         '''
         return {
-            'rf_width':self.rf_width,
+            'rf_pulse_duration':self.rf_pulse_duration,
             'clock_period':self.clock_period
         }
 
-    def raise_for_pulse_width(self, rf_width, *args, **kwargs):
-        if rf_width < 10e-9:
-            raise PulseTrainWidthError(f'RF width too small {int(rf_width)} < 10 ns')
+    def raise_for_pulse_width(self, rf_pulse_duration, *args, **kwargs):
+        if rf_pulse_duration < 10e-9:
+            raise PulseTrainWidthError(f'RF width too small {int(rf_pulse_duration)} < 10 ns')
 
     def reset_pulser(self, num_resets = 2):
 
@@ -58,16 +58,16 @@ class QCSapphCWODMRPulser(ExperimentPulser):
         self.pulser.query('*RST')
         self.pulser.system.mode('normal')
 
-    def program_pulser_state(self, rf_width = None, *args, **kwargs):
+    def program_pulser_state(self, rf_pulse_duration = None, *args, **kwargs):
         '''
         Program the pulser to generate a signals on all channels --
         RF channel, clock channel and trigger channel.
 
-        Allows the user to set a different rf_width after object instantiation.
+        Allows the user to set a different rf_pulse_duration after object instantiation.
 
         Note that, in this current implementation, the rf width is half the
         full cycle width of the pulser. That is, one full cycle is RF on for
-        time 'rf_width', followed by RF off for time 'rf_width'.
+        time 'rf_pulse_duration', followed by RF off for time 'rf_pulse_duration'.
 
         For CWODMR with the QCSapphire Pulser, the optical pumping laser must
         be on continuously through external means (typically, this is achieved
@@ -91,22 +91,22 @@ class QCSapphCWODMRPulser(ExperimentPulser):
         clock_channel.delay(0)
 
         #set up the RF pulse
-        if rf_width:
-            self.raise_for_pulse_width(rf_width)
-            self.rf_width = np.round(rf_width,8)
+        if rf_pulse_duration:
+            self.raise_for_pulse_width(rf_pulse_duration)
+            self.rf_pulse_duration = np.round(rf_pulse_duration,8)
         else:
-            self.raise_for_pulse_width(self.rf_width)
+            self.raise_for_pulse_width(self.rf_pulse_duration)
 
         on_count_rf_channel = 1
         #if we support CWODMR setup where RF on duty cycle != 50%, would allow for user
-        #to specify full_cycle_width and rf_width separately.
+        #to specify full_cycle_width and rf_pulse_duration separately.
         #but currently, we only support 50% duty cycle
-        self.full_cycle_width = np.round(2 * self.rf_width, 8)
+        self.full_cycle_width = np.round(2 * self.rf_pulse_duration, 8)
         off_count_rf_channel = np.round(self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
 
         rf_channel = self.pulser.channel(self.rf_channel)
         rf_channel.mode('dcycle')
-        rf_channel.width(self.rf_width)
+        rf_channel.width(self.rf_pulse_duration)
         rf_channel.delay(0)
         rf_channel.pcounter(on_count_rf_channel)
         rf_channel.ocounter(off_count_rf_channel)
@@ -157,7 +157,7 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
                        trigger_channel = 'D',
                        clock_period = 200e-9,
                        trigger_width = 500e-9,
-                       rf_width = 5e-6,
+                       rf_pulse_duration = 5e-6,
                        aom_width = 5e-6,
                        aom_response_time = 800e-9,
                        rf_response_time = 200e-9,
@@ -178,7 +178,7 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
         self.trigger_channel = trigger_channel
 
         self.aom_width = np.round(aom_width, 8)
-        self.rf_width = np.round(rf_width, 8)
+        self.rf_pulse_duration = np.round(rf_pulse_duration, 8)
         self.aom_response_time = np.round(aom_response_time, 8)
         self.rf_response_time = np.round(rf_response_time, 8)
         self.post_rf_pad = np.round(post_rf_pad, 8)
@@ -194,7 +194,7 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
         Returns a dictionary of paramters that are pertinent for the relevant experiment
         '''
         return {
-            'rf_width':self.rf_width,
+            'rf_pulse_duration':self.rf_pulse_duration,
             'aom_width':self.aom_width,
             'aom_response_time':self.aom_response_time,
             'post_rf_pad':self.post_rf_pad,
@@ -215,23 +215,23 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
         self.pulser.query('*RST')
         self.pulser.system.mode('normal')
 
-    def raise_for_pulse_width(self, rf_width):
+    def raise_for_pulse_width(self, rf_pulse_duration):
         #the following enforces that the full cycle width is large enough
         requested_total_width = self.aom_width
         requested_total_width += self.aom_response_time
         requested_total_width += self.pre_rf_pad
-        requested_total_width += rf_width
+        requested_total_width += rf_pulse_duration
         requested_total_width += self.post_rf_pad
 
         if requested_total_width >= self.full_cycle_width / 2:
             raise PulseTrainWidthError(f"full cycle width, {self.full_cycle_width / 2}, is not large enough to support requested pulse sequence, {requested_total_width}.")
 
-    def program_pulser_state(self, rf_width = None, *args, **kwargs):
+    def program_pulser_state(self, rf_pulse_duration = None, *args, **kwargs):
         '''
         Sets the pulser to generate a signals on all channels -- AOM channel,
         RF channel, clock channel and trigger channel.
 
-        Allows the user to set a different rf_width after object instantiation.
+        Allows the user to set a different rf_pulse_duration after object instantiation.
 
         Note that the pulser will be in the OFF state after calling this function.
         Call self.start() for the QCSapphire to start the pulser.
@@ -243,11 +243,11 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
             int: N_clock_ticks_per_cycle
 
         '''
-        if rf_width: #update to a different rf_width
-            self.raise_for_pulse_width(rf_width)
-            self.rf_width = np.round(rf_width,8)
+        if rf_pulse_duration: #update to a different rf_pulse_duration
+            self.raise_for_pulse_width(rf_pulse_duration)
+            self.rf_pulse_duration = np.round(rf_pulse_duration,8)
         else:
-            self.raise_for_pulse_width(self.rf_width)
+            self.raise_for_pulse_width(self.rf_pulse_duration)
 
         assert self.rf_pulse_justify in ['left', 'center', 'right', 'start_center']
         half_cycle_width = self.full_cycle_width / 2
@@ -264,13 +264,13 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
         channel.ocounter(off_count_aom_channel)
 
         if self.rf_pulse_justify == 'center':
-            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_width/2 - self.rf_response_time
+            delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_pulse_duration/2 - self.rf_response_time
         if self.rf_pulse_justify == 'start_center':
             delay_rf_channel = self.aom_width + (half_cycle_width - self.aom_width)/2 - self.rf_response_time
         if self.rf_pulse_justify == 'left':
             delay_rf_channel = self.aom_width + self.aom_response_time + self.pre_rf_pad - self.rf_response_time
         if self.rf_pulse_justify == 'right':
-            delay_rf_channel = half_cycle_width - self.post_rf_pad - self.rf_width - self.rf_response_time + self.aom_response_time
+            delay_rf_channel = half_cycle_width - self.post_rf_pad - self.rf_pulse_duration - self.rf_response_time + self.aom_response_time
 
         #todo: check to be sure the RF pulse is fully outside of the aom response + pad time, raise exception if violated
 
@@ -281,7 +281,7 @@ class QCSapphPulsedODMRPulser(ExperimentPulser):
         off_count_rf_channel = np.round(self.full_cycle_width/self.clock_period).astype(int) - on_count_rf_channel
         channel = self.pulser.channel(self.rf_channel)
         channel.mode('dcycle')
-        channel.width(self.rf_width)
+        channel.width(self.rf_pulse_duration)
         channel.delay(delay_rf_channel)
         channel.pcounter(on_count_rf_channel)
         channel.ocounter(off_count_rf_channel)
