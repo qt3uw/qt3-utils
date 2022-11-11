@@ -55,51 +55,6 @@ class PulseBlaster(ExperimentPulser):
             raise PulseBlasterInitError(f'{ret}: {pulseblaster.spinapi.pb_get_error()}')
         pulseblaster.spinapi.pb_core_clock(100*pulseblaster.spinapi.MHz)
 
-class PulseBlasterHoldAOM(PulseBlaster):
-    '''
-    Holds the AOM channel open indefinitely by programming it
-    to output a constant positive voltage.
-
-    Useful for confocal scanning.
-    '''
-    def __init__(self, pb_board_number = 1,
-                       aom_channel = 0,
-                       cycle_width = 10e-3):
-        """
-        pb_board_number - the board number (0, 1, ...)
-        aom_channel output controls the AOM by holding a positive voltage
-        cycle_width - the length of the programmed pulse. Since aom channel is held on, this value is arbitrary
-        """
-        self.pb_board_number = pb_board_number
-        self.aom_channel = aom_channel
-        self.cycle_width = np.round(cycle_width, 8)
-
-    def program_pulser_state(self, *args, **kwargs):
-        '''
-        returns a 0 instead of the number of samples acquired per full signal cycle
-        '''
-        hardware_pins = [self.aom_channel]
-        self.open()
-        pb = PBInd(pins = hardware_pins, on_time = int(self.cycle_width*1e9))
-        self.start_programming()
-
-        pb.on(self.aom_channel, 0, int(self.cycle_width*1e9))
-        pb.program([],float('inf'))
-        self.stop_programming()
-
-        self.close()
-        return 0
-
-    def experimental_conditions(self):
-        '''
-        Returns an empty dictionary
-        '''
-        return {}
-
-    def raise_for_pulse_width(self, *args, **kwargs):
-        pass
-
-
 class PulseBlasterArb(PulseBlaster):
 
     def __init__(self, pb_board_number = 1):
@@ -108,7 +63,7 @@ class PulseBlasterArb(PulseBlaster):
         self.reset()
 
     def reset(self):
-        self.clock_channels = {}
+        self.clock_channels = []
         self.clock_period = None
         self.channel_settings = []
         self.full_cycle_width = 0
@@ -186,10 +141,27 @@ class PulseBlasterArb(PulseBlaster):
         '''
         return {
             'full_cycle_width':self.full_cycle_width,
+            'clock_channels':self.clock_channels,
             'clock_period':self.clock_period,
             'channel_settings':self.channel_settings
         }
 
+class PulseBlasterHoldAOM(PulseBlasterArb):
+    '''
+    Holds the AOM channel open indefinitely by programming it
+    to output a constant positive voltage.
+    Useful for confocal scanning.
+    '''
+    def __init__(self, pb_board_number = 1,
+                       aom_channel = 0,
+                       cycle_width = 10e-3):
+        """
+        pb_board_number - the board number (0, 1, ...)
+        aom_channel output controls the AOM by holding a positive voltage
+        cycle_width - the length of the programmed pulse. Since aom channel is held on, this value is arbitrary
+        """
+        super.__init__(self, pb_board_number)
+        self.add_channels(aom_channel, 0, cycle_width)
 
 class PulseBlasterCWODMR(PulseBlaster):
     '''
