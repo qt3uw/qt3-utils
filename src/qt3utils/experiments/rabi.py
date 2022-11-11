@@ -130,15 +130,15 @@ class Rabi(qt3utils.experiments.common.Experiment):
     #     except:
     #         pass
 
-    def _acquire_data_at_parameter(self, rf_width, N_cycles = 10000,
+    def _acquire_data_at_parameter(self, rf_pulse_duration, N_cycles = 10000,
                               post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
 
         self.N_cycles = int(N_cycles)
 
-        self.current_rf_width = np.round(rf_width, 9)
-        logger.info(f'RF Width: {self.current_rf_width} seconds')
+        self.current_rf_pulse_duration = np.round(rf_pulse_duration, 9)
+        logger.info(f'RF Width: {self.current_rf_pulse_duration} seconds')
 
-        self.N_clock_ticks_per_cycle = self.pulser.program_pulser_state(self.current_rf_width)
+        self.N_clock_ticks_per_cycle = self.pulser.program_pulser_state(self.current_rf_pulse_duration)
         self.pulser.start()
 
         # compute the total number of samples to be acquired and the DAQ time
@@ -185,8 +185,8 @@ class Rabi(qt3utils.experiments.common.Experiment):
         if post_process_function:
             data_buffer = post_process_function(data_buffer, self)
 
-        #should we make this a dictionary with self.current_rf_width as the key?
-        return [self.current_rf_width, data_buffer]
+        #should we make this a dictionary with self.current_rf_pulse_duration as the key?
+        return [self.current_rf_pulse_duration, data_buffer]
 
     def run(self, N_cycles = 50000,
                   post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
@@ -252,8 +252,8 @@ class Rabi(qt3utils.experiments.common.Experiment):
         rf_pulse_duration_list = np.arange(self.rf_pulse_duration_low, self.rf_pulse_duration_high + self.rf_pulse_duration_step, self.rf_pulse_duration_step)
 
         try:
-            for rf_width in rf_width_list:
-                data.append(self._acquire_data_at_parameter(rf_width, N_cycles, post_process_function))
+            for rf_pulse_duration in rf_pulse_duration_list:
+                data.append(self._acquire_data_at_parameter(rf_pulse_duration, N_cycles, post_process_function))
 
         except Exception as e:
             logger.error(f'{type(e)}: {e}')
