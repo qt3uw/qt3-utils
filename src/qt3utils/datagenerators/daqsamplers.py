@@ -77,7 +77,8 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
                        num_data_samples_per_batch = 1000,
                        clock_terminal = None,
                        read_write_timeout = 10,
-                       signal_counter = 'ctr2'
+                       signal_counter = 'ctr2',
+                       trigger_terminal = None,
                        ):
 
         self.daq_name = daq_name
@@ -87,6 +88,7 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
         self.signal_counter = signal_counter
         self.read_write_timeout = read_write_timeout
         self.num_data_samples_per_batch = num_data_samples_per_batch
+        self.trigger_terminal = trigger_terminal
         self.running = False
 
         self.read_lock = False
@@ -105,7 +107,7 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
             source_terminal = self.signal_terminal,
             N_samples_to_acquire_or_buffer_size = self.num_data_samples_per_batch,
             clock_terminal = clock_terminal,
-            trigger_terminal = None,
+            trigger_terminal = self.trigger_terminal,
             sampling_mode = nidaqmx.constants.AcquisitionType.FINITE)
 
         self.nidaq_config.create_counter_reader()
@@ -115,25 +117,40 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
         if self.running is False: #external thread could have stopped
             return np.zeros(1),0
 
-        self.read_lock = True
         data_buffer = np.zeros(self.num_data_samples_per_batch)
-        logger.info('starting counter task')
-        self.nidaq_config.counter_task.start()
-        #DO WE NEED TO PAUSE HERE FOR DATA ACQUISITION?
-        #another method will probably be to configure the task to continuously fill a buffer and read it
-        #out... then we don't need to start and stop, right? TODO
-        #and, with continuous acquisition, there might not need to be any time.sleep
-        time.sleep(1.05*self.num_data_samples_per_batch / self.clock_rate)
-        logger.info(f'pausing for {1.05*self.num_data_samples_per_batch / self.clock_rate:.6f} seconds')
-        logger.info('reading data')
-        samples_read = self.nidaq_config.counter_reader.read_many_sample_double(
-                                data_buffer,
-                                number_of_samples_per_channel=self.num_data_samples_per_batch,
-                                timeout=self.read_write_timeout)
-        logger.info(f'returned {samples_read} samples')
-        self.nidaq_config.counter_task.stop()
-        self.read_lock = False
-        return data_buffer, samples_read
+        samples_read = 0
+
+        try:
+            self.read_lock = True
+            logger.info('starting counter task')
+            self.nidaq_config.counter_task.wait_until_done()
+            self.nidaq_config.counter_task.start()
+            #DO WE NEED TO PAUSE HERE FOR DATA ACQUISITION?
+            #another method will probably be to configure the task to continuously fill a buffer and read it
+            #out... then we don't need to start and stop, right? TODO
+            #and, with continuous acquisition, there might not need to be any time.sleep
+            logger.info(f'waiting for {1.1*self.num_data_samples_per_batch / self.clock_rate:.6f} seconds for data acquisition.')
+            time.sleep(1.1*self.num_data_samples_per_batch / self.clock_rate)
+            logger.info('reading data')
+            samples_read = self.nidaq_config.counter_reader.read_many_sample_double(
+                                    data_buffer,
+                                    number_of_samples_per_channel=self.num_data_samples_per_batch,
+                                    timeout=self.read_write_timeout)
+            logger.info(f'returned {samples_read} samples')
+
+        except Exception as e:
+            logger.error(f'{type(e)}: {e}')
+            raise e
+
+        finally:
+            try:
+                self.nidaq_config.counter_task.stop()
+            except Exception as e:
+                logger.error(f'in finally.stop. {type(e)}: {e}')
+
+            self.read_lock = False
+            return data_buffer, samples_read
+
 
     def start(self):
         if self.running:
