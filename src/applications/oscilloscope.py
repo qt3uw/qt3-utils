@@ -35,7 +35,7 @@ parser.add_argument('-c', '--clock-rate', metavar = 'rate (Hz)', default = 10000
                     this value specifies the clock rate to use. Per the NI DAQ manual,
                     use a suitable clock rate for the device for best performance, which is an integer
                     multiple downsample of the digital sample clock.''')
-parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 100, type=int,
+parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 1500, type=int,
                     help='''Number of data points to acquire per DAQ batch request.
                            Note that only ONE data point is shown in the scope.
                            After each request to the NI DAQ for data, the mean count
@@ -52,7 +52,7 @@ parser.add_argument('-sc', '--signal-counter', metavar = 'ctrN', default = 'ctr2
                     help='NI DAQ interal counter (ctr1, ctr2, ctr3, ctr4)')
 parser.add_argument('-r', '--randomtest', action = 'store_true',
                     help='When true, program will run showing random numbers. This is for development testing.')
-parser.add_argument('-aut', '--animation-update-interval', metavar = 'milliseconds', default = 40,
+parser.add_argument('-aut', '--animation-update-interval', metavar = 'milliseconds', default = 20,
                     help='''Sets the animation update period, t, (in milliseconds).
                     This is the time delay between calls to acquire new data.
                     You should be limited by the data acquisition time = N / clock_rate.''')
