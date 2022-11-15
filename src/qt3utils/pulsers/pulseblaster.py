@@ -116,6 +116,12 @@ class PulseBlasterArb(PulseBlaster):
         Programs the pulser based on the state of the object, as instructed
         by calls to set_clock_channels, set_channels and set_full_cycle_length
 
+        If a clock channel has been specified, will return full_cycle_length / clock_period,
+        which is the number of clock "ticks" for each full pulse sequence cycle.
+        This useful for a data acquisition device that utilizes the clock signal.
+
+        If no clock channel has been specified, will return 0. 
+
         '''
         hardware_pins = self.clock_channels + [s['channel'] for s in self.channel_settings]
 
@@ -131,9 +137,12 @@ class PulseBlasterArb(PulseBlaster):
 
         pb.program([],float('inf'))
         self.stop_programming()
-
         self.close()
-        return np.round(self.full_cycle_width / self.clock_period).astype(int)
+
+        if self.clock_period:
+            return np.round(self.full_cycle_width / self.clock_period).astype(int)
+        else:
+            return 0
 
     def experimental_conditions(self):
         '''
@@ -160,7 +169,7 @@ class PulseBlasterHoldAOM(PulseBlasterArb):
         aom_channel output controls the AOM by holding a positive voltage
         cycle_width - the length of the programmed pulse. Since aom channel is held on, this value is arbitrary
         """
-        super.__init__(self, pb_board_number)
+        super().__init__(pb_board_number)
         self.add_channels(aom_channel, 0, cycle_width)
 
 class PulseBlasterCWODMR(PulseBlaster):
