@@ -17,6 +17,7 @@ import nidaqmx
 import qt3utils.nidaq
 import qt3utils.datagenerators as datasources
 import qt3utils.datagenerators.piezoscanner
+import qt3utils.pulsers.pulseblaster
 import nipiezojenapy
 
 
@@ -59,6 +60,9 @@ parser.add_argument('-q', '--quiet', action = 'store_true',
                     help='When true,logger level will be set to warning. Otherwise, set to "info".')
 parser.add_argument('-cmap', metavar = '<MPL color>', default = 'Reds',
                     help='Set the MatplotLib colormap scale')
+parser.add_argument('-pb', '--pulse-blaster', metavar = '<PB board number>', default = 0, type=int,
+                    help='Pulse Blaster board number')
+
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
@@ -203,6 +207,13 @@ class SidePanel():
         self.n_sample_size_entry.grid(row=row, column=1)
         self.n_sample_size_value.set(args.num_data_samples_per_batch)
 
+        row += 1
+        tk.Label(frame, text="Pulse Blaster AOM").grid(row=row, column=0)
+        self.hold_aom_button = tk.Button(frame, text="Hold AOM")
+        self.hold_aom_button.grid(row=row, column=1, pady=(2,15))
+        self.aom_pulse_blaster_channel = tk.Entry(frame, width=10)
+        self.aom_pulse_blaster_channel.insert(10, '0')
+        self.aom_pulse_blaster_channel.grid(row=row, column=2, pady=(2,15))
 
         row += 1
         tk.Label(frame, text="View Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
@@ -292,6 +303,7 @@ class MainTkApplication():
         self.view.sidepanel.go_to_z_button.bind("<Button>", self.go_to_z)
         self.view.sidepanel.saveScanButton.bind("<Button>", self.save_scan)
         self.view.sidepanel.set_color_map_button.bind("<Button>", self.set_color_map)
+        self.view.sidepanel.hold_aom_button.bind("<Button>", self.hold_aom_with_pulse_blaster)
 
         self.view.sidepanel.optimize_x_button.bind("<Button>", lambda e: self.optimize('x'))
         self.view.sidepanel.optimize_y_button.bind("<Button>", lambda e: self.optimize('y'))
@@ -341,6 +353,12 @@ class MainTkApplication():
         if len(self.model.data) > 0:
             self.view.scan_view.update(self.model)
             self.view.canvas.draw()
+
+    def hold_aom_with_pulse_blaster(self, event = None):
+        aom_channel = int(self.view.sidepanel.aom_pulse_blaster_channel.get())
+        pb = qt3utils.pulsers.pulseblaster.PulseBlasterHoldAOM(args.pulse_blaster, aom_channel)
+        pb.program_pulser_state()
+        pb.start()
 
     def stop_scan(self, event = None):
         self.model.stop()
