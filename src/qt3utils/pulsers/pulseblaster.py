@@ -13,6 +13,9 @@ from qt3utils.errors import PulseBlasterInitError, PulseBlasterError, PulseTrain
 
 class PulseBlaster(ExperimentPulser):
 
+    def __init__(self, instruction_set_resolution_in_ns = 50):
+        self.instruction_set_resolution_in_ns = instruction_set_resolution_in_ns
+
     def start(self):
         self.open()
         ret = pulseblaster.spinapi.pb_start()
@@ -55,10 +58,15 @@ class PulseBlaster(ExperimentPulser):
             raise PulseBlasterInitError(f'{ret}: {pulseblaster.spinapi.pb_get_error()}')
         pulseblaster.spinapi.pb_core_clock(100*pulseblaster.spinapi.MHz)
 
+    def PBInd(self, *args, **kwargs):
+        kwargs['res'] = kwargs.get('res', self.instruction_set_resolution_in_ns)
+        self._PBInd = PBInd(*args, **kwargs)
+        return self._PBInd
+
 class PulseBlasterArb(PulseBlaster):
 
-    def __init__(self, pb_board_number = 1):
-
+    def __init__(self, pb_board_number = 1, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.pb_board_number = pb_board_number
         self.reset()
 
@@ -120,13 +128,13 @@ class PulseBlasterArb(PulseBlaster):
         which is the number of clock "ticks" for each full pulse sequence cycle.
         This useful for a data acquisition device that utilizes the clock signal.
 
-        If no clock channel has been specified, will return 0. 
+        If no clock channel has been specified, will return 0.
 
         '''
         hardware_pins = self.clock_channels + [s['channel'] for s in self.channel_settings]
 
         self.open()
-        pb = PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
+        pb = self.PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
         self.start_programming()
 
         for clock_channel in self.clock_channels:
@@ -163,13 +171,13 @@ class PulseBlasterHoldAOM(PulseBlasterArb):
     '''
     def __init__(self, pb_board_number = 1,
                        aom_channel = 0,
-                       cycle_width = 10e-3):
+                       cycle_width = 10e-3, *args, **kwargs):
         """
         pb_board_number - the board number (0, 1, ...)
         aom_channel output controls the AOM by holding a positive voltage
         cycle_width - the length of the programmed pulse. Since aom channel is held on, this value is arbitrary
         """
-        super().__init__(pb_board_number)
+        super().__init__(pb_board_number, *args, **kwargs)
         self.add_channels(aom_channel, 0, cycle_width)
 
 class PulseBlasterCWODMR(PulseBlaster):
@@ -189,7 +197,7 @@ class PulseBlasterCWODMR(PulseBlaster):
                        trigger_channel = 3,
                        rf_pulse_duration = 5e-6,
                        clock_period = 200e-9,
-                       trigger_width = 500e-9):
+                       trigger_width = 500e-9, *args, **kwargs):
         """
         pb_board_number - the board number (0, 1, ...)
         aom_channel output controls the AOM by holding a positive voltage
@@ -197,6 +205,8 @@ class PulseBlasterCWODMR(PulseBlaster):
         clock_channel output provides a clock input to the NI DAQ card
         trigger_channel output provides a rising edge trigger for the NI DAQ card
         """
+        super().__init__(*args, **kwargs)
+
         self.pb_board_number = pb_board_number
         self.aom_channel = aom_channel
         self.rf_channel = rf_channel
@@ -223,7 +233,7 @@ class PulseBlasterCWODMR(PulseBlaster):
                          self.clock_channel, self.trigger_channel]
 
         self.open()
-        pb = PBInd(pins = hardware_pins, on_time = int(cycle_length*1e9))
+        pb = self.PBInd(pins = hardware_pins, on_time = int(cycle_length*1e9))
         self.start_programming()
 
         pb.on(self.trigger_channel, 0, int(self.trigger_width*1e9))
@@ -281,13 +291,15 @@ class PulseBlasterPulsedODMR(PulseBlaster):
                        pre_rf_pad = 100e-9,
                        post_rf_pad = 100e-9,
                        full_cycle_width = 30e-6,
-                       rf_pulse_justify = 'center'):
+                       rf_pulse_justify = 'center', *args, **kwargs):
         """
         pb_board_number - the board number (0, 1, ...)
         rf_channel output controls a RF switch
         clock_channel output provides a clock input to the NI DAQ card
         trigger_channel output provides a rising edge trigger for the NI DAQ card
         """
+        super().__init__(*args, **kwargs)
+
         self.pb_board_number = pb_board_number
         self.aom_channel = aom_channel
         self.rf_channel = rf_channel
@@ -334,7 +346,7 @@ class PulseBlasterPulsedODMR(PulseBlaster):
                          self.clock_channel, self.trigger_channel]
         self.open()
 
-        pb = PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
+        pb = self.PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
         self.start_programming()
 
         pb.on(self.trigger_channel, 0, int(self.trigger_width*1e9))
@@ -405,7 +417,7 @@ class PulseBlasterRamHahnDD(PulseBlaster):
                        pre_rf_pad = 100e-9,
                        post_rf_pad = 100e-9,
                        free_precession_time = 5e-6,
-                       n_refocussing_pi_pulses = 0):
+                       n_refocussing_pi_pulses = 0, *args, **kwargs):
         """
         Hardware configuration
 
@@ -435,6 +447,8 @@ class PulseBlasterRamHahnDD(PulseBlaster):
         n_refocussing_pi_pulses - will likely be changed via calls program_pulser_state method.
 
         """
+        super().__init__(*args, **kwargs)
+
         self.pb_board_number = pb_board_number
         self.aom_channel = aom_channel
         self.rf_channel = rf_channel
@@ -532,7 +546,7 @@ class PulseBlasterRamHahnDD(PulseBlaster):
                          self.clock_channel, self.trigger_channel]
         self.open()
 
-        pb = PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
+        pb = self.PBInd(pins = hardware_pins, on_time = int(self.full_cycle_width*1e9))
 
         self.start_programming()
 
