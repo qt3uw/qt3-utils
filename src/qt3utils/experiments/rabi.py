@@ -161,10 +161,8 @@ class Rabi(qt3utils.experiments.common.Experiment):
 
         self.edge_counter_config.counter_task.wait_until_done()
         self.edge_counter_config.counter_task.start()
-        print(self.N_clock_ticks_per_frequency)
-        print(self.pulser.clock_period)
-        print(self.daq_time)
-        time.sleep(self.daq_time*1.5) #pause for acquisition
+
+        time.sleep(self.daq_time*1.1) #pause for acquisition
 
         # data_buffer = self.edge_counter_config.counter_task.read(nidaqmx.constants.READ_ALL_AVAILABLE,
         #                                                          nidaqmx.constants.WAIT_INFINITELY)
