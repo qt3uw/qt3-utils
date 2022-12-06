@@ -261,11 +261,11 @@ class Rabi(qt3utils.experiments.common.Experiment):
             try:
                 self.edge_counter_config.counter_task.stop()
             except Exception as e:
-                logger.error(f'in finally.stop. {type(e)}: {e}')
+                pass
             try:
                 self.edge_counter_config.counter_task.close()
             except Exception as e:
-                logger.error(f'in finally.close. {type(e)}: {e}')
+                pass
             #rfsynth.rf_off(self.rfsynth_channel)
             data = np.array(data)
 
