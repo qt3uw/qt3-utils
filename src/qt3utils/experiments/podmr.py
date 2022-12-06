@@ -94,7 +94,8 @@ class PulsedODMR(qt3utils.experiments.common.Experiment):
             pass
 
     def run(self, N_cycles = 500000,
-                  post_process_function = simple_measure_contrast):
+                  post_process_function = simple_measure_contrast,
+                  random_order = False):
         '''
         Performs the PulsedODMR scan over the specificed range of frequencies.
 
