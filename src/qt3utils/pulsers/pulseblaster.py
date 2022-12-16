@@ -13,8 +13,9 @@ from qt3utils.errors import PulseBlasterInitError, PulseBlasterError, PulseTrain
 
 class PulseBlaster(ExperimentPulser):
 
-    def __init__(self, instruction_set_resolution_in_ns = 50):
+    def __init__(self, pb_board_number=0, instruction_set_resolution_in_ns=50):
         self.instruction_set_resolution_in_ns = instruction_set_resolution_in_ns
+        self.pb_board_number = pb_board_number
 
     def start(self):
         self.open()
@@ -65,16 +66,17 @@ class PulseBlaster(ExperimentPulser):
 
 class PulseBlasterArb(PulseBlaster):
 
-    def __init__(self, pb_board_number = 1, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.pb_board_number = pb_board_number
-        self.reset()
+        self.clear_channel_settings()
+        self.clear_clock_channels()
+        self.set_full_cycle_length(0)
 
-    def reset(self):
+    def clear_clock_channels(self):
         self.clock_channels = []
         self.clock_period = None
+    def clear_channel_settings(self):
         self.channel_settings = []
-        self.full_cycle_width = 0
 
     def set_clock_channels(self, pulse_blaster_channels, clock_period):
         '''
@@ -177,8 +179,91 @@ class PulseBlasterHoldAOM(PulseBlasterArb):
         aom_channel output controls the AOM by holding a positive voltage
         cycle_width - the length of the programmed pulse. Since aom channel is held on, this value is arbitrary
         """
-        super().__init__(pb_board_number, *args, **kwargs)
+        super().__init__(pb_board_number=pb_board_number, *args, **kwargs)
         self.add_channels(aom_channel, 0, cycle_width)
+
+class PulseBlasterT1(PulseBlasterArb):
+    """
+    Sets up the pulse blaster to emit TTL signals for measuring the T1 relaxation time of
+    a quantum state that can be optically initialized and read out.
+
+    pulse sequence
+    aom on, aom off for time = ~full_cycle_width/2 - tau, aom on,  aom off for time = tau, aom on, aom off for time = ~full_cycle_width/2
+
+    Note that since this cycle repeats (often for many thousands of times), the first aom on pulse is
+    our background signal because it occurs ~full_cycle_width/2 after the third aom pulse.
+    The second aom pulse occurs a time tau before the third aom pulse.
+    Thus, the third aom pulse acts as a readout that occurs time tau after initialization.
+    It also acts as the initialization for the first aom pulse, which is why we use the first aom pulse for background measuremnt
+    This all assumes, of course, that the ensemble of states can be fully initialized within the aom pulse duration.
+    Default is set to 10 microseconds, which should be sufficient with ~1mW of optical power.
+
+    Also to note: our current reliance on zeeshawn/pulseblaster hinders our ability to create long
+    pulse blaster sequences and simultaneously short clock periods. There seems to be a limitation that
+    full_cycle_width / clock_period <= 2000. This is probably because 2000 clock ticks requires 4000
+    programming instructions, based upon zeeshawn/pulseblaster code. The pulse blaster has a limit
+    of 4k memory for pulse instructions.
+    """
+    def __init__(self, aom_channels=0,
+                       clock_channels=2,
+                       trigger_channels=3,
+                       aom_pulse_duration_time=10e-6,
+                       aom_response_time = 800e-9,
+                       clock_period=0.25e-6,
+                       trigger_pulse_duration=1e-6,
+                       tau_readout_delay_default=10e-6,
+                       full_cycle_width=0.5e-3, *args, **kwargs):
+        """
+        pb_board_number - the board number (0, 1, ...)
+        aom_channel output controls the AOM by holding a positive voltage
+        full_cycle_width - the length of the programmed pulse. Since aom channel is held on, this value is arbitrary
+        """
+        super().__init__(*args, **kwargs)
+        self.aom_channels = aom_channels
+        self.clock_channels = clock_channels
+        self.trigger_channels = trigger_channels
+        self.aom_pulse_duration_time = aom_pulse_duration_time
+        self.aom_response_time = aom_response_time
+        self.trigger_pulse_duration = trigger_pulse_duration
+        self.clock_period = clock_period
+        self.tau_readout_delay = tau_readout_delay_default
+        self.set_full_cycle_length(full_cycle_width)
+        self.clock_delay = 0 #artificial delay to handle issue where NIDAQ doesn't start acquireing data until a full clock cycle after the trigger
+        # this normally isn't an issue when the AOM response time is greater than a clock cycle.
+
+    def program_pulser_state(self, tau_readout_delay=None, *args, **kwargs):
+        """
+        tau_readout_delay
+        """
+
+        if tau_readout_delay is not None:
+            self.tau_readout_delay = np.round(tau_readout_delay,8)
+
+        self.clear_channel_settings()
+        self.set_clock_channels(self.clock_channels, self.clock_period)
+        self.add_channels(self.trigger_channels, 0, self.trigger_pulse_duration)
+
+        self.clock_delay = 2*self.clock_period # we have to delay signals such that the pulses arrive after subsequent clock signals to our DAQ, otherwise the readout appears phase shifted
+        # # first aom pulse
+        self.add_channels(self.aom_channels, self.clock_delay, self.aom_pulse_duration_time)
+        # delay
+        read_out_start_time = self.full_cycle_width / 2
+        read_out_start_time -= self.tau_readout_delay + self.aom_pulse_duration_time
+        # second aom pulse
+        self.add_channels(self.aom_channels, self.clock_delay + read_out_start_time, self.aom_pulse_duration_time)
+        # third aom pulse
+        self.add_channels(self.aom_channels, self.clock_delay + self.full_cycle_width / 2, self.aom_pulse_duration_time)
+
+
+        self.raise_for_pulse_width(self.tau_readout_delay)
+        return super().program_pulser_state(*args, **kwargs)
+
+    def raise_for_pulse_width(self, tau_readout_delay, *args, **kwargs):
+        min_required_length = 2 * (self.aom_pulse_duration_time + tau_readout_delay + self.aom_pulse_duration_time)
+        min_required_length += self.aom_response_time
+
+        if self.full_cycle_width <  min_required_length:
+            raise PulseTrainWidthError(f'Readout delay is too large: {tau_readout_delay:.2e}. Increase self.full_cycle_width to > {min_required_length:.2e}')
 
 class PulseBlasterCWODMR(PulseBlaster):
     '''
