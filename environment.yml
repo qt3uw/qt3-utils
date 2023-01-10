@@ -1,0 +1,22 @@
+name: qt3-utils
+channels:
+  - defaults
+  - conda-forge
+
+dependencies:
+  - python>3.9
+  - pip
+  - numpy
+  - h5py
+  - matplotlib
+  - pytest
+  - pyvisa
+  - gitpython
+  - jupyter
+  - scipy
+  - matplotlib
+  - pip:
+      - git+https://github.com/qt3uw/qt3RFSynthControl.git
+      - git+https://github.com/qt3uw/nipiezeojenapy.git
+      - git+https://github.com/qt3uw/qcsapphire.git
+      - git+https://github.com/qt3uw/pulseblaster.git

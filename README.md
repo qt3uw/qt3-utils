@@ -19,25 +19,15 @@ experiments.
 
 # Setup
 
-### Prerequisites
-
-The utilities in this package depend on publicly available Python packages found
-on PyPI and on packages currently only on github. The public packages will be installed
-automatically when you run the installation script. However, you will first
-need to manually install the following packages
-
-* [gadamc/qcsapphire](https://github.com/gadamc/qcsapphire)
-* [gadamc/qt3RFSynthControl](https://github.com/gadamc/qt3RFSynthControl)
-* [gadamc/nipiezeojenapy](https://github.com/gadamc/nipiezeojenapy)
-* [zeeshawnkazi/pulseblaster](https://github.com/zeeshawnkazi/pulseblaster)
-
-## Installation
-
-Once the prerequisite packages have been installed
+An environment.yml file is included in the repository to easily
+install a conda environment with the required dependencies.
+Install with the following commands in an anaconda prompt.
 
 ```
-git clone https://github.com/gadamc/qt3-utils
+git clone https://github.com/qt3uw/qt3-utils
 cd qt3-utils
+conda env create -f environment.yml
+conda activate qt3-utils
 python -m pip install .
 ```
 
