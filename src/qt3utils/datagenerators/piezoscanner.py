@@ -71,6 +71,13 @@ class BasePiezoScanner(abc.ABC):
                 logger.info(f'out of range\n\n{e}')
 
     @abc.abstractmethod
+    def sample_counts(self):
+        '''
+        must return an array-like object
+        '''
+        pass
+
+    @abc.abstractmethod
     def sample_count_rate(self):
         '''
         must return an array-like object
@@ -165,8 +172,13 @@ class NiDaqPiezoScanner(BasePiezoScanner):
     def set_num_data_samples_per_batch(self, N):
         self.nidaqratecounter.num_data_samples_per_batch = N
 
-    def sample_count_rate(self):
-        return self.nidaqratecounter.sample_count_rate(self.num_daq_batches)
+    def sample_counts(self):
+        return self.nidaqratecounter.sample_counts(self.num_daq_batches)
+
+    def sample_count_rate(self, data_counts=None):
+        if data_counts is None:
+            data_counts = self.sample_counts()
+        return self.nidaqratecounter.sample_count_rate(data_counts)
 
     def stop(self):
         self.nidaqratecounter.stop()
@@ -192,17 +204,24 @@ class RandomPiezoScanner(BasePiezoScanner):
         self.possible_offset_values = np.arange(5000, 100000, 1000)
 
         self.current_offset = self.default_offset
+        self.clock_period = 0.09302010  # a totally random number
 
     def set_num_data_samples_per_batch(self, N):
         #for the random sampler, there is only one sample per batch. So, we set
         #number of batches here
         self.num_daq_batches = N
 
-    def sample_count_rate(self):
-        #time.sleep(.25) #simulate time for data acquisition
+
+    def sample_counts(self):
         if np.random.random(1)[0] < 0.005:
             self.current_offset = np.random.choice(self.possible_offset_values)
         else:
             self.current_offset = self.default_offset
 
-        return self.signal_noise_amp*self.current_offset*np.random.random(self.num_daq_batches) + self.current_offset
+        return self.signal_noise_amp * self.current_offset * np.random.random(
+            self.num_daq_batches) + self.current_offset
+
+    def sample_count_rate(self, data_counts = None):
+        if data_counts is None:
+            data_counts = self.sample_counts()
+        return data_counts / self.clock_period
