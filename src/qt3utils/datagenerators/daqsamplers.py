@@ -1,5 +1,6 @@
 import time
 import logging
+import abc
 
 import numpy as np
 import nidaqmx
@@ -8,26 +9,75 @@ import qt3utils.nidaq
 
 logger = logging.getLogger(__name__)
 
-class RateCounterInterface:
+class RateCounterBase(abc.ABC):
+
+    def __init__(self):
+        self.clock_rate = 1 # default clock rate
+        self.running = False
+
     def stop(self):
-        pass
+        """
+        subclasses may override this for custom behavior
+        """
+        self.running = False
 
     def start(self):
-        pass
+        """
+        subclasses may override this for custom behavior
+        """
+        self.running = True
 
     def close(self):
+        """
+        subclasses may override this for custom behavior
+        """
         pass
 
-    def sample_count_rate(self, n_samples = None):
+    @abc.abstractmethod
+    def sample_counts(self, n_samples = 1) -> np.ndarray:
+        """
+        Should return a numpy array of size n_samples, with each row being
+        an array (or tuple) of two values, The first value is equal to the number of counts,
+        and the second value is the number of clock samples that were used to measure the counts.
+
+        Example, if n_samples = 3
+        data = [
+                [22, 5], # 22 counts were observed in 5 clock samples
+                [24, 5],
+                [20, 4] # this data indicates there was an error with data acquisition - 4 clock samples were observed.
+               ]
+        """
         pass
+
+    def sample_count_rate(self, data_counts: np.ndarray):
+        """
+        Converts the output of sample_counts to a count rate. Expects data_counts to be a 2d numpy array
+
+        Under normal conditions, will return a numpy array of size n_samples, with values
+        equal to the estimated count rate.
+
+        However, there are two possible outcomes if there are errors with the data (which can be caused by NIDAQ errors)
+
+        1. return a numpy array of count rate measurements of size 0 < N < n_samples (if there's partial error)
+        2. return a numpy array of size N = n_samples with value of np.nan if no data are returned
+
+        If the NiDAQ is configured properly and sufficient time is allowed for data to be
+        acquired per batch, it's very unlikely that any errors will occur.
+        """
+
+        _data = data_counts[np.where(data_counts[:, 1] > 0)] #removes all rows where no data were acquired
+        if _data.shape[0] > 0:
+            return self.clock_rate * _data[:, 0]/_data[:, 1]
+        else:
+            return np.nan*np.ones(len(data_counts))
 
     def yield_count_rate(self):
-        #this should be a generator function
-        #yield np.mean(self.sample_count_rate())
-        pass
+        while self.running:
+            count_data = self.sample_counts()
+            yield np.mean(self.sample_count_rate(count_data))
 
 
-class RandomRateCounter(RateCounterInterface):
+class RandomRateCounter(RateCounterBase):
 
     '''
     This random source acts like a light source with variable intensity.
@@ -35,6 +85,7 @@ class RandomRateCounter(RateCounterInterface):
     This is similar to a PL source moving in and out of focus.
     '''
     def __init__(self):
+        super().__init__()
         self.default_offset = 100
         self.signal_noise_amp  = 0.2
         self.possible_offset_values = np.arange(0, 1000, 50)
@@ -43,16 +94,10 @@ class RandomRateCounter(RateCounterInterface):
         self.current_direction = 1
         self.running = False
 
-    def stop(self):
-        self.running = False
-
-    def start(self):
-        self.running = True
-
-    def close(self):
-        pass
-
-    def sample_count_rate(self, n_samples = 1):
+    def sample_counts(self, n_samples = 1):
+        """
+        Returns a random number of counts
+        """
         if np.random.random(1)[0] < 0.05:
             if np.random.random(1)[0] < 0.1:
                 self.current_direction = -1 * self.current_direction
@@ -62,14 +107,12 @@ class RandomRateCounter(RateCounterInterface):
             self.current_offset = self.default_offset
             self.current_direction = 1
 
-        return self.signal_noise_amp*self.current_offset*np.random.random(n_samples) + self.current_offset
-
-    def yield_count_rate(self):
-        while self.running:
-            yield np.mean(self.sample_count_rate())
+        counts = self.signal_noise_amp*self.current_offset*np.random.random(n_samples) + self.current_offset
+        count_size = np.ones(n_samples)
+        return np.column_stack((counts, count_size))
 
 
-class NiDaqDigitalInputRateCounter(RateCounterInterface):
+class NiDaqDigitalInputRateCounter(RateCounterBase):
 
     def __init__(self, daq_name = 'Dev1',
                        signal_terminal = 'PFI0',
@@ -80,7 +123,7 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
                        signal_counter = 'ctr2',
                        trigger_terminal = None,
                        ):
-
+        super().__init__()
         self.daq_name = daq_name
         self.signal_terminal = signal_terminal
         self.clock_rate = clock_rate
@@ -235,7 +278,7 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
         count_rate = clock_rate * data[:,0]/data[:,1]
         '''
 
-        data =np.zeros((n_samples, 2))
+        data = np.zeros((n_samples, 2))
         for i in range(n_samples):
             data_sample, samples_read = self._read_samples()
             if samples_read > 0:
@@ -244,30 +287,3 @@ class NiDaqDigitalInputRateCounter(RateCounterInterface):
             logger.info(f'batch data (sum counts, num clock cycles per batch): {data[i]}')
         return data
 
-    def sample_count_rate(self, n_samples = 1):
-        '''
-        Utilizes sample_counts method above and compute the count rate as described
-        in that method's docstring.
-
-        Under normal conditions, will return a numpy array of size n_samples, with values
-        equal to the estimated count rate.
-
-        However, there are two possible outcomes if there are errors reading the NiDAQ.
-
-        1. return a numpy array of count rate measurements of size 0 < N < n_samples (if there's partial error)
-        2. return a numpy array of size N = n_samples with value of np.nan if no data are returned
-
-        If the NiDAQ is configured properly and sufficient time is allowed for data to be
-        acquired per batch, it's very unlikely that any errors will occur.
-        '''
-
-        data = self.sample_counts(n_samples)
-        data = data[np.where(data[:,1] > 0)]
-        if data.shape[0] > 0:
-            return self.clock_rate * data[:,0]/data[:,1]
-        else:
-            return np.nan*np.ones(n_samples)
-
-    def yield_count_rate(self):
-        while self.running:
-            yield np.mean(self.sample_count_rate())
