@@ -1,17 +1,12 @@
-import time
 import argparse
-import collections
 import tkinter as tk
-import tkinter.ttk as ttk
 import logging
 from threading import Thread
 
 import numpy as np
-import scipy.optimize
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
-matplotlib.use('Agg')
 import nidaqmx
 
 import qt3utils.nidaq
@@ -19,6 +14,8 @@ import qt3utils.datagenerators as datasources
 import qt3utils.datagenerators.piezoscanner
 import qt3utils.pulsers.pulseblaster
 import nipiezojenapy
+
+matplotlib.use('Agg')
 
 
 parser = argparse.ArgumentParser(description='NI DAQ (PCIx 6363) / Jena Piezo Scanner',
@@ -85,10 +82,10 @@ class ScanImage:
     def update(self, model):
 
         if self.log_data:
-            data = np.log10(model.data)
+            data = np.log10(model.scanned_count_rate)
             data[np.isinf(data)] = 0 #protect against +-inf
         else:
-            data = model.data
+            data = model.scanned_count_rate
 
         self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.xmin,
                                                                    model.xmax + model.step_size,
@@ -115,6 +112,7 @@ class ScanImage:
         if event.inaxes is self.ax:
             #todo: draw a circle around clicked point? Maybe with a high alpha, so that its faint
             self.onclick_callback(event)
+
 
 class SidePanel():
     def __init__(self, root, scan_range):
@@ -226,7 +224,6 @@ class SidePanel():
 
         self.log10Button = tk.Button(frame, text="Log10")
         self.log10Button.grid(row=row, column=2, pady=(2,15))
-
 
     def update_go_to_position(self, x = None, y = None, z = None):
         if x is not None:
@@ -343,14 +340,14 @@ class MainTkApplication():
     def set_color_map(self, event = None):
         #Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.cmap = self.view.sidepanel.mpl_color_map_entry.get()
-        if len(self.model.data) > 0:
+        if len(self.model.scanned_count_rate) > 0:
             self.view.scan_view.update(self.model)
             self.view.canvas.draw()
 
     def log_scan_image(self, event = None):
         #Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.log_data = not self.view.scan_view.log_data
-        if len(self.model.data) > 0:
+        if len(self.model.scanned_count_rate) > 0:
             self.view.scan_view.update(self.model)
             self.view.canvas.draw()
 
@@ -429,7 +426,7 @@ class MainTkApplication():
         if afile is None or afile == '':
            return #selection was canceled.
         with open(afile, 'wb') as f_object:
-          np.save(f_object, self.model.data)
+          np.save(f_object, self.model.scanned_count_rate)
 
         self.view.sidepanel.saveScanButton['state'] = 'normal'
 
@@ -499,7 +496,8 @@ class MainTkApplication():
 def build_data_scanner():
     if args.randomtest:
         stage_controller = nipiezojenapy.BaseControl()
-        scanner = datasources.RandomPiezoScanner(stage_controller=stage_controller)
+        data_acq = datasources.RandomRateCounter(simulate_single_light_source=True,
+                                                 num_data_samples_per_batch=args.num_data_samples_per_batch)
     else:
         stage_controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
                                   write_channels = args.piezo_write_channels.split(','),
@@ -513,7 +511,7 @@ def build_data_scanner():
                                                             args.rwtimeout,
                                                             args.signal_counter)
 
-        scanner = datasources.NiDaqPiezoScanner(data_acq, stage_controller)
+    scanner = qt3utils.datagenerators.piezoscanner.CounterAndScanner(data_acq, stage_controller)
 
     return scanner
 
@@ -521,6 +519,7 @@ def build_data_scanner():
 def main():
     tkapp = MainTkApplication(build_data_scanner())
     tkapp.run()
+
 
 if __name__ == '__main__':
     main()

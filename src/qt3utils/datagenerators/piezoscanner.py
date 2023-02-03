@@ -1,4 +1,3 @@
-import abc
 import numpy as np
 import scipy.optimize
 import time
@@ -10,29 +9,33 @@ def gauss(x, *p):
     C, mu, sigma, offset = p
     return C*np.exp(-(x-mu)**2/(2.*sigma**2)) + offset
 
-class BasePiezoScanner(abc.ABC):
-    def __init__(self, stage_controller = None):
+
+class CounterAndScanner:
+    def __init__(self, rate_counter, stage_controller):
 
         self.running = False
-
         self.current_y = 0
         self.ymin = 0.0
         self.ymax = 80.0
         self.xmin = 0.0
         self.xmax = 80.0
         self.step_size = 0.5
-        self.raster_line_pause = 0.0
+        self.raster_line_pause = 0.150  # wait 150ms for the piezo stage to settle before a line scan
 
-        self.data = []
+        self.scanned_raw_counts = []
+        self.scanned_count_rate = []
+
         self.stage_controller = stage_controller
-
-        self.num_daq_batches = 1 #could change to 10 if want 10x more samples for each position
+        self.rate_counter = rate_counter
+        self.num_daq_batches = 1 # could change to 10 if want 10x more samples for each position
 
     def stop(self):
+        self.rate_counter.stop()
         self.running = False
 
     def start(self):
         self.running = True
+        self.rate_counter.start()
 
     def set_to_starting_position(self):
         self.current_y = self.ymin
@@ -40,7 +43,18 @@ class BasePiezoScanner(abc.ABC):
             self.stage_controller.go_to_position(x = self.xmin, y = self.ymin)
 
     def close(self):
-        return
+        self.rate_counter.close()
+
+    def set_num_data_samples_per_batch(self, N):
+        self.rate_counter.num_data_samples_per_batch = N
+
+    def sample_counts(self):
+        return self.rate_counter.sample_counts(self.num_daq_batches)
+
+    def sample_count_rate(self, data_counts=None):
+        if data_counts is None:
+            data_counts = self.sample_counts()
+        return self.rate_counter.sample_count_rate(data_counts)
 
     def set_scan_range(self, xmin, xmax, ymin, ymax):
         if self.stage_controller:
@@ -70,47 +84,40 @@ class BasePiezoScanner(abc.ABC):
             except ValueError as e:
                 logger.info(f'out of range\n\n{e}')
 
-    @abc.abstractmethod
-    def sample_counts(self):
-        """
-        expectation is to return [[counts, clock_samples], [counts, clock_samples], ...] as is returned by daqsamplers.sample_counts.
-        """
-        pass
-
-    @abc.abstractmethod
-    def sample_count_rate(self):
-        """
-        must return a single floating point value
-        """
-        pass
-
-    @abc.abstractmethod
-    def set_num_data_samples_per_batch(self, N):
-        pass
-
     def scan_x(self):
+        """
+        Scans the x axis from xmin to xmax in steps of step_size.
 
-        scan = self.scan_axis('x', self.xmin, self.xmax, self.step_size)
-        self.data.append(scan)
+        Stores results in self.scanned_raw_counts and self.scanned_count_rate.
+        """
+        raw_counts_for_axis = self.scan_axis('x', self.xmin, self.xmax, self.step_size)
+        self.scanned_raw_counts.append(raw_counts_for_axis)
+        self.scanned_count_rate.append([self.sample_count_rate(raw_counts) for raw_counts in raw_counts_for_axis])
 
     def scan_axis(self, axis, min, max, step_size):
-        scan = []
+        """
+        Moves the stage along the specified axis from min to max in steps of step_size.
+        Returns a list of raw counts from the scan in the shape
+        [[[counts, clock_samples]], [[counts, clock_samples]], ...] where each [[counts, clock_samples]] is the
+        result of a single call to sample_counts at each scan position along the axis.
+        """
+        raw_counts = []
         self.stage_controller.go_to_position(**{axis:min})
         time.sleep(self.raster_line_pause)
         for val in np.arange(min, max, step_size):
             if self.stage_controller:
                 logger.info(f'go to position {axis}: {val:.2f}')
                 self.stage_controller.go_to_position(**{axis:val})
-            cr = self.sample_count_rate()
-            scan.append(cr)
-            logger.info(f'count rate: {cr}')
+            _raw_counts = self.sample_counts()
+            raw_counts.append(_raw_counts)
+            logger.info(f'raw counts, total clock samples: {_raw_counts}')
             if self.stage_controller:
                 logger.info(f'current position: {self.stage_controller.get_current_position()}')
 
-        return scan
+        return raw_counts
 
     def reset(self):
-        self.data = []
+        self.scanned_raw_counts = []
 
     def optimize_position(self, axis, center_position, width = 2, step_size = 0.25):
         '''
@@ -147,81 +154,19 @@ class BasePiezoScanner(abc.ABC):
             max_val = np.min([max_val, 80.0])
 
         self.start()
-        data = self.scan_axis(axis, min_val, max_val, step_size)
+        raw_counts = self.scan_axis(axis, min_val, max_val, step_size)
         self.stop()
         axis_vals = np.arange(min_val, max_val, step_size)
+        count_rate = self.sample_count_rate(raw_counts)
 
-        optimal_position = axis_vals[np.argmax(data)]
+        optimal_position = axis_vals[np.argmax(count_rate)]
         coeff = None
-        params = [np.max(data), optimal_position, 1.0, np.min(data)]
+        params = [np.max(count_rate), optimal_position, 1.0, np.min(count_rate)]
         try:
-            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=params)
+            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, count_rate, p0=params)
             optimal_position = coeff[1]
         except RuntimeError as e:
             print(e)
 
-        return data, axis_vals, optimal_position, coeff
+        return count_rate, axis_vals, optimal_position, coeff
 
-class NiDaqPiezoScanner(BasePiezoScanner):
-    def __init__(self, nidaqratecounter, stage_controller, num_data_samples_per_batch = 50):
-        super().__init__(stage_controller)
-        self.nidaqratecounter = nidaqratecounter
-        self.raster_line_pause = 0.150  #wait 150ms for the piezo stage to settle before a line scan
-        self.set_num_data_samples_per_batch(num_data_samples_per_batch)
-
-    def set_num_data_samples_per_batch(self, N):
-        self.nidaqratecounter.num_data_samples_per_batch = N
-
-    def sample_counts(self):
-        return self.nidaqratecounter.sample_counts(self.num_daq_batches)
-
-    def sample_count_rate(self, data_counts=None):
-        if data_counts is None:
-            data_counts = self.sample_counts()
-        return self.nidaqratecounter.sample_count_rate(data_counts)
-
-    def stop(self):
-        self.nidaqratecounter.stop()
-        super().stop()
-
-    def start(self):
-        super().start()
-        self.nidaqratecounter.start()
-
-    def close(self):
-        super().close()
-        self.nidaqratecounter.close()
-
-class RandomPiezoScanner(BasePiezoScanner):
-    '''
-    This random scanner acts like it finds bright light sources
-    at random positions across a scan.
-    '''
-    def __init__(self, stage_controller = None):
-        super().__init__(stage_controller)
-        self.default_offset = 350
-        self.signal_noise_amp  = 0.2
-        self.possible_offset_values = np.arange(5000, 100000, 1000)  # these create the "bright" positions
-
-        self.current_offset = self.default_offset
-        self.clock_period = 0.09302010  # a totally random number
-
-    def set_num_data_samples_per_batch(self, N):
-        #for the random sampler, there is only one sample per batch. So, we set
-        #number of batches here
-        self.num_daq_batches = N
-
-
-    def sample_counts(self):
-        if np.random.random(1)[0] < 0.005:
-            self.current_offset = np.random.choice(self.possible_offset_values)
-        else:
-            self.current_offset = self.default_offset
-
-        return self.signal_noise_amp * self.current_offset * np.random.random(
-            self.num_daq_batches) + self.current_offset
-
-    def sample_count_rate(self, data_counts = None):
-        if data_counts is None:
-            data_counts = self.sample_counts()
-        return np.sum(data_counts) / self.clock_period
