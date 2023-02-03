@@ -72,16 +72,16 @@ class BasePiezoScanner(abc.ABC):
 
     @abc.abstractmethod
     def sample_counts(self):
-        '''
-        must return an array-like object
-        '''
+        """
+        expectation is to return [[counts, clock_samples], [counts, clock_samples], ...] as is returned by daqsamplers.sample_counts.
+        """
         pass
 
     @abc.abstractmethod
     def sample_count_rate(self):
-        '''
-        must return an array-like object
-        '''
+        """
+        must return a single floating point value
+        """
         pass
 
     @abc.abstractmethod
@@ -101,7 +101,7 @@ class BasePiezoScanner(abc.ABC):
             if self.stage_controller:
                 logger.info(f'go to position {axis}: {val:.2f}')
                 self.stage_controller.go_to_position(**{axis:val})
-            cr = np.mean(self.sample_count_rate())
+            cr = self.sample_count_rate()
             scan.append(cr)
             logger.info(f'count rate: {cr}')
             if self.stage_controller:
@@ -201,7 +201,7 @@ class RandomPiezoScanner(BasePiezoScanner):
         super().__init__(stage_controller)
         self.default_offset = 350
         self.signal_noise_amp  = 0.2
-        self.possible_offset_values = np.arange(5000, 100000, 1000)
+        self.possible_offset_values = np.arange(5000, 100000, 1000)  # these create the "bright" positions
 
         self.current_offset = self.default_offset
         self.clock_period = 0.09302010  # a totally random number
@@ -224,4 +224,4 @@ class RandomPiezoScanner(BasePiezoScanner):
     def sample_count_rate(self, data_counts = None):
         if data_counts is None:
             data_counts = self.sample_counts()
-        return data_counts / self.clock_period
+        return np.sum(data_counts) / self.clock_period

@@ -52,29 +52,23 @@ class RateCounterBase(abc.ABC):
     def sample_count_rate(self, data_counts: np.ndarray):
         """
         Converts the output of sample_counts to a count rate. Expects data_counts to be a 2d numpy array
+        of [[counts, clock_samples], [counts, clock_samples], ...] as is returned by sample_counts.
 
-        Under normal conditions, will return a numpy array of size n_samples, with values
-        equal to the estimated count rate.
+        Under normal conditions, will return a single value
 
-        However, there are two possible outcomes if there are errors with the data (which can be caused by NIDAQ errors)
-
-        1. return a numpy array of count rate measurements of size 0 < N < n_samples (if there's partial error)
-        2. return a numpy array of size N = n_samples with value of np.nan if no data are returned
-
-        If the NiDAQ is configured properly and sufficient time is allowed for data to be
-        acquired per batch, it's very unlikely that any errors will occur.
+        If the sum of all clock_samples is 0, will return np.nan.
         """
-
-        _data = data_counts[np.where(data_counts[:, 1] > 0)] #removes all rows where no data were acquired
-        if _data.shape[0] > 0:
-            return self.clock_rate * _data[:, 0]/_data[:, 1]
+        _data = np.sum(data_counts, axis=0)
+        if _data[1] > 0:
+            return self.clock_rate * _data[0]/_data[1]
         else:
-            return np.nan*np.ones(len(data_counts))
+            return np.nan
+
 
     def yield_count_rate(self):
         while self.running:
             count_data = self.sample_counts()
-            yield np.mean(self.sample_count_rate(count_data))
+            yield self.sample_count_rate(count_data)
 
 
 class RandomRateCounter(RateCounterBase):
