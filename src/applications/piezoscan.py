@@ -420,17 +420,20 @@ class MainTkApplication():
         self.scan_thread.start()
 
     def save_scan(self, event = None):
-        myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array', '*.npy'), ('HDF5', '*.h5')]
+        myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
         afile = tk.filedialog.asksaveasfilename(filetypes=myformats, defaultextension='.npz')
         logger.info(afile)
         file_type = afile.split('.')[-1]
         if afile is None or afile == '':
             return # selection was canceled.
 
-        data = dict(raw_counts=self.counter_scanner.scanned_raw_counts,
+        data = dict(
+                    raw_counts=self.counter_scanner.scanned_raw_counts,
                     count_rate=self.counter_scanner.scanned_count_rate,
                     scan_range=self.counter_scanner.get_completed_scan_range(),
-                    step_size=self.counter_scanner.step_size)
+                    step_size=self.counter_scanner.step_size,
+                    daq_clock_rate=self.counter_scanner.rate_counter.clock_rate,
+                    )
 
         if file_type == 'npy':
             np.save(afile, data['count_rate'])
