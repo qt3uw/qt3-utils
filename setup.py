@@ -24,7 +24,8 @@ requirements = [
     'qcsapphire',
     'qt3rfsynthcontrol',
     'nipiezojenapy',
-    'pulseblaster'
+    'pulseblaster',
+    'h5py',
 ]
 
 # The README.md file content is included in the package metadata as long description and will be
