@@ -181,7 +181,7 @@ class CounterAndScanner:
             coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, count_rates, p0=params, bounds=bounds)
             optimal_position = coeff[1]
         except RuntimeError as e:
-            print(e)
+            logger.warning(e)
 
         return count_rates, axis_vals, optimal_position, coeff
 
