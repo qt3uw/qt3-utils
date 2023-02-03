@@ -184,7 +184,7 @@ class CounterAndScanner:
             optimal_position = np.max([min_val, optimal_position])
             optimal_position = np.min([max_val, optimal_position])
         except RuntimeError as e:
-            print(e)
+            logger.warning(e)
 
         return count_rates, axis_vals, optimal_position, coeff
 
