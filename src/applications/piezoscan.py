@@ -11,7 +11,6 @@ import nidaqmx
 
 import qt3utils.nidaq
 import qt3utils.datagenerators as datasources
-import qt3utils.datagenerators.piezoscanner
 import qt3utils.pulsers.pulseblaster
 import nipiezojenapy
 
@@ -511,7 +510,7 @@ def build_data_scanner():
                                                             args.rwtimeout,
                                                             args.signal_counter)
 
-    scanner = qt3utils.datagenerators.piezoscanner.CounterAndScanner(data_acq, stage_controller)
+    scanner = datasources.CounterAndScanner(data_acq, stage_controller)
 
     return scanner
 
