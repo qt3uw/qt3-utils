@@ -152,10 +152,10 @@ class CounterAndScanner:
         example:
            ([r0, r1, ...], [x0, x1, ...], x_optimal, [C, mu, sigma])
 
-        In cases where the data cannot be succesfully fit to a gaussian function,
-        the optimial_position returned is the absolute brightest position in the scan,
+        In cases where the data cannot be successfully fit to a gaussian function,
+        the optimal_position returned is the absolute brightest position in the scan,
         and the fit_coeff is set to None.
-        When the fit is sucessful, x_optimal = mu.
+        When the fit is successful, x_optimal = mu.
 
         '''
         min_val = center_position - width
@@ -171,13 +171,14 @@ class CounterAndScanner:
         raw_counts = self.scan_axis(axis, min_val, max_val, step_size)
         self.stop()
         axis_vals = np.arange(min_val, max_val, step_size)
-        count_rate = self.sample_count_rate(raw_counts)
+        count_rates = [self.sample_count_rate(count) for count in raw_counts]
 
-        optimal_position = axis_vals[np.argmax(count_rate)]
+        optimal_position = axis_vals[np.argmax(count_rates)]
         coeff = None
-        params = [np.max(count_rate), optimal_position, 1.0, np.min(count_rate)]
+        params = [np.max(count_rates), optimal_position, 1.0, np.min(count_rates)]
+        bounds = (len(params)*tuple((0,)), len(params)*tuple((np.inf,)))
         try:
-            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, count_rate, p0=params)
+            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, count_rates, p0=params, bounds=bounds)
             optimal_position = coeff[1]
             # ensure that the optimal position is within the scan range
             optimal_position = np.max([min_val, optimal_position])
@@ -185,5 +186,5 @@ class CounterAndScanner:
         except RuntimeError as e:
             print(e)
 
-        return count_rate, axis_vals, optimal_position, coeff
+        return count_rates, axis_vals, optimal_position, coeff
 
