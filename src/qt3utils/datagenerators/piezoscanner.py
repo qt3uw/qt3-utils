@@ -150,6 +150,9 @@ class BasePiezoScanner(abc.ABC):
         try:
             coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, data, p0=params)
             optimal_position = coeff[1]
+            # ensure that the optimal position is within the scan range
+            optimal_position = np.max([min_val, optimal_position])
+            optimal_position = np.min([max_val, optimal_position])
         except RuntimeError as e:
             print(e)
 
