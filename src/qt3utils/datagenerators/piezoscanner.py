@@ -132,7 +132,8 @@ class CounterAndScanner:
 
     def reset(self):
         self.scanned_raw_counts = []
-
+        self.scanned_count_rate = []
+        
     def optimize_position(self, axis, center_position, width = 2, step_size = 0.25):
         '''
         Performs a scan over a particular axis about `center_position`.
