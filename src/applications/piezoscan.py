@@ -291,11 +291,11 @@ class MainApplicationView():
 
 class MainTkApplication():
 
-    def __init__(self, data_model):
+    def __init__(self, counter_scanner):
         self.root = tk.Tk()
-        self.model = data_model
-        scan_range = [data_model.stage_controller.minimum_allowed_position,
-                      data_model.stage_controller.maximum_allowed_position]
+        self.counter_scanner = counter_scanner
+        scan_range = [counter_scanner.stage_controller.minimum_allowed_position,
+                      counter_scanner.stage_controller.maximum_allowed_position]
         self.view = MainApplicationView(self.root, scan_range)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
         self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
@@ -316,8 +316,8 @@ class MainTkApplication():
         self.scan_thread = None
 
         self.optimized_position = {'x':0, 'y':0, 'z':-1}
-        if self.model.stage_controller:
-            self.optimized_position['z'] = self.model.stage_controller.get_current_position()[2]
+        if self.counter_scanner.stage_controller:
+            self.optimized_position['z'] = self.counter_scanner.stage_controller.get_current_position()[2]
         else:
             self.optimized_position['z'] = 20
         self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'],4))
@@ -329,16 +329,16 @@ class MainTkApplication():
         self.root.mainloop()
 
     def go_to_position(self, event = None):
-        if self.model.stage_controller:
-            self.model.stage_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
+        if self.counter_scanner.stage_controller:
+            self.counter_scanner.stage_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
         else:
             print(f'stage_controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
         self.optimized_position['x'] = self.view.sidepanel.go_to_x_position_text.get()
         self.optimized_position['y'] = self.view.sidepanel.go_to_y_position_text.get()
 
     def go_to_z(self, event = None):
-        if self.model.stage_controller:
-            self.model.stage_controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
+        if self.counter_scanner.stage_controller:
+            self.counter_scanner.stage_controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
         else:
             print(f'stage_controller would have moved to z = {self.view.sidepanel.z_entry_text.get():.2f}')
         self.optimized_position['z'] = self.view.sidepanel.z_entry_text.get()
@@ -346,15 +346,15 @@ class MainTkApplication():
     def set_color_map(self, event = None):
         #Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.cmap = self.view.sidepanel.mpl_color_map_entry.get()
-        if len(self.model.scanned_count_rate) > 0:
-            self.view.scan_view.update(self.model)
+        if len(self.counter_scanner.scanned_count_rate) > 0:
+            self.view.scan_view.update(self.counter_scanner)
             self.view.canvas.draw()
 
     def log_scan_image(self, event = None):
         #Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.log_data = not self.view.scan_view.log_data
-        if len(self.model.scanned_count_rate) > 0:
-            self.view.scan_view.update(self.model)
+        if len(self.counter_scanner.scanned_count_rate) > 0:
+            self.view.scan_view.update(self.counter_scanner)
             self.view.canvas.draw()
 
     def hold_aom_with_pulse_blaster(self, event = None):
@@ -364,7 +364,7 @@ class MainTkApplication():
         pb.start()
 
     def stop_scan(self, event = None):
-        self.model.stop()
+        self.counter_scanner.stop()
 
 
     def pop_out_scan(self, event = None):
@@ -390,22 +390,22 @@ class MainTkApplication():
 
     def scan_thread_function(self, xmin, xmax, ymin, ymax, step_size, N):
 
-        self.model.set_scan_range(xmin, xmax, ymin, ymax)
-        self.model.step_size = step_size
-        self.model.set_num_data_samples_per_batch(N)
+        self.counter_scanner.set_scan_range(xmin, xmax, ymin, ymax)
+        self.counter_scanner.step_size = step_size
+        self.counter_scanner.set_num_data_samples_per_batch(N)
 
         try:
-            self.model.reset() #clears the data
-            self.model.start() #starts the DAQ
-            self.model.set_to_starting_position() #moves the stage to starting position
+            self.counter_scanner.reset() #clears the data
+            self.counter_scanner.start() #starts the DAQ
+            self.counter_scanner.set_to_starting_position() #moves the stage to starting position
 
-            while self.model.still_scanning():
-                self.model.scan_x()
-                self.view.scan_view.update(self.model)
+            while self.counter_scanner.still_scanning():
+                self.counter_scanner.scan_x()
+                self.view.scan_view.update(self.counter_scanner)
                 self.view.canvas.draw()
-                self.model.move_y()
+                self.counter_scanner.move_y()
 
-            self.model.stop()
+            self.counter_scanner.stop()
 
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
@@ -456,19 +456,19 @@ class MainTkApplication():
         if afile is None or afile == '':
            return #selection was canceled.
         with open(afile, 'wb') as f_object:
-          np.save(f_object, self.model.scanned_count_rate)
+          np.save(f_object, self.counter_scanner.scanned_count_rate)
 
         self.view.sidepanel.saveScanButton['state'] = 'normal'
 
     def optimize_thread_function(self, axis, central, range, step_size):
 
         try:
-            data, axis_vals, opt_pos, coeff = self.model.optimize_position(axis,
+            data, axis_vals, opt_pos, coeff = self.counter_scanner.optimize_position(axis,
                                                                            central,
                                                                            range,
                                                                            step_size)
             self.optimized_position[axis] = opt_pos
-            self.model.stage_controller.go_to_position(**{axis:opt_pos})
+            self.counter_scanner.stage_controller.go_to_position(**{axis:opt_pos})
             self.view.show_optimization_plot(f'Optimize {axis}',
                                              central,
                                              self.optimized_position[axis],
@@ -499,7 +499,7 @@ class MainTkApplication():
         opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
         old_optimized_value = self.optimized_position[axis]
 
-        self.model.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
+        self.counter_scanner.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
 
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.stopButton['state'] = 'disabled'
