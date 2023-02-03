@@ -137,12 +137,15 @@ class RateCounterBase(abc.ABC):
 
 
 class RandomRateCounter(RateCounterBase):
-
-    '''
+    """
     This random source acts like a light source with variable intensity.
 
     This is similar to a PL source moving in and out of focus.
-    '''
+
+    When 'simulated_single_light_source' is True at instantiation,
+    this will simulate a sample with isolated bright spots, like NV centers in diamond and
+    is used when testing the CounterAndScanner class in piezoscanner.py module.
+    """
     def __init__(self, simulate_single_light_source=False, num_data_samples_per_batch=10):
         super().__init__()
         self.default_offset = 100
