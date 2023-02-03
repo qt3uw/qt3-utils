@@ -66,6 +66,20 @@ class CounterAndScanner:
         self.xmin = xmin
         self.xmax = xmax
 
+    def get_scan_range(self) -> tuple:
+        """
+        Returns a tuple of the full scan range
+        :return: xmin, xmax, ymin, ymax
+        """
+        return self.xmin, self.xmax, self.ymin, self.ymax
+
+    def get_completed_scan_range(self) -> tuple:
+        """
+        Returns a tuple of the scan range that has been completed
+        :return: xmin, xmax, ymin, current_y
+        """
+        return self.xmin, self.xmax, self.ymin, self.current_y
+
     def still_scanning(self):
         if self.running == False: #this allows external process to stop scan
             return False

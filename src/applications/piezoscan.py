@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
 import nidaqmx
+import h5py
 
 import qt3utils.nidaq
 import qt3utils.datagenerators as datasources
@@ -419,15 +420,30 @@ class MainTkApplication():
         self.scan_thread.start()
 
     def save_scan(self, event = None):
-        myformats = [('Numpy Array', '*.npy')]
-        afile = tk.filedialog.asksaveasfilename(filetypes = myformats, defaultextension = '.npy')
+        myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array', '*.npy'), ('HDF5', '*.h5')]
+        afile = tk.filedialog.asksaveasfilename(filetypes=myformats, defaultextension='.npz')
         logger.info(afile)
+        file_type = afile.split('.')[-1]
         if afile is None or afile == '':
-           return #selection was canceled.
-        with open(afile, 'wb') as f_object:
-          np.save(f_object, self.counter_scanner.scanned_count_rate)
+            return # selection was canceled.
 
-        self.view.sidepanel.saveScanButton['state'] = 'normal'
+        data = dict(raw_counts=self.counter_scanner.scanned_raw_counts,
+                    count_rate=self.counter_scanner.scanned_count_rate,
+                    scan_range=self.counter_scanner.get_completed_scan_range(),
+                    step_size=self.counter_scanner.step_size)
+
+        if file_type == 'npy':
+            np.save(afile, data['count_rate'])
+
+        if file_type == 'npz':
+            np.savez_compressed(afile, **data)
+
+        elif file_type == 'h5':
+            h5file = h5py.File(afile, 'w')
+            for key, value in data.items():
+                h5file.create_dataset(key, data=value)
+            h5file.close()
+
 
     def optimize_thread_function(self, axis, central, range, step_size):
 
