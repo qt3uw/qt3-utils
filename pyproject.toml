@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qt3utils"
-dynamic = ["version"] # version is defined in __init__.py
+version = '1.0.1.dev1'
 
 description = "A package for performing experiments in the QT3 lab at UW."
 readme = "README.md"
@@ -63,5 +63,3 @@ dependencies = [
 qt3scope = "applications.oscilloscope:main"
 qt3scan = "applications.piezoscan:main"
 
-[tool.setuptools.dynamic]
-version = {attr = "qt3utils.__version__"}

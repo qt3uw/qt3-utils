@@ -22,32 +22,33 @@ experiments.
 ### Prerequisites
 
 The utilities in this package depend on publicly available Python packages found
-on PyPI and on packages currently only on github. The public packages will be installed
-automatically when you run the installation script. However, you will first
-need to manually install the following packages
+on PyPI. However, the package also depends on the National Instruments DAQmx and
+SpinCore's PulseBlaster libraries. These libraries are not available on PyPI and
+must be installed separately.
 
-* [gadamc/qcsapphire](https://github.com/gadamc/qcsapphire)
-* [gadamc/qt3RFSynthControl](https://github.com/gadamc/qt3RFSynthControl)
-* [gadamc/nipiezeojenapy](https://github.com/gadamc/nipiezeojenapy)
-* [zeeshawnkazi/pulseblaster](https://github.com/zeeshawnkazi/pulseblaster)
+* [National Instruments DAQmx](https://nidaqmx-python.readthedocs.io/en/latest/)
+  * [driver downloads](http://www.ni.com/downloads/)
+* [SpinCore's PulseBlaster](https://www.spincore.com/pulseblaster.html)
+  * [spinAPI driver](http://www.spincore.com/support/spinapi/)
 
 ## Installation
 
 Once the prerequisite packages have been installed
 
 ```
-git clone https://github.com/gadamc/qt3-utils
-cd qt3-utils
-python -m pip install .
+pip install qt3utils
 ```
 
 # Usage
 
-The simplest way to get started is to see one of the [example](examples) notebooks.
+This package provides GUI applications and a Python API for controlling the hardware and running experiments.
 
-# Applications
+For instructions on using the python API, 
+the simplest way to get started is to see one of the [example](examples) notebooks.
 
-## QT3 Oscilloscope
+## Applications
+
+### QT3 Oscilloscope
 
 The console program `qt3scope` comes with this package. It allows you to run
 a simple program from the command-line that reads the count rate on a particular
@@ -67,7 +68,7 @@ If default settings are correct, then should be able to run without options
 > qt3scope
 ```
 
-## QT3 Confocal Scan
+### QT3 Confocal Scan
 
 The console program `qt3scan` comes with this package.  This program launches
 a GUI applications that will perform a confocal scan using the Jena system
@@ -87,6 +88,17 @@ If default settings are correct, then should be able to run without options
 ```
 > qt3scan
 ```
+
+### QT3 Piezo Controller
+
+The console program `qt3piezo` comes installed via the 'nipiezojenapy' package, and may be launched from the command line.
+
+```
+> qt3piezo
+```
+
+Similarly, this applications can be configured via command line options to match the haredware setup.
+
 
 # Debugging
 
