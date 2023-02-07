@@ -4,6 +4,7 @@ import collections
 import tkinter as tk
 import tkinter.ttk as ttk
 import logging
+import datetime
 from threading import Thread
 
 import numpy as np
@@ -164,6 +165,9 @@ class SidePanel():
         self.saveScanButton = tk.Button(frame, text="Save Scan")
         self.saveScanButton.grid(row=row, column=2)
 
+        row += 1
+        self.popOutScanButton = tk.Button(frame, text="Popout Scan")
+        self.popOutScanButton.grid(row=row, column=0)
 
         row += 1
         tk.Label(frame, text="Position").grid(row=row, column=0, pady=10)
@@ -302,6 +306,8 @@ class MainTkApplication():
         self.view.sidepanel.gotoButton.bind("<Button>", self.go_to_position)
         self.view.sidepanel.go_to_z_button.bind("<Button>", self.go_to_z)
         self.view.sidepanel.saveScanButton.bind("<Button>", self.save_scan)
+        self.view.sidepanel.popOutScanButton.bind("<Button>", self.pop_out_scan)
+
         self.view.sidepanel.set_color_map_button.bind("<Button>", self.set_color_map)
         self.view.sidepanel.hold_aom_button.bind("<Button>", self.hold_aom_with_pulse_blaster)
 
@@ -363,6 +369,28 @@ class MainTkApplication():
     def stop_scan(self, event = None):
         self.model.stop()
 
+
+    def pop_out_scan(self, event = None):
+        """
+        Creates a new TKinter window with the data from the current scan. This allows researchers
+        to retain scan image in a separate window and run subsequent scans.
+        """
+
+        win = tk.Toplevel()
+        win.title(f'Scan {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
+
+        new_scan_view = ScanImage(self.view.scan_view.cmap)
+        new_scan_view.update(self.model)
+
+        canvas = FigureCanvasTkAgg(new_scan_view.fig, master=win)
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        toolbar = NavigationToolbar2Tk(canvas, win)
+        toolbar.update()
+        canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        canvas.draw()
+
     def scan_thread_function(self, xmin, xmax, ymin, ymax, step_size, N):
 
         self.model.set_scan_range(xmin, xmax, ymin, ymax)
@@ -390,6 +418,7 @@ class MainTkApplication():
         self.view.sidepanel.go_to_z_button['state'] = 'normal'
         self.view.sidepanel.gotoButton['state'] = 'normal'
         self.view.sidepanel.saveScanButton['state'] = 'normal'
+        self.view.sidepanel.popOutScanButton['state'] = 'normal'
 
         self.view.sidepanel.optimize_x_button['state'] = 'normal'
         self.view.sidepanel.optimize_y_button['state'] = 'normal'
@@ -400,6 +429,7 @@ class MainTkApplication():
         self.view.sidepanel.go_to_z_button['state'] = 'disabled'
         self.view.sidepanel.gotoButton['state'] = 'disabled'
         self.view.sidepanel.saveScanButton['state'] = 'disabled'
+        self.view.sidepanel.popOutScanButton['state'] = 'disabled'
 
         self.view.sidepanel.optimize_x_button['state'] = 'disabled'
         self.view.sidepanel.optimize_y_button['state'] = 'disabled'
@@ -460,6 +490,7 @@ class MainTkApplication():
         self.view.sidepanel.go_to_z_button['state'] = 'normal'
         self.view.sidepanel.gotoButton['state'] = 'normal'
         self.view.sidepanel.saveScanButton['state'] = 'normal'
+        self.view.sidepanel.popOutScanButton['state'] = 'normal'
 
         self.view.sidepanel.optimize_x_button['state'] = 'normal'
         self.view.sidepanel.optimize_y_button['state'] = 'normal'
@@ -478,6 +509,7 @@ class MainTkApplication():
         self.view.sidepanel.go_to_z_button['state'] = 'disabled'
         self.view.sidepanel.gotoButton['state'] = 'disabled'
         self.view.sidepanel.saveScanButton['state'] = 'disabled'
+        self.view.sidepanel.popOutScanButton['state'] = 'disabled'
 
         self.view.sidepanel.optimize_x_button['state'] = 'disabled'
         self.view.sidepanel.optimize_y_button['state'] = 'disabled'
