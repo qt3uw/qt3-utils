@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qt3utils"
+dynamic = ["version"] # version is defined in __init__.py
+
+description = "A package for performing experiments in the QT3 lab at UW."
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+keywords = ["qt3", "confocal scan", "nidaqmx", "piezo", "stage", "control", "electron spin control"]
+
+authors = [
+    {name = "G. Adam Cox", email = "gadamc@gmail.com" },
+]
+
+maintainers = [
+    {name = "G. Adam Cox", email = "gadamc@gmail.com" },
+    {name = "Maxwell Parsons", email = "mfpars@uw.edu " },
+]
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+
+    # Indicate who your project is intended for
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering",
+
+    # Pick your license as you wish
+    "License :: OSI Approved :: BSD License",
+
+    # Specify the Python versions you support here. In particular, ensure
+    # that you indicate you support Python 3. These classifiers are *not*
+    # checked by "pip install". See instead "python_requires" below.
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+dependencies = [
+    "nidaqmx>=0.6.3",
+    "numpy>=1.21.2",
+    "matplotlib>=3.4.3",
+    "scipy>=1.7.1",
+    "qcsapphire>=1.0.1",
+    "qt3rfsynthcontrol>=1.0.1",
+    "nipiezojenapy>=1.0.1",
+    "pulseblaster>=1.0.1",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/qt3uw/qt3utils"
+"Source" = "https://github.com/qt3uw/qt3utils"
+"Bug Tracker" = "https://github.com/qt3uw/qt3utils/issues"
+"Changelog" = "https://github.com/qt3uw/qt3utils/releases"
+
+[project.scripts]
+qt3scope = "applications.oscilloscope:main"
+qt3scan = "applications.piezoscan:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "qt3utils.__version__"}
