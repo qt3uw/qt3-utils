@@ -22,9 +22,8 @@ experiments.
 ### Prerequisites
 
 The utilities in this package depend on publicly available Python packages found
-on PyPI. However, the package also depends on the National Instruments DAQmx and
-SpinCore's PulseBlaster libraries. These libraries are not available on PyPI and
-must be installed separately.
+on PyPI and drivers built by National Instruments for DAQmx and
+SpinCore for the PulseBlaster. These libraries must be installed separately.
 
 * [National Instruments DAQmx](https://nidaqmx-python.readthedocs.io/en/latest/)
   * [driver downloads](http://www.ni.com/downloads/)
@@ -33,11 +32,16 @@ must be installed separately.
 
 ## Installation
 
-Once the prerequisite packages have been installed
+Once the prerequisite packages have been installed, qt3utils can be installed from pip.
 
 ```
 pip install qt3utils
 ```
+
+The `qt3utils` package depends on a handful of other [qt3 packages](https://github.com/qt3uw) and will be installed for you by default.
+Additional information may also be [found here](https://github.com/qt3uw/qt3softwaredocs).
+
+
 
 # Usage
 
