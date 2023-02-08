@@ -377,7 +377,7 @@ class MainTkApplication():
         win.title(f'Scan {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
 
         new_scan_view = ScanImage(self.view.scan_view.cmap)
-        new_scan_view.update(self.model)
+        new_scan_view.update(self.counter_scanner)
 
         canvas = FigureCanvasTkAgg(new_scan_view.fig, master=win)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
