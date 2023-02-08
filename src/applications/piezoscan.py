@@ -59,7 +59,7 @@ parser.add_argument('-r', '--randomtest', action = 'store_true',
                     help='When true, program will run showing random numbers. This is for development testing.')
 parser.add_argument('-q', '--quiet', action = 'store_true',
                     help='When true,logger level will be set to warning. Otherwise, set to "info".')
-parser.add_argument('-cmap', metavar = '<MPL color>', default = 'Reds',
+parser.add_argument('-cmap', metavar = '<MPL color>', default = 'gray',
                     help='Set the MatplotLib colormap scale')
 parser.add_argument('-pb', '--pulse-blaster', metavar = '<PB board number>', default = 0, type=int,
                     help='Pulse Blaster board number')
@@ -74,7 +74,7 @@ if args.quiet is False:
 
 
 class ScanImage:
-    def __init__(self, mplcolormap = 'Reds'):
+    def __init__(self, mplcolormap = 'gray'):
         self.fig, self.ax = plt.subplots()
         self.cbar = None
         self.cmap = mplcolormap
@@ -225,7 +225,7 @@ class SidePanel():
         self.set_color_map_button = tk.Button(frame, text="Set Color")
         self.set_color_map_button.grid(row=row, column=0, pady=(2,15))
         self.mpl_color_map_entry = tk.Entry(frame, width=10)
-        self.mpl_color_map_entry.insert(10, 'Reds')
+        self.mpl_color_map_entry.insert(10, args.cmap)
         self.mpl_color_map_entry.grid(row=row, column=1, pady=(2,15))
 
         self.log10Button = tk.Button(frame, text="Log10")
