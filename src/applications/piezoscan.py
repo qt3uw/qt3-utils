@@ -1,25 +1,22 @@
-import time
 import argparse
-import collections
 import tkinter as tk
-import tkinter.ttk as ttk
 import logging
 import datetime
 from threading import Thread
 
 import numpy as np
-import scipy.optimize
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
-matplotlib.use('Agg')
 import nidaqmx
+import h5py
 
 import qt3utils.nidaq
 import qt3utils.datagenerators as datasources
-import qt3utils.datagenerators.piezoscanner
 import qt3utils.pulsers.pulseblaster
 import nipiezojenapy
+
+matplotlib.use('Agg')
 
 
 parser = argparse.ArgumentParser(description='NI DAQ (PCIx 6363) / Jena Piezo Scanner',
@@ -86,10 +83,10 @@ class ScanImage:
     def update(self, model):
 
         if self.log_data:
-            data = np.log10(model.data)
+            data = np.log10(model.scanned_count_rate)
             data[np.isinf(data)] = 0 #protect against +-inf
         else:
-            data = model.data
+            data = model.scanned_count_rate
 
         self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.xmin,
                                                                    model.xmax + model.step_size,
@@ -116,6 +113,7 @@ class ScanImage:
         if event.inaxes is self.ax:
             #todo: draw a circle around clicked point? Maybe with a high alpha, so that its faint
             self.onclick_callback(event)
+
 
 class SidePanel():
     def __init__(self, root, scan_range):
@@ -231,7 +229,6 @@ class SidePanel():
         self.log10Button = tk.Button(frame, text="Log10")
         self.log10Button.grid(row=row, column=2, pady=(2,15))
 
-
     def update_go_to_position(self, x = None, y = None, z = None):
         if x is not None:
             self.go_to_x_position_text.set(np.round(x,4))
@@ -294,11 +291,11 @@ class MainApplicationView():
 
 class MainTkApplication():
 
-    def __init__(self, data_model):
+    def __init__(self, counter_scanner):
         self.root = tk.Tk()
-        self.model = data_model
-        scan_range = [data_model.stage_controller.minimum_allowed_position,
-                      data_model.stage_controller.maximum_allowed_position]
+        self.counter_scanner = counter_scanner
+        scan_range = [counter_scanner.stage_controller.minimum_allowed_position,
+                      counter_scanner.stage_controller.maximum_allowed_position]
         self.view = MainApplicationView(self.root, scan_range)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
         self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
@@ -319,8 +316,8 @@ class MainTkApplication():
         self.scan_thread = None
 
         self.optimized_position = {'x':0, 'y':0, 'z':-1}
-        if self.model.stage_controller:
-            self.optimized_position['z'] = self.model.stage_controller.get_current_position()[2]
+        if self.counter_scanner.stage_controller:
+            self.optimized_position['z'] = self.counter_scanner.stage_controller.get_current_position()[2]
         else:
             self.optimized_position['z'] = 20
         self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'],4))
@@ -332,16 +329,16 @@ class MainTkApplication():
         self.root.mainloop()
 
     def go_to_position(self, event = None):
-        if self.model.stage_controller:
-            self.model.stage_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
+        if self.counter_scanner.stage_controller:
+            self.counter_scanner.stage_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
         else:
             print(f'stage_controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
         self.optimized_position['x'] = self.view.sidepanel.go_to_x_position_text.get()
         self.optimized_position['y'] = self.view.sidepanel.go_to_y_position_text.get()
 
     def go_to_z(self, event = None):
-        if self.model.stage_controller:
-            self.model.stage_controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
+        if self.counter_scanner.stage_controller:
+            self.counter_scanner.stage_controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
         else:
             print(f'stage_controller would have moved to z = {self.view.sidepanel.z_entry_text.get():.2f}')
         self.optimized_position['z'] = self.view.sidepanel.z_entry_text.get()
@@ -349,15 +346,15 @@ class MainTkApplication():
     def set_color_map(self, event = None):
         #Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.cmap = self.view.sidepanel.mpl_color_map_entry.get()
-        if len(self.model.data) > 0:
-            self.view.scan_view.update(self.model)
+        if len(self.counter_scanner.scanned_count_rate) > 0:
+            self.view.scan_view.update(self.counter_scanner)
             self.view.canvas.draw()
 
     def log_scan_image(self, event = None):
         #Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.log_data = not self.view.scan_view.log_data
-        if len(self.model.data) > 0:
-            self.view.scan_view.update(self.model)
+        if len(self.counter_scanner.scanned_count_rate) > 0:
+            self.view.scan_view.update(self.counter_scanner)
             self.view.canvas.draw()
 
     def hold_aom_with_pulse_blaster(self, event = None):
@@ -367,7 +364,7 @@ class MainTkApplication():
         pb.start()
 
     def stop_scan(self, event = None):
-        self.model.stop()
+        self.counter_scanner.stop()
 
 
     def pop_out_scan(self, event = None):
@@ -393,22 +390,22 @@ class MainTkApplication():
 
     def scan_thread_function(self, xmin, xmax, ymin, ymax, step_size, N):
 
-        self.model.set_scan_range(xmin, xmax, ymin, ymax)
-        self.model.step_size = step_size
-        self.model.set_num_data_samples_per_batch(N)
+        self.counter_scanner.set_scan_range(xmin, xmax, ymin, ymax)
+        self.counter_scanner.step_size = step_size
+        self.counter_scanner.set_num_data_samples_per_batch(N)
 
         try:
-            self.model.reset() #clears the data
-            self.model.start() #starts the DAQ
-            self.model.set_to_starting_position() #moves the stage to starting position
+            self.counter_scanner.reset() #clears the data
+            self.counter_scanner.start() #starts the DAQ
+            self.counter_scanner.set_to_starting_position() #moves the stage to starting position
 
-            while self.model.still_scanning():
-                self.model.scan_x()
-                self.view.scan_view.update(self.model)
+            while self.counter_scanner.still_scanning():
+                self.counter_scanner.scan_x()
+                self.view.scan_view.update(self.counter_scanner)
                 self.view.canvas.draw()
-                self.model.move_y()
+                self.counter_scanner.move_y()
 
-            self.model.stop()
+            self.counter_scanner.stop()
 
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
@@ -453,25 +450,43 @@ class MainTkApplication():
         self.scan_thread.start()
 
     def save_scan(self, event = None):
-        myformats = [('Numpy Array', '*.npy')]
-        afile = tk.filedialog.asksaveasfilename(filetypes = myformats, defaultextension = '.npy')
+        myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
+        afile = tk.filedialog.asksaveasfilename(filetypes=myformats, defaultextension='.npz')
         logger.info(afile)
+        file_type = afile.split('.')[-1]
         if afile is None or afile == '':
-           return #selection was canceled.
-        with open(afile, 'wb') as f_object:
-          np.save(f_object, self.model.data)
+            return # selection was canceled.
 
-        self.view.sidepanel.saveScanButton['state'] = 'normal'
+        data = dict(
+                    raw_counts=self.counter_scanner.scanned_raw_counts,
+                    count_rate=self.counter_scanner.scanned_count_rate,
+                    scan_range=self.counter_scanner.get_completed_scan_range(),
+                    step_size=self.counter_scanner.step_size,
+                    daq_clock_rate=self.counter_scanner.rate_counter.clock_rate,
+                    )
+
+        if file_type == 'npy':
+            np.save(afile, data['count_rate'])
+
+        if file_type == 'npz':
+            np.savez_compressed(afile, **data)
+
+        elif file_type == 'h5':
+            h5file = h5py.File(afile, 'w')
+            for key, value in data.items():
+                h5file.create_dataset(key, data=value)
+            h5file.close()
+
 
     def optimize_thread_function(self, axis, central, range, step_size):
 
         try:
-            data, axis_vals, opt_pos, coeff = self.model.optimize_position(axis,
+            data, axis_vals, opt_pos, coeff = self.counter_scanner.optimize_position(axis,
                                                                            central,
                                                                            range,
                                                                            step_size)
             self.optimized_position[axis] = opt_pos
-            self.model.stage_controller.go_to_position(**{axis:opt_pos})
+            self.counter_scanner.stage_controller.go_to_position(**{axis:opt_pos})
             self.view.show_optimization_plot(f'Optimize {axis}',
                                              central,
                                              self.optimized_position[axis],
@@ -502,7 +517,7 @@ class MainTkApplication():
         opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
         old_optimized_value = self.optimized_position[axis]
 
-        self.model.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
+        self.counter_scanner.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
 
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.stopButton['state'] = 'disabled'
@@ -531,7 +546,8 @@ class MainTkApplication():
 def build_data_scanner():
     if args.randomtest:
         stage_controller = nipiezojenapy.BaseControl()
-        scanner = datasources.RandomPiezoScanner(stage_controller=stage_controller)
+        data_acq = datasources.RandomRateCounter(simulate_single_light_source=True,
+                                                 num_data_samples_per_batch=args.num_data_samples_per_batch)
     else:
         stage_controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
                                   write_channels = args.piezo_write_channels.split(','),
@@ -545,7 +561,7 @@ def build_data_scanner():
                                                             args.rwtimeout,
                                                             args.signal_counter)
 
-        scanner = datasources.NiDaqPiezoScanner(data_acq, stage_controller)
+    scanner = datasources.CounterAndScanner(data_acq, stage_controller)
 
     return scanner
 
@@ -553,6 +569,7 @@ def build_data_scanner():
 def main():
     tkapp = MainTkApplication(build_data_scanner())
     tkapp.run()
+
 
 if __name__ == '__main__':
     main()

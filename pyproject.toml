@@ -47,6 +47,7 @@ dependencies = [
     "numpy>=1.21.2",
     "matplotlib>=3.4.3",
     "scipy>=1.7.1",
+    "h5py>=3.3.0",
     "qcsapphire>=1.0.1",
     "qt3rfsynthcontrol>=1.0.1",
     "nipiezojenapy>=1.0.1",
