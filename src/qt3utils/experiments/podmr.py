@@ -210,7 +210,7 @@ class PulsedODMR(qt3utils.experiments.common.Experiment):
             except Exception as e:
                 logger.error(f'in finally.close. {type(e)}: {e}')
             #rfsynth.rf_off(self.rfsynth_channel)
-            data = np.array(data)
+            data = np.array(data, dtype=object)
             data = data[data[:,0].argsort()] #sorts the data by values in zeroth column... this is necessary if random_order = True
 
             return data

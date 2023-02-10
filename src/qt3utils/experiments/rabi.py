@@ -267,8 +267,7 @@ class Rabi(qt3utils.experiments.common.Experiment):
             except Exception as e:
                 pass
             #rfsynth.rf_off(self.rfsynth_channel)
-            data = np.array(data)
+            data = np.array(data, dtype=object)
 
             return data
 
-        return data

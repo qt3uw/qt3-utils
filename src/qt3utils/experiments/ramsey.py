@@ -228,8 +228,7 @@ class Ramsey:
             except Exception as e:
                 logger.error(f'in finally.close. {type(e)}: {e}')
             #rfsynth.rf_off(self.rfsynth_channel)
-            data = np.array(data)
+            data = np.array(data, dtype=object)
 
             return data
 
-        return data
