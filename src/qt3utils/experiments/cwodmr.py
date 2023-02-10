@@ -88,10 +88,10 @@ class CWODMR(qt3utils.experiments.common.Experiment):
     def run(self, N_cycles = 500000,
                   post_process_function = simple_measure_contrast,
                   random_order = False):
-        '''
-        Performs the CWODMR scan over the specificed range of frequencies.
+        """
+        Performs the CWODMR scan over the specified range of frequencies.
 
-        For each frequency, some number of cycles of data are acquired. A cycle
+        For each frequency, the specified number of cycles of data are acquired. A cycle
         is one full sequence of the pulse train used in the experiment. For CWODMR,
         a cycle is {RF on for pulser.rf_pulse_duration time, RF off for pulser.rf_pulse_duration time}.
 
@@ -109,7 +109,7 @@ class CWODMR(qt3utils.experiments.common.Experiment):
         which is useful to reduce the required memory to hold the raw data.
 
         After data acquisition for each frequency in the scan,
-        the post_process_function function is called and takes two arguments:
+        the post_process_function is called and takes two arguments:
             1) data_buffer: the full trace of data acquired
             2) self: a reference to an instance of this object
 
@@ -118,15 +118,18 @@ class CWODMR(qt3utils.experiments.common.Experiment):
 
         If post_process_function = None, the full raw data trace will be kept.
 
-        The return from this function is a list. Each element of the list
+        The return from this function is a numpy array. Each element of the array
         is a list of the following values
-            RF Frequency,
-            data_post_processing_output (or raw data trace)
+            RF Frequency (float),
+            data_post_processing_output, or raw data trace (typically of type numpy array(dtype = float))
+
+        Because of the mixed types in this array, the numpy array data type returned
+        here is an 'object'.
 
         The remaining (fixed) values for analysis can be obtained from the
         self.experimental_conditions function.
 
-        '''
+        """
 
         self.N_cycles = int(N_cycles)
 
@@ -203,7 +206,7 @@ class CWODMR(qt3utils.experiments.common.Experiment):
                 logger.error(f'in finally.close. {type(e)}: {e}')
 
             self.rfsynth.rf_off(self.rfsynth_channel)
-            data = np.array(data)
+            data = np.array(data, dtype=object)
             data = data[data[:,0].argsort()] #sorts the data by values in zeroth column... this is necessary if random_order = True
             return data
 

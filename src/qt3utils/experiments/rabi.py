@@ -188,7 +188,7 @@ class Rabi(qt3utils.experiments.common.Experiment):
 
     def run(self, N_cycles = 50000,
                   post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
-        '''
+        """
         Performs the scan over the specificed range of RF widths.
 
         For each RF width, some number of cycles of data are acquired. A cycle
@@ -221,14 +221,17 @@ class Rabi(qt3utils.experiments.common.Experiment):
 
         If post_process_function = None, the full raw data trace will be kept.
 
-        The return from this function is a list. Each element of the list
+        The return from this function is a numpy array. Each element of the array
         is a list of the following values
-            RF width,
-            data_post_processing_output (or raw data trace)
+            RF width (float),
+            data_post_processing_output, or raw data trace (typically of type numpy array(dtype = float))
+
+        Because of the mixed types in this array, the numpy array data type returned
+        here is an 'object'.
 
         The remaining (fixed) values for analysis can be obtained from the
         self.experimental_conditions function.
-        '''
+        """
 
         #first check that the pulser width is large enough
         try:
@@ -267,8 +270,7 @@ class Rabi(qt3utils.experiments.common.Experiment):
             except Exception as e:
                 pass
             #rfsynth.rf_off(self.rfsynth_channel)
-            data = np.array(data)
+            data = np.array(data, dtype=object)
 
             return data
 
-        return data
