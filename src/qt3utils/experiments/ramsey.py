@@ -26,7 +26,7 @@ class Ramsey:
         of an experiment and the hardware system setup.
 
         Hardware Settings
-            ramsey_pulser - a qt3utils.experiments.pulsers.pulseblaster.PulseBlasterRamHahnDD object
+            ramsey_pulser - a qt3utils.pulsers.pulseblaster.PulseBlasterRamHahnDD object
             rfsynth - a qt3rfsynthcontrol.Pulser object
             edge_counter_config - a qt3utils.nidaq.config.EdgeCounter object
 
@@ -101,27 +101,24 @@ class Ramsey:
 
     def run(self, N_cycles = 50000,
                   post_process_function = qt3utils.experiments.podmr.simple_measure_contrast):
-        '''
+        """
         Performs the scan over the specificed range of free precession times.
 
-        For each RF width, some number of cycles of data are acquired. A cycle
-        is one full sequence of the pulse train used in the experiment.
-        For Rabi, a cycle is {AOM on, AOM off/RF on, AOM on, AOM off/RF off}.
+        For each RF pulse delay, tau, some number of cycles of data are acquired. A cycle
+        is one full sequence of the pulse train used in the experiment as specified
+        by the supplied ramsey_pulser object.
 
         The N_cycles specifies the total number of these cycles to
         acquire. Your choice depends on your desired resolution or signal-to-noise
         ratio, your post-data acquisition processing choices, and the amount of memory
         available on your computer.
 
-        For each width, the number of data read from the NI DAQ will be
+        For each free precession time, tau, the number of data read from the NI DAQ will be
         N_clock_ticks_per_cycle * N_cycles, where N_clock_ticks_per_cycle
         is the value returned by self.set_pulser_state(tau).
 
-        Given the way our pulser is configured, N_clock_ticks_per_cycle will
-        grow linearly by tau.
-
         The acquired data are stored in a data_buffer within this method. They
-        may be analyzed with a function passed to post_process_function,
+        may be processed with a function passed to post_process_function,
         which is useful to reduce the required memory to hold the raw data.
 
         After data acquisition for each width in the scan,
@@ -134,14 +131,17 @@ class Ramsey:
 
         If post_process_function = None, the full raw data trace will be kept.
 
-        The return from this function is a list. Each element of the list
+        The return from this function is a numpy array. Each element of the array
         is a list of the following values
-            RF width,
-            data_post_processing_output (or raw data trace)
+            RF Frequency (float),
+            data_post_processing_output, or raw data trace (typically of type numpy array(dtype = float))
+
+        Because of the mixed types in this array, the numpy array data type returned
+        here is an 'object'.
 
         The remaining (fixed) values for analysis can be obtained from the
         self.experimental_conditions function.
-        '''
+        """
 
         #first check that the pulser width is large enough
         try:
