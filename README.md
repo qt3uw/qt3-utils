@@ -42,13 +42,31 @@ The `qt3utils` package depends on a handful of other [qt3 packages](https://gith
 Additional information may also be [found here](https://github.com/qt3uw/qt3softwaredocs).
 
 
-
 # Usage
 
 This package provides GUI applications and a Python API for controlling the hardware and running experiments.
 
-For instructions on using the python API, 
-the simplest way to get started is to see one of the [example](examples) notebooks.
+For instructions on using the python API,
+the simplest way to get started is to see one of the [example](examples) Jupyter notebooks.
+
+The following notebooks demonstrate usage of their respective experiment classes and
+the necessary hardware control objects for those experiments
+
+  * [CWODMR](examples/default_cwodmr.ipynb)
+  * [Pulsed ODMR](examples/default_podmr.ipynb)
+  * [Rabi Oscillations](examples/default_rabi.ipynb)
+  * [Ramsey](examples/default_ramsey.ipynb) (similar usage for spin/Hahn echo and dynamical decoupling)
+
+Additionally, there are two notebooks that demonstrate some basic hardware tests
+
+  * [Pulse Blaster Tests](examples/pulse_blaster_testing.ipynb)
+  * [MW Switch Tests](examples/testing_MW_switch.ipynb)
+  
+Most classes and methods contain docstrings that describe functionality, which you can
+discover through the python help() function.
+
+Help to [automatically generate documentation](https://github.com/qt3uw/qt3-utils/issues/66) would be appreciated.
+
 
 ## Applications
 
