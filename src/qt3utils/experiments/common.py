@@ -4,7 +4,7 @@ def aggregate_sum(data_buffer, experiment):
 
 class Experiment:
 
-    def run(self, N_cycles = 500000, post_process_function = None, *args, **kwargs):
+    def run(self, N_cycles, post_process_function, *args, **kwargs):
         raise NotImplementedError()
 
     def experimental_conditions(self):

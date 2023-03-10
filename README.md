@@ -61,9 +61,12 @@ Additionally, there are two notebooks that demonstrate some basic hardware tests
 
   * [Pulse Blaster Tests](examples/pulse_blaster_testing.ipynb)
   * [MW Switch Tests](examples/testing_MW_switch.ipynb)
-  
+
 Most classes and methods contain docstrings that describe functionality, which you can
 discover through the python help() function.
+
+Details of how the experiment classes work and how you can modify
+them are found in [ExperimentsDoc.md](docs/ExeperimentsDoc.md)
 
 Help to [automatically generate documentation](https://github.com/qt3uw/qt3-utils/issues/66) would be appreciated.
 
