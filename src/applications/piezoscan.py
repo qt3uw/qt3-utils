@@ -242,6 +242,7 @@ class SidePanel():
             self.update_go_to_position(mpl_event.xdata, mpl_event.ydata)
 
 
+
 class MainApplicationView():
     def __init__(self, main_frame, scan_range = [0,80]):
         frame = tk.Frame(main_frame)
@@ -388,6 +389,44 @@ class MainTkApplication():
 
         canvas.draw()
 
+    def disable_buttons_at_start_scan(self):
+        self.view.sidepanel.startButton['state'] = 'disabled'
+        self.view.sidepanel.go_to_z_button['state'] = 'disabled'
+        self.view.sidepanel.gotoButton['state'] = 'disabled'
+        self.view.sidepanel.saveScanButton['state'] = 'disabled'
+        self.view.sidepanel.popOutScanButton['state'] = 'disabled'
+
+        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
+        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
+
+        self.view.sidepanel.hold_aom_button['state'] = 'disabled'
+        self.view.sidepanel.log10Button['state'] = 'disabled'
+        self.view.sidepanel.set_color_map_button['state'] = 'disabled'
+
+    def disable_buttons_at_optimize(self):
+        self.disable_buttons_at_start_scan()
+        self.view.sidepanel.stopButton['state'] = 'disabled'
+
+    def enable_buttons_at_end_scan(self):
+        self.view.sidepanel.startButton['state'] = 'normal'
+        self.view.sidepanel.go_to_z_button['state'] = 'normal'
+        self.view.sidepanel.gotoButton['state'] = 'normal'
+        self.view.sidepanel.saveScanButton['state'] = 'normal'
+        self.view.sidepanel.popOutScanButton['state'] = 'normal'
+
+        self.view.sidepanel.optimize_x_button['state'] = 'normal'
+        self.view.sidepanel.optimize_y_button['state'] = 'normal'
+        self.view.sidepanel.optimize_z_button['state'] = 'normal'
+
+        self.view.sidepanel.hold_aom_button['state'] = 'normal'
+        self.view.sidepanel.log10Button['state'] = 'normal'
+        self.view.sidepanel.set_color_map_button['state'] = 'normal'
+
+    def enable_buttons_at_end_optimize(self):
+        self.enable_buttons_at_end_scan()
+        self.view.sidepanel.stopButton['state'] = 'normal'
+
     def scan_thread_function(self, xmin, xmax, ymin, ymax, step_size, N):
 
         self.counter_scanner.set_scan_range(xmin, xmax, ymin, ymax)
@@ -411,26 +450,9 @@ class MainTkApplication():
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
 
-        self.view.sidepanel.startButton['state'] = 'normal'
-        self.view.sidepanel.go_to_z_button['state'] = 'normal'
-        self.view.sidepanel.gotoButton['state'] = 'normal'
-        self.view.sidepanel.saveScanButton['state'] = 'normal'
-        self.view.sidepanel.popOutScanButton['state'] = 'normal'
-
-        self.view.sidepanel.optimize_x_button['state'] = 'normal'
-        self.view.sidepanel.optimize_y_button['state'] = 'normal'
-        self.view.sidepanel.optimize_z_button['state'] = 'normal'
+        self.enable_buttons_at_end_scan()
 
     def start_scan(self, event = None):
-        self.view.sidepanel.startButton['state'] = 'disabled'
-        self.view.sidepanel.go_to_z_button['state'] = 'disabled'
-        self.view.sidepanel.gotoButton['state'] = 'disabled'
-        self.view.sidepanel.saveScanButton['state'] = 'disabled'
-        self.view.sidepanel.popOutScanButton['state'] = 'disabled'
-
-        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
 
         #clear the figure
         self.view.scan_view.reset()
@@ -445,6 +467,7 @@ class MainTkApplication():
         args.append(float(self.view.sidepanel.step_size_entry.get()))
         args.append(int(self.view.sidepanel.n_sample_size_value.get()))
 
+        self.disable_buttons_at_start_scan()
         self.scan_thread = Thread(target=self.scan_thread_function,
                                   args = args)
         self.scan_thread.start()
@@ -500,16 +523,7 @@ class MainTkApplication():
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
 
 
-        self.view.sidepanel.startButton['state'] = 'normal'
-        self.view.sidepanel.stopButton['state'] = 'normal'
-        self.view.sidepanel.go_to_z_button['state'] = 'normal'
-        self.view.sidepanel.gotoButton['state'] = 'normal'
-        self.view.sidepanel.saveScanButton['state'] = 'normal'
-        self.view.sidepanel.popOutScanButton['state'] = 'normal'
-
-        self.view.sidepanel.optimize_x_button['state'] = 'normal'
-        self.view.sidepanel.optimize_y_button['state'] = 'normal'
-        self.view.sidepanel.optimize_z_button['state'] = 'normal'
+        self.enable_buttons_at_end_optimize()
 
     def optimize(self, axis):
 
@@ -519,16 +533,7 @@ class MainTkApplication():
 
         self.counter_scanner.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
 
-        self.view.sidepanel.startButton['state'] = 'disabled'
-        self.view.sidepanel.stopButton['state'] = 'disabled'
-        self.view.sidepanel.go_to_z_button['state'] = 'disabled'
-        self.view.sidepanel.gotoButton['state'] = 'disabled'
-        self.view.sidepanel.saveScanButton['state'] = 'disabled'
-        self.view.sidepanel.popOutScanButton['state'] = 'disabled'
-
-        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
+        self.disable_buttons_at_optimize()
 
         self.optimize_thread = Thread(target=self.optimize_thread_function,
                                       args = (axis, old_optimized_value, opt_range, opt_step_size))
