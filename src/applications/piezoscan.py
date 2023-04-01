@@ -121,7 +121,8 @@ class SidePanel():
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         row = 0
-        tk.Label(frame, text="Scan Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+        bold_font = ('Helvetica', 16, 'bold')
+        tk.Label(frame, text="Scan Settings", font=bold_font, underline=0).grid(row=row, column=1, pady=10)
         row += 1
         tk.Label(frame, text="x range (um)").grid(row=row, column=0)
         self.x_min_entry = tk.Entry(frame, width=10)
@@ -201,7 +202,8 @@ class SidePanel():
         self.optimize_z_button.grid(row=row, column=2)
 
         row += 1
-        tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+        bold_font = ('Helvetica', 16, 'bold')
+        tk.Label(frame, text="Confocal DAQ Settings", font=bold_font, underline=0).grid(row=row, column=1, pady=10)
         row += 1
         tk.Label(frame, text="N samples/step").grid(row=row, column=0)
         self.n_sample_size_value = tk.IntVar()
@@ -218,7 +220,8 @@ class SidePanel():
         self.aom_pulse_blaster_channel.grid(row=row, column=2, pady=(2,15))
 
         row += 1
-        tk.Label(frame, text="View Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
+        bold_font = ('Helvetica', 16, 'bold')
+        tk.Label(frame, text="Confocal View Settings", font=bold_font, underline=0).grid(row=row, column=1, pady=10)
         row += 1
         self.set_color_map_button = tk.Button(frame, text="Set Color")
         self.set_color_map_button.grid(row=row, column=0, pady=(2,15))
