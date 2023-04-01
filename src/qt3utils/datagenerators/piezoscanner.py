@@ -133,7 +133,19 @@ class CounterAndScanner:
     def reset(self):
         self.scanned_raw_counts = []
         self.scanned_count_rate = []
-        
+
+    def get_raw_counts(self):
+        """
+        Returns a list of raw counts from the most resent scan
+        """
+        return self.scanned_raw_counts
+
+    def get_count_rate(self):
+        """
+        Returns a list of count rates from the most resent scan
+        """
+        return self.scanned_count_rate
+
     def optimize_position(self, axis, center_position, width = 2, step_size = 0.25):
         '''
         Performs a scan over a particular axis about `center_position`.
@@ -188,4 +200,22 @@ class CounterAndScanner:
             logger.warning(e)
 
         return count_rates, axis_vals, optimal_position, coeff
+
+
+    def run_scan(self, reset_starting_position=True):
+        """
+        Runs a scan of the sample.
+
+        To get the data, call get_raw_counts() or get_count_rate()
+        """
+
+        if reset_starting_position:
+            self.reset()
+            self.set_to_starting_position()
+
+        self.start()
+        while self.still_scanning():
+            self.scan_x()
+            self.move_y()
+        self.stop()
 
