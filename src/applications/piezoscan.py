@@ -122,7 +122,7 @@ class SidePanel():
 
         row = 0
         bold_font = ('Helvetica', 16, 'bold')
-        tk.Label(frame, text="Scan Settings", font=bold_font, underline=0).grid(row=row, column=1, pady=10)
+        tk.Label(frame, text="Scan Settings", font=bold_font).grid(row=row, column=1, pady=10)
         row += 1
         tk.Label(frame, text="x range (um)").grid(row=row, column=0)
         self.x_min_entry = tk.Entry(frame, width=10)
@@ -203,7 +203,7 @@ class SidePanel():
 
         row += 1
         bold_font = ('Helvetica', 16, 'bold')
-        tk.Label(frame, text="Confocal DAQ Settings", font=bold_font, underline=0).grid(row=row, column=1, pady=10)
+        tk.Label(frame, text="Confocal DAQ Settings", font=bold_font).grid(row=row, column=1, pady=15)
         row += 1
         tk.Label(frame, text="N samples/step").grid(row=row, column=0)
         self.n_sample_size_value = tk.IntVar()
@@ -221,7 +221,7 @@ class SidePanel():
 
         row += 1
         bold_font = ('Helvetica', 16, 'bold')
-        tk.Label(frame, text="Confocal View Settings", font=bold_font, underline=0).grid(row=row, column=1, pady=10)
+        tk.Label(frame, text="Confocal View Settings", font=bold_font, underline=0).grid(row=row, column=1, pady=15)
         row += 1
         self.set_color_map_button = tk.Button(frame, text="Set Color")
         self.set_color_map_button.grid(row=row, column=0, pady=(2,15))
@@ -231,6 +231,15 @@ class SidePanel():
 
         self.log10Button = tk.Button(frame, text="Log10")
         self.log10Button.grid(row=row, column=2, pady=(2,15))
+        
+        row += 1
+        bold_font = ('Helvetica', 16, 'bold')
+        tk.Label(frame, text="Hyper Data", font=bold_font).grid(row=row, column=1, pady=15)
+        row += 1
+        tk.Label(frame, text="Spectrometer HSR750").grid(row=row, column=0)
+        self.optimize_x_button = tk.Button(frame, text="Tap Here")           #TODO:You need to change object "self.optimize..." code because it is linked to the optimize object and you need to create your own
+        self.optimize_x_button.grid(row=row, column=1, pady=(2,15))
+        
 
     def update_go_to_position(self, x = None, y = None, z = None):
         if x is not None:
@@ -294,6 +303,8 @@ class MainApplicationView():
 
 class MainTkApplication():
 
+    #TODO: You will need to bind the buttons you created for "Hyper Data" in this section
+    
     def __init__(self, counter_scanner):
         self.root = tk.Tk()
         self.counter_scanner = counter_scanner
