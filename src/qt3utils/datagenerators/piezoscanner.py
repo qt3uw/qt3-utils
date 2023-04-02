@@ -14,11 +14,11 @@ def gauss(x, *p):
 
 
 class CounterAndScanner:
-    def __init__(self, rate_counter, stage_controller, hyper_data_acquisition_function: Callable = None):
+    def __init__(self, rate_counter, position_controller, hyper_data_acquisition_function: Callable = None):
         """
 
         :param rate_counter: a RateCounter object
-        :param stage_controller: a StageController object
+        :param position_controller: a position controller object such as nipiezojenapy.BaseControl or PiezoControl
         :param hyper_data_acquisition_function: a function is called at each position of the scan
 
         Notes on hyper_data_acquisition_function:
@@ -43,12 +43,12 @@ class CounterAndScanner:
         self.xmin = 0.0
         self.xmax = 80.0
         self.step_size = 0.5
-        self.raster_line_pause = 0.150  # wait 150ms for the piezo stage to settle before a line scan
+        self.raster_line_pause = 0.150  # wait 150ms for the piezo actuator to settle before a line scan
 
         self.scanned_raw_counts = []
         self.scanned_count_rate = []
 
-        self.stage_controller = stage_controller
+        self.position_controller = position_controller
         self.rate_counter = rate_counter
         self.num_daq_batches = 1  # could change to 10 if want 10x more samples for each position
 
@@ -91,9 +91,9 @@ class CounterAndScanner:
 
     def set_to_starting_position(self):
         """
-        Move the stage to the starting position (xmin, ymin)
+        Move the actuator to the starting position (xmin, ymin)
         """
-        self.stage_controller.go_to_position(x=self.xmin, y=self.ymin)
+        self.position_controller.go_to_position(x=self.xmin, y=self.ymin)
 
     def close(self):
         self.rate_counter.close()
@@ -113,8 +113,8 @@ class CounterAndScanner:
         """
         Sets the scan range
         """
-        self.stage_controller.check_allowed_position(xmin, ymin)
-        self.stage_controller.check_allowed_position(xmax, ymax)
+        self.position_controller.check_allowed_position(xmin, ymin)
+        self.position_controller.check_allowed_position(xmax, ymax)
 
         self.ymin = ymin
         self.ymax = ymax
@@ -130,20 +130,20 @@ class CounterAndScanner:
 
     def get_current_position(self, axis=None, use_last_write_values=True) -> Union[dict, float]:
         """
-        Returns the last position written to the stage controller.
+        Returns the last position written to the actuator controller.
 
-        This is the CURRENT position of the stage.
+        This is the CURRENT position of the actuator.
 
         :param axis: 'x', 'y', or 'z'. If None, returns a dict of all axes
-        :param use_last_write_values: if True, then the last position written to the stage controller is returned.
-            otherwise, the current position is returned as determined by the read voltages from the stage controller.
+        :param use_last_write_values: if True, then the last position written to the actuator controller is returned.
+            otherwise, the current position is returned as determined by the read voltages from the actuator controller.
 
         :return: dict of x, y, z positions or a single float of the position of the specified axis
         """
         if use_last_write_values:
-            position = dict(zip(['x', 'y', 'z'], self.stage_controller.last_write_values))
+            position = dict(zip(['x', 'y', 'z'], self.position_controller.last_write_values))
         else:
-            position = dict(zip(['x', 'y', 'z'], self.stage_controller.get_position()))
+            position = dict(zip(['x', 'y', 'z'], self.position_controller.get_position()))
 
         if axis is None:
             return position
@@ -170,7 +170,7 @@ class CounterAndScanner:
     def _move_y(self):
         if self.get_current_position('y') + self.step_size <= self.ymax:
             try:
-                self.stage_controller.go_to_position(y=self.get_current_position('y') + self.step_size)
+                self.position_controller.go_to_position(y=self.get_current_position('y') + self.step_size)
             except ValueError as e:
                 logger.info(f'out of range\n\n{e}')
 
@@ -181,13 +181,13 @@ class CounterAndScanner:
         Stores results in self.scanned_raw_counts and self.scanned_count_rate.
         """
         raw_counts_for_axis = self._scan_axis('x', self.xmin, self.xmax, self.step_size,
-                                             hyper_data_acquisition_function=self.hyper_data_acquisition_function)
+                                              hyper_data_acquisition_function=self.hyper_data_acquisition_function)
         self.scanned_raw_counts.append(raw_counts_for_axis)
         self.scanned_count_rate.append([self.sample_count_rate(raw_counts) for raw_counts in raw_counts_for_axis])
 
     def _scan_axis(self, axis, min, max, step_size, hyper_data_acquisition_function=None):
         """
-        Moves the stage along the specified axis from min to max in steps of step_size.
+        Moves the actuator along the specified axis from min to max in steps of step_size.
         Returns a list of raw counts from the scan in the shape
         [[[counts, clock_samples]], [[counts, clock_samples]], ...] where each [[counts, clock_samples]] is the
         result of a single call to sample_counts at each scan position along the axis.
@@ -196,11 +196,11 @@ class CounterAndScanner:
         If hyper_data_acquisition_function.in_parallel is True, it will be called in a separate thread.
         """
         raw_counts = []
-        self.stage_controller.go_to_position(**{axis: min})
+        self.position_controller.go_to_position(**{axis: min})
         time.sleep(self.raster_line_pause)
         for val in np.arange(min, max, step_size):
             logger.info(f'go to position {axis}: {val:.2f}')
-            self.stage_controller.go_to_position(**{axis: val})
+            self.position_controller.go_to_position(**{axis: val})
 
             if hyper_data_acquisition_function is not None:
                 if hyper_data_acquisition_function.in_parallel:
@@ -216,7 +216,7 @@ class CounterAndScanner:
 
             raw_counts.append(_raw_counts)
             logger.info(f'raw counts, total clock samples: {_raw_counts}')
-            logger.info(f'current stage position: {self.get_current_position()}')
+            logger.info(f'current actuator position: {self.get_current_position()}')
 
         return raw_counts
 
@@ -226,13 +226,13 @@ class CounterAndScanner:
 
     def get_raw_counts(self):
         """
-        Returns a list of raw counts from the most resent scan
+        Returns a list of raw counts from the most recent scan
         """
         return self.scanned_raw_counts
 
     def get_count_rate(self):
         """
-        Returns a list of count rates from the most resent scan
+        Returns a list of count rates from the most recent scan
         """
         return self.scanned_count_rate
 
@@ -264,8 +264,8 @@ class CounterAndScanner:
         """
         min_val = center_position - width
         max_val = center_position + width
-        min_val = np.max([min_val, self.stage_controller.minimum_allowed_position])
-        max_val = np.min([max_val, self.stage_controller.maximum_allowed_position])
+        min_val = np.max([min_val, self.position_controller.minimum_allowed_position])
+        max_val = np.min([max_val, self.position_controller.maximum_allowed_position])
 
         self.start()
         raw_counts = self._scan_axis(axis, min_val, max_val, step_size)
@@ -290,12 +290,12 @@ class CounterAndScanner:
 
     def run_scan(self, reset_starting_position=True, line_scan_callback=None):
         """
-        Runs a scan across the range of set parameters: xmin, xmax, ymin, ymax, step_size
+        Runs a scan across the range of set parameters: xmin, xmax, ymin, ymax, with increments of step_size.
 
         To get the data after the scan, call get_raw_counts() or get_count_rate(). You may also
         provide a callback function that will be called after each line scan is completed.
 
-        :param reset_starting_position: if True, the stage will be reset to the starting position before the scan begins
+        :param reset_starting_position: if True, the actuator will be reset to the starting position before the scan begins
         :param line_scan_callback: a function that will be called after each line scan is completed. The function
                                      should take a single argument, which will be an instance of this class.
                                      i.e. line_scan_callback(obj: CounterAndScanner)

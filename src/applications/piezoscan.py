@@ -294,8 +294,8 @@ class MainTkApplication():
     def __init__(self, counter_scanner):
         self.root = tk.Tk()
         self.counter_scanner = counter_scanner
-        scan_range = [counter_scanner.stage_controller.minimum_allowed_position,
-                      counter_scanner.stage_controller.maximum_allowed_position]
+        scan_range = [counter_scanner.actuator_controller.minimum_allowed_position,
+                      counter_scanner.actuator_controller.maximum_allowed_position]
         self.view = MainApplicationView(self.root, scan_range)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
         self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
@@ -316,31 +316,31 @@ class MainTkApplication():
         self.scan_thread = None
 
         self.optimized_position = {'x':0, 'y':0, 'z':-1}
-        if self.counter_scanner.stage_controller:
-            self.optimized_position['z'] = self.counter_scanner.stage_controller.get_current_position()[2]
+        if self.counter_scanner.actuator_controller:
+            self.optimized_position['z'] = self.counter_scanner.actuator_controller.get_current_position()[2]
         else:
             self.optimized_position['z'] = 20
         self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'],4))
 
 
     def run(self):
-        self.root.title("QT3Scan: Piezo Controlled NIDAQ Digital Count Rate Scanner")
+        self.root.title("QT3Scan: Piezo Control and NIDAQ Digital Signal Counter")
         self.root.deiconify()
         self.root.mainloop()
 
     def go_to_position(self, event = None):
-        if self.counter_scanner.stage_controller:
-            self.counter_scanner.stage_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
+        if self.counter_scanner.actuator_controller:
+            self.counter_scanner.actuator_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
         else:
-            print(f'stage_controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
+            print(f'actuator_controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
         self.optimized_position['x'] = self.view.sidepanel.go_to_x_position_text.get()
         self.optimized_position['y'] = self.view.sidepanel.go_to_y_position_text.get()
 
     def go_to_z(self, event = None):
-        if self.counter_scanner.stage_controller:
-            self.counter_scanner.stage_controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
+        if self.counter_scanner.actuator_controller:
+            self.counter_scanner.actuator_controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
         else:
-            print(f'stage_controller would have moved to z = {self.view.sidepanel.z_entry_text.get():.2f}')
+            print(f'actuator_controller would have moved to z = {self.view.sidepanel.z_entry_text.get():.2f}')
         self.optimized_position['z'] = self.view.sidepanel.z_entry_text.get()
 
     def set_color_map(self, event = None):
@@ -481,7 +481,7 @@ class MainTkApplication():
                                                                            range,
                                                                            step_size)
             self.optimized_position[axis] = opt_pos
-            self.counter_scanner.stage_controller.go_to_position(**{axis:opt_pos})
+            self.counter_scanner.actuator_controller.go_to_position(**{axis:opt_pos})
             self.view.show_optimization_plot(f'Optimize {axis}',
                                              central,
                                              self.optimized_position[axis],
@@ -493,7 +493,6 @@ class MainTkApplication():
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
-
 
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.stopButton['state'] = 'normal'
@@ -540,11 +539,11 @@ class MainTkApplication():
 
 def build_data_scanner():
     if args.randomtest:
-        stage_controller = nipiezojenapy.BaseControl()
+        actuator_controller = nipiezojenapy.BaseControl()
         data_acq = datasources.RandomRateCounter(simulate_single_light_source=True,
                                                  num_data_samples_per_batch=args.num_data_samples_per_batch)
     else:
-        stage_controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
+        actuator_controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
                                   write_channels = args.piezo_write_channels.split(','),
                                   read_channels = args.piezo_read_channels.split(','))
 
@@ -556,7 +555,7 @@ def build_data_scanner():
                                                             args.rwtimeout,
                                                             args.signal_counter)
 
-    scanner = datasources.CounterAndScanner(data_acq, stage_controller)
+    scanner = datasources.CounterAndScanner(data_acq, actuator_controller)
 
     return scanner
 
