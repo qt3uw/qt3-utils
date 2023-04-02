@@ -80,18 +80,18 @@ class ScanImage:
         self.ax.set_ylabel('y position (um)')
         self.log_data = False
 
-    def update(self, model):
+    def update(self, scanner):
 
         if self.log_data:
-            data = np.log10(model.scanned_count_rate)
+            data = np.log10(scanner.get_count_rate())
             data[np.isinf(data)] = 0 #protect against +-inf
         else:
-            data = model.scanned_count_rate
+            data = scanner.get_count_rate()
 
-        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.xmin,
-                                                                   model.xmax + model.step_size,
-                                                                   model.current_y + model.step_size,
-                                                                   model.ymin])
+        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[scanner.xmin,
+                                                                   scanner.xmax + scanner.step_size,
+                                                                   scanner.get_current_position('y') + scanner.step_size,
+                                                                   scanner.ymin])
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
         else:
@@ -395,17 +395,12 @@ class MainTkApplication():
         self.counter_scanner.set_num_data_samples_per_batch(N)
 
         try:
-            self.counter_scanner.reset() #clears the data
-            self.counter_scanner.start() #starts the DAQ
-            self.counter_scanner.set_to_starting_position() #moves the stage to starting position
-
-            while self.counter_scanner.still_scanning():
-                self.counter_scanner.scan_x()
-                self.view.scan_view.update(self.counter_scanner)
+            def update_scan_view(counter_scanner):
+                self.view.scan_view.update(counter_scanner)
                 self.view.canvas.draw()
-                self.counter_scanner.move_y()
 
-            self.counter_scanner.stop()
+            self.counter_scanner.run_scan(reset_starting_position=True,
+                                          line_scan_callback=update_scan_view)
 
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
