@@ -233,10 +233,11 @@ class SidePanel():
         self.log10Button.grid(row=row, column=2, pady=(2,15))
         
         row += 1
-        tk.Label(frame, text="Spectrometer Settings", font='Helvetica 16').grid(row=row, column=1, pady=15)
+        bold_font = ('Helvetica', 16, 'bold')
+        tk.Label(frame, text="Spectrometer Settings", font=bold_font).grid(row=row, column=1, pady=15)
         row += 1
         self.spectrometer_button = tk.Button(frame, text="Open Spectrometer Settings")
-        self.spectrometer_button.grid(row=row, column=1, pady=(2, 15))
+        self.spectrometer_button.grid(row=row, column=0, pady=(2, 15))
         
 
     def update_go_to_position(self, x = None, y = None, z = None):
@@ -268,7 +269,7 @@ class SpectrometerSettingsView:
         self.max_wavelength_entry.insert(10, self.spectrometer_settings.max_wavelength)
         self.min_wavelength_entry.grid(row=row, column=1)
         self.max_wavelength_entry.grid(row=row, column=2)
-
+        
         row += 1
         self.save_button = tk.Button(frame, text="Save Settings")
         self.save_button.grid(row=row, column=2, pady=(2, 15))
