@@ -229,6 +229,13 @@ class SidePanel():
         self.log10Button = tk.Button(frame, text="Log10")
         self.log10Button.grid(row=row, column=2, pady=(2,15))
 
+        row += 1
+        tk.Label(frame, text="Spectrometer Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
+        row += 1
+        self.spectrometer_button = tk.Button(frame, text="Open Spectrometer Settings")
+        self.spectrometer_button.grid(row=row, column=1, pady=(2, 15))
+
+
     def update_go_to_position(self, x = None, y = None, z = None):
         if x is not None:
             self.go_to_x_position_text.set(np.round(x,4))
@@ -240,6 +247,34 @@ class SidePanel():
     def mpl_onclick_callback(self, mpl_event):
         if mpl_event.xdata and mpl_event.ydata:
             self.update_go_to_position(mpl_event.xdata, mpl_event.ydata)
+
+
+class SpectrometerSettingsView:
+    def __init__(self, root, spectrometer_settings):
+
+        frame = tk.Frame(root)
+        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.spectrometer_settings = spectrometer_settings
+
+        row = 0
+        tk.Label(frame, text="Spectrometer Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+        row += 1
+        tk.Label(frame, text="Spectral Range (nm)").grid(row=row, column=0)
+        self.min_wavelength_entry = tk.Entry(frame, width=10)
+        self.max_wavelength_entry = tk.Entry(frame, width=10)
+        self.min_wavelength_entry.insert(10, self.spectrometer_settings.min_wavelength)
+        self.max_wavelength_entry.insert(10, self.spectrometer_settings.max_wavelength)
+        self.min_wavelength_entry.grid(row=row, column=1)
+        self.max_wavelength_entry.grid(row=row, column=2)
+
+        row += 1
+        self.save_button = tk.Button(frame, text="Save Settings")
+        self.save_button.grid(row=row, column=2, pady=(2, 15))
+
+class SpectrometerDAQSettings:
+    def __init__(self):
+        self.min_wavelength = 600
+        self.max_wavelength = 800
 
 
 class MainApplicationView():
@@ -312,6 +347,10 @@ class MainTkApplication():
         self.view.sidepanel.optimize_y_button.bind("<Button>", lambda e: self.optimize('y'))
         self.view.sidepanel.optimize_z_button.bind("<Button>", lambda e: self.optimize('z'))
 
+        self.view.sidepanel.spectrometer_button.bind("<Button>", self.open_spectrometer_settings)
+        self.spectrometer_settings = SpectrometerDAQSettings()
+        self.spectrometer_settings_view = None
+
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.scan_thread = None
 
@@ -366,6 +405,16 @@ class MainTkApplication():
     def stop_scan(self, event = None):
         self.counter_scanner.stop()
 
+
+    def open_spectrometer_settings(self, event=None):
+
+        win = tk.Toplevel()
+        self.spectrometer_settings_view = SpectrometerSettingsView(win, self.spectrometer_settings)
+        self.spectrometer_settings_view.save_button.bind("<Button>", self.save_spectrometer_settings)
+
+    def save_spectrometer_settings(self, event=None):
+        self.spectrometer_settings.min_wavelength = self.spectrometer_settings_view.min_wavelength_entry.get()
+        self.spectrometer_settings.max_wavelength = self.spectrometer_settings_view.max_wavelength_entry.get()
 
     def pop_out_scan(self, event = None):
         """
