@@ -236,7 +236,7 @@ class SidePanel():
         bold_font = ('Helvetica', 16, 'bold')
         tk.Label(frame, text="Spectrometer Settings", font=bold_font).grid(row=row, column=1, pady=15)
         row += 1
-        self.spectrometer_button = tk.Button(frame, text="Open Spectrometer Settings")
+        self.spectrometer_button = tk.Button(frame, text="Open Spectrometer Settings",)
         self.spectrometer_button.grid(row=row, column=0, pady=(2, 15))
         
 
@@ -258,9 +258,28 @@ class SpectrometerSettingsView:
         frame = tk.Frame(root)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.spectrometer_settings = spectrometer_settings
-
         row = 0
-        tk.Label(frame, text="Spectrometer Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+        bold_font = ('Helvetica', 16, 'bold')
+        tk.Label(frame, text="Spectrometer Settings", font=bold_font).grid(row=row, column=0,pady=10)
+        
+        row += 1
+        tk.Label(frame, text="Exposure Time (s)").grid(row=row, column=0)
+        self.exposure_time_entry = tk.Entry(frame, width=10)
+        self.exposure_time_entry.insert(10, self.spectrometer_settings.exposure_time)
+        self.exposure_time_entry.grid(row=row, column=1)
+        
+        row += 1
+        tk.Label(frame, text="Frames to Save").grid(row=row, column=0)
+        self.spec_frames_entry = tk.Entry(frame, width=10)
+        self.spec_frames_entry.insert(10, self.spectrometer_settings.spec_frames)
+        self.spec_frames_entry.grid(row=row, column=1)
+        
+        row += 1
+        tk.Label(frame, text="Center Wavelength (nm)").grid(row=row, column=0)
+        self.center_wlength_entry = tk.Entry(frame, width=10)
+        self.center_wlength_entry.insert(10, self.spectrometer_settings.center_wlength)
+        self.center_wlength_entry.grid(row=row, column=1)
+        
         row += 1
         tk.Label(frame, text="Spectral Range (nm)").grid(row=row, column=0)
         self.min_wavelength_entry = tk.Entry(frame, width=10)
@@ -276,9 +295,11 @@ class SpectrometerSettingsView:
 
 class SpectrometerDAQSettings:
     def __init__(self):
+        self.exposure_time = 20
+        self.spec_frames = 1
+        self.center_wlength = 1000
         self.min_wavelength = 600
         self.max_wavelength = 800
-
 
 class MainApplicationView():
     def __init__(self, main_frame, scan_range = [0,80]):
@@ -417,9 +438,12 @@ class MainTkApplication():
         self.spectrometer_settings_view.save_button.bind("<Button>", self.save_spectrometer_settings)
 
     def save_spectrometer_settings(self, event=None):
+        self.spectrometer_settings.exposure_time = self.spectrometer_settings_view.exposure_time_entry.get()
+        self.spectrometer_settings.spec_frames = self.spectrometer_settings_view.spec_frames_entry.get()
+        self.spectrometer_settings.center_wlength = self.spectrometer_settings_view.center_wlength_entry.get()
         self.spectrometer_settings.min_wavelength = self.spectrometer_settings_view.min_wavelength_entry.get()
         self.spectrometer_settings.max_wavelength = self.spectrometer_settings_view.max_wavelength_entry.get()
-
+        
 
     def pop_out_scan(self, event = None):
         """
