@@ -264,9 +264,9 @@ class SpectrometerSettingsView:
         
         row += 1
         tk.Label(frame, text="Exposure Time (s)").grid(row=row, column=0)
-        self.exposure_time_entry = tk.Entry(frame, width=10)
-        self.exposure_time_entry.insert(10, self.spectrometer_settings.exposure_time)
-        self.exposure_time_entry.grid(row=row, column=1)
+        self.expose_time_entry = tk.Entry(frame, width=10)
+        self.expose_time_entry.insert(10, self.spectrometer_settings.expose_time)
+        self.expose_time_entry.grid(row=row, column=1)
         
         row += 1
         tk.Label(frame, text="Frames to Save").grid(row=row, column=0)
@@ -295,7 +295,7 @@ class SpectrometerSettingsView:
 
 class SpectrometerDAQSettings:
     def __init__(self):
-        self.exposure_time = 20
+        self.expose_time = 20
         self.spec_frames = 1
         self.center_wlength = 1000
         self.min_wavelength = 600
@@ -438,7 +438,7 @@ class MainTkApplication():
         self.spectrometer_settings_view.save_button.bind("<Button>", self.save_spectrometer_settings)
 
     def save_spectrometer_settings(self, event=None):
-        self.spectrometer_settings.exposure_time = self.spectrometer_settings_view.exposure_time_entry.get()
+        self.spectrometer_settings.expose_time = self.spectrometer_settings_view.expose_time_entry.get()
         self.spectrometer_settings.spec_frames = self.spectrometer_settings_view.spec_frames_entry.get()
         self.spectrometer_settings.center_wlength = self.spectrometer_settings_view.center_wlength_entry.get()
         self.spectrometer_settings.min_wavelength = self.spectrometer_settings_view.min_wavelength_entry.get()
@@ -518,6 +518,8 @@ class MainTkApplication():
         xmax = float(self.view.sidepanel.x_max_entry.get())
         ymin = float(self.view.sidepanel.y_min_entry.get())
         ymax = float(self.view.sidepanel.y_max_entry.get())
+        
+        
 
         args = [xmin, xmax, ymin, ymax]
         args.append(float(self.view.sidepanel.step_size_entry.get()))

@@ -75,3 +75,21 @@ class HSR750:
         Get the current spectrum from the spectrometer.
         """
         return self.experiment.GetData()
+    
+    def generate_data(self, exposure_times: List[float], num_spectra: int) -> List[List[float]]:
+        """
+        Generate data by taking multiple spectra with varying exposure times.
+        :param exposure_times: a list of exposure times to use
+        :param num_spectra: the number of spectra to take for each exposure time
+        :return: a list of spectra, where each spectrum is a list of floats representing intensity values
+        """
+        data = []
+        for exposure_time in exposure_times:
+            self.exposure_time = exposure_time
+            self.load_settings()
+            spectra = []
+            for i in range(num_spectra):
+                self.take_spectrum()
+                spectra.append(self.get_current_spectrum())
+            data.append(spectra)
+        return data
