@@ -62,5 +62,5 @@ dependencies = [
 
 [project.scripts]
 qt3scope = "applications.oscilloscope:main"
-qt3scan = "applications.piezoscan:main"
+qt3scan = "applications.qt3scan:main"
 
