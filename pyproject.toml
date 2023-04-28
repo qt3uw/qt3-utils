@@ -61,6 +61,6 @@ dependencies = [
 "Changelog" = "https://github.com/qt3uw/qt3utils/releases"
 
 [project.scripts]
-qt3scope = "applications.oscilloscope:main"
+qt3scope = "applications.qt3scope:main"
 qt3scan = "applications.piezoscan:main"
 

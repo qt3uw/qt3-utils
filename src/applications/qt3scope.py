@@ -1,20 +1,13 @@
-import time
 import argparse
 import collections
 import tkinter as Tk
 import logging
 
 import numpy as np
-from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import nidaqmx
-
-import qt3utils.nidaq
 import qt3utils.datagenerators as datasources
 
 logger = logging.getLogger(__name__)
@@ -29,12 +22,9 @@ parser.add_argument('-st', '--signal-terminal', metavar = 'terminal', default = 
 parser.add_argument('-w', '--scope-width', metavar = 'width', default = 500, type=int,
                     help='Number of measurements to display in window.')
 parser.add_argument('-c', '--clock-rate', metavar = 'rate (Hz)', default = 100000, type=int,
-                    help='''Specifies the clock rate in Hz. If using an external clock,
-                    you should specifiy the clock rate here so that the correct counts per
-                    second are displayed. If using the internal NI DAQ clock (default behavior),
-                    this value specifies the clock rate to use. Per the NI DAQ manual,
-                    use a suitable clock rate for the device for best performance, which is an integer
-                    multiple downsample of the digital sample clock.''')
+                    help='''Specifies the clock rate in Hz. This application uses the internal 
+                    NI DAQ clock. Per the NI DAQ manual, use a suitable clock rate for the device 
+                    for best performance, which is an integer multiple downsample of the digital sample clock.''')
 parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 1500, type=int,
                     help='''Number of data points to acquire per DAQ batch request.
                            Note that only ONE data point is shown in the scope.
@@ -43,9 +33,6 @@ parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default
                            the "num-data-samples-per-batch" should reduce your noise, but
                            slow the response of the scope. Increase this value if the
                            scope appears too noisy.''')
-parser.add_argument('-ct', '--clock-terminal', metavar = 'terminal', default = None, type=str,
-                    help='''Specifies the digital input terminal to the NI DAQ to use for a clock.
-                            If None, which is the default, the internal NI DAQ clock is used.''')
 parser.add_argument('-to', '--rwtimeout', metavar = 'seconds', default = 10, type=int,
                     help='NI DAQ read/write timeout in seconds.')
 parser.add_argument('-sc', '--signal-counter', metavar = 'ctrN', default = 'ctr2', type=str,
@@ -185,7 +172,6 @@ def build_data_model():
                                                                           signal_terminal = args.signal_terminal,
                                                                           clock_rate = args.clock_rate,
                                                                           num_data_samples_per_batch = args.num_data_samples_per_batch,
-                                                                          clock_terminal = args.clock_terminal,
                                                                           read_write_timeout = args.rwtimeout,
                                                                           signal_counter = args.signal_counter)
     return data_acquisition_model
