@@ -130,7 +130,7 @@ class LightFieldM:
         while self.experiment.IsRunning:
             sleep(0.1)  # waits for experiment to finish
 
-        last_file = self.application.FileManager.GetRecentlyAcquiredFileNames().GetItem(0)
+        last_file = self.application.FileManager.GetRecentlyAcquiredFileNames().get_Item(0)
 
         image_set = self.application.FileManager.OpenFile(last_file, FileAccess.Read)
 
@@ -155,28 +155,10 @@ class LightFieldM:
 
 
         else:
-            # not sure when this situation actually arises, but I think multiple
-            # regions of interest have to be set.
-            #     data = cell(imageset.Regions.Length, 1)
+            
             print('image_set.Regions not 1! this needs to be figured out!')
             print(image_set.Frames)
-        #     for j in range(0, image_set.Regions.Length - 1):
-        #
-        #         if image_set.Frames == 1:
-        #
-        #             frame = image_set.GetFrame(j, 0)
-        #             buf = np.reshape(np.fromiter(frame.GetData(), 'uint16'), frame.Width, frame.Height))
-        #
-        #         else:
-        #
-        #             buf = []
-        #
-        #             for i in range(0, image_set.Frames-1):
-        #
-        #                 frame = image_set.GetFrame(j, i)
-        #                 buffer = np.dstack(buf, np.reshape(np.fromiter(frame.GetData(), 'uint16'), frame.Width, frame.Height, 1))
-        #
-        #         data[j+1] = buf
+        
 
     def close(self):
         """

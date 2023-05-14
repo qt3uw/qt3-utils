@@ -1,5 +1,8 @@
 import clr
-import numpy
+import numpy as np
+import matplotlib
+matplotlib.use('TKAgg')
+import matplotlib.pyplot as plt
 
 # Import the HSR750 class from the princeton_spectrometers module
 from pscanner import Spectrometer
@@ -44,13 +47,16 @@ print(data.shape)
 """
 
 
-s.num_frames = "10"
-print('Acquiring 10 frames')
-data, wavelength = s.acquire_frame()
-print(data.shape)
+s.num_frames = "3"
+# print('Acquiring 10 frames')
+# data, wavelength = s.acquire_frame()
+# print(data.shape)
 
-data, wavelength = s.acquire_step_and_glue([500.0, 950.0])
+im_data, wavelength = s.acquire_step_and_glue([400.0, 450.0])
+spectrum = np.sum(im_data, axis=1)
+plt.plot(wavelength, spectrum)
+plt.show()
 
-print(data.shape, wavelength.shape)
 
 s.finalize()
+
