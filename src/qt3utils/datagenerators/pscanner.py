@@ -12,9 +12,9 @@ try:
     addin_path = lf_root + '\AddInViews\PrincetonInstruments.LightFieldViewV4.dll'
     support_path = lf_root + '\PrincetonInstruments.LightFieldAddInSupportServices.dll'
 
-    addin_class = clr.AddReference(addin_path);
-    automation_class = clr.AddReference(automation_path);
-    support_class = clr.AddReference(support_path);
+    addin_class = clr.AddReference(addin_path)
+    automation_class = clr.AddReference(automation_path)
+    support_class = clr.AddReference(support_path)
 
     import PrincetonInstruments.LightField as lf
 
@@ -24,8 +24,8 @@ try:
     from System.Collections.Generic import List
     from System import String
     from System.IO import FileAccess
-except:
-    pass
+except Exception as e:
+    print(f"Exception occurred during import: {e}")
 
 
 class LightFieldM:
@@ -37,7 +37,7 @@ class LightFieldM:
     def __init__(self, visible):
 
         self._addinbase = lf.AddIns.AddInBase()
-        self._automation = lf.Automation.Automation(visible, List[String](""))
+        self._automation = lf.Automation.Automation(visible, List[String]())
         self._application = self._automation.LightFieldApplication
         self._experiment = self._application.Experiment
 
@@ -112,8 +112,7 @@ class LightFieldM:
     def acquire(self):
         """
         Helper function to acquire the data from the PIXIS-style cameras.
-        Your mileage may vary for the Pylon - need to check array reorganization
-        since there is only a single vertical pixel.
+        Need to check array reorganization since there is only a single vertical pixel.
         For a single frame, the data is returned as a 2D array (just raw counts
         from each pixel). Taking a section in the vertical (400-pixel) direction
         corresponds to wavelength averaging.
@@ -381,7 +380,7 @@ def test():
     # import matplotlib.pyplot as plt
 
     lfm = LightFieldM(True)
-    lfm.load_experiment('SpyreAutomation')
+    lfm.load_experiment('LF_Control')
 
     lfm.set_frames(5)
     print(lfm.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore))

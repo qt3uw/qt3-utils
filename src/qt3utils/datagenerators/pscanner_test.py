@@ -15,9 +15,9 @@ s.exposure_time = 1.5
 print('Exposure time: {}ms'.format(s.exposure_time))
 
 print('Number of frames: {}'.format(s.num_frames))
-s.num_frames = 1
+s.num_frames = "1"
 print('Number of frames: {}'.format(s.num_frames))
-s.num_frames = 10
+s.num_frames = "10"
 print('Number of frames: {}'.format(s.num_frames))
 
 print('Sensor temperature setpoint: {} C'.format(s.sensor_setpoint))
@@ -36,13 +36,16 @@ print('Center wavelength:{}'.format(s.center_wavelength))
 s.center_wavelength = 730.0
 print('Center wavelength:{}'.format(s.center_wavelength))
 
-print('Acquring single frame')
-s.num_frames = 1
+"""
+print('Acquiring a single frame')
+s.num_frames = "1"
 data, wavelength = s.acquire_frame()
 print(data.shape)
+"""
 
-s.num_frames = 10
-print('Acquring 10 frames')
+
+s.num_frames = "10"
+print('Acquiring 10 frames')
 data, wavelength = s.acquire_frame()
 print(data.shape)
 
