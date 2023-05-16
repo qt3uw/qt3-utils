@@ -169,7 +169,7 @@ class LightFieldM:
 
 class Spectrometer():
     GRATINGS = ['[500nm,600][0][0]', '[1.2um,300][1][0]',
-                '[500nm,150][2][0]']  # TODO: make it pull gratings from SW directly
+                '[500nm,150][2][0]']  # TODO: make it so that it automatically scrapes the grating settings
 
     def initialize(self):
         """
