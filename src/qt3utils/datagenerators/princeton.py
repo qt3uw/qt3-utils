@@ -1,7 +1,6 @@
 import os
-from time import sleep
-
 import numpy as np
+from time import sleep
 
 try:
     import clr
@@ -28,7 +27,7 @@ except Exception as e:
     print(f"Exception occurred during import: {e}")
 
 
-class LightFieldM:
+class LightfieldApp:
     """
     Helper class for interfacing between the lantz driver and LightField
     software.
@@ -79,12 +78,12 @@ class LightFieldM:
 
             else:
 
-                # TODO: add proper exception?
+                # TODO: might need to add a proper exception
                 print('Invalid value: {} for setting: {}.'.format(value, setting))
 
         else:
 
-            # TODO: add proper exceptions?
+            # TODO: might need to add a proper exception
             print('Invalid setting:{}'.format(setting))
 
         return
@@ -120,31 +119,31 @@ class LightFieldM:
         averaging can be performed simply by summing over the different planes.
         """
 
-        acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime)
+        acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) #to allow the camera to capture the desired amount of data during the specified exposure time.
         num_frames = self.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore)
 
         self.experiment.Acquire()
 
-        sleep(0.001 * acquisition_time * num_frames)  # waits exposure duration
+        sleep(0.001 * acquisition_time * num_frames)  #sleep delay that waits for the exposure duration of the camera
 
         while self.experiment.IsRunning:
-            sleep(0.1)  # waits for experiment to finish
+            sleep(0.1)  #loop that repeatedly checks whether the experiment is still running so it decided when to move to next block of code
 
         last_file = self.application.FileManager.GetRecentlyAcquiredFileNames().get_Item(0)
 
-        image_set = self.application.FileManager.OpenFile(last_file, FileAccess.Read)
+        frame_count = self.application.FileManager.OpenFile(last_file, FileAccess.Read)
 
-        if image_set.Regions.Length == 1:
+        if frame_count.Regions.Length == 1:
 
-            if image_set.Frames == 1:
+            if frame_count.Frames == 1:
 
-                frame = image_set.GetFrame(0, 0)
+                frame = frame_count.GetFrame(0, 0)
                 data = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height], order='F')
 
             else:
                 data = np.array([])
-                for i in range(0, image_set.Frames):
-                    frame = image_set.GetFrame(0, i)
+                for i in range(0, frame_count.Frames):
+                    frame = frame_count.GetFrame(0, i)
                     new_frame = np.fromiter(frame.GetData(), 'uint16')
 
                     new_frame = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height],
@@ -156,12 +155,13 @@ class LightFieldM:
 
         else:
             
-            print('image_set.Regions not 1! this needs to be figured out!')
-            print(image_set.Frames)
+            print('frame_count.Regions is not. Please retry.')
+            print(frame_count.Frames)
         
 
     def close(self):
         """
+        Similar to finalize as seen a few lines below. 
         """
         self.automation.Dispose()
         print('Closed AddInProcess.exe')
@@ -173,34 +173,35 @@ class Spectrometer():
 
     def initialize(self):
         """
-        Sets up LightField
+        Sets up LightField and loads an empty experiment called 
+        "LF_Control that we use for automation purposes.
         """
-        self.lfm = LightFieldM(True)
-        self.lfm.load_experiment('LF_Control')
+        self.light = LightfieldApp(True)
+        self.light.load_experiment('LF_Control')  
 
     def finalize(self):
         """
-        Shuts the club downnnnn.
+        Closes the Lightfield application without saving the settings.
         """
-        self.lfm.close()
+        self.light.close()
 
     @property
     def center_wavelength(self):
         """
         Returns the center wavelength in nanometers.
         """
-        return self.lfm.get(lf.AddIns.SpectrometerSettings.GratingCenterWavelength)
+        return self.light.get(lf.AddIns.SpectrometerSettings.GratingCenterWavelength)
 
     def get_wavelengths(self):
         """
         Returns the wavelength calibration for a single frame.
         """
-        size = self.lfm.experiment.SystemColumnCalibration.get_Length()
+        size = self.light.experiment.SystemColumnCalibration.get_Length()
 
         result = np.empty(size)
 
-        for _ in range(size):
-            result[_] = self.lfm.experiment.SystemColumnCalibration[_]
+        for i in range(size):
+            result[i] = self.light.experiment.SystemColumnCalibration[i]
 
         return result
 
@@ -210,16 +211,16 @@ class Spectrometer():
         Sets the spectrometer center wavelength to nanometers.
         """
         # this avoids bug where if step and glue is selected, doesn't allow setting center wavelength
-        self.lfm.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
 
-        return self.lfm.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
+        return self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
 
     @property
     def grating(self):
         """
         Returns the current grating.
         """
-        return self.lfm.get(lf.AddIns.SpectrometerSettings.GratingSelected)
+        return self.light.get(lf.AddIns.SpectrometerSettings.GratingSelected)
 
     @grating.setter
     def grating(self, grating):
@@ -228,7 +229,7 @@ class Spectrometer():
         """
         # TODO: figure out the format for setting this
 
-        print('figure out the format for this')
+        print('still need to figure out the format for this')
 
     @property
     def gratings(self):
@@ -252,65 +253,63 @@ class Spectrometer():
         """
         Returns the number of frames taken during the acquisition.
         """
-        return self.lfm.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore)
+        return self.light.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore)
 
     @num_frames.setter
     def num_frames(self, num_frames):
         """
         Sets the number of frames to be taken during acquisition to number.
         """
-        return self.lfm.set(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore, num_frames)
+        return self.light.set(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore, num_frames)
 
     @property
     def exposure_time(self):
         """
         Returns the single frame exposure time (in ms).
         """
-        return self.lfm.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime)
+        return self.light.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime)
 
     @exposure_time.setter
     def exposure_time(self, ms):
         """
-        Sets the single frame exposure time to be ms (in milliseconds).
+        Sets the single frame exposure time to be ms (in ms).
         """
-        return self.lfm.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, ms)
+        return self.light.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, ms)
 
     @property
     def sensor_temperature(self):
         """
-        Returns the current sensor temperature (in degrees Celsius).
+        Returns the current sensor temperature (in celcius).
         """
-        return self.lfm.get(lf.AddIns.CameraSettings.SensorTemperatureReading)
+        return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureReading)
 
     @property
     def sensor_setpoint(self):
         """
-        Returns the sensor setpoint temperature (in degrees Celsius).
+        Returns the sensor setpoint temperature (celcius).
         """
-        return self.lfm.get(lf.AddIns.CameraSettings.SensorTemperatureSetPoint)
+        return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureSetPoint)
 
     @sensor_setpoint.setter
     def sensor_setpoint(self, deg_C):
         """
         Sets the sensor target temperature (in degrees Celsius) to deg_C.
         """
-        return self.lfm.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
+        return self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
 
-    
     def acquire_frame(self):
         """
         Acquires a frame (or series of frames) from the spectrometer, and the
         corresponding wavelength data.
         """
-        return self.lfm.acquire(), self.get_wavelengths()
+        return self.light.acquire(), self.get_wavelengths()
 
-    
     def acquire_step_and_glue(self, wavelength_range):
         """
         Acquires a step and glue (wavelength sweep) over the specified range.
         Wavelength range must have two elements (both in nm), corresponding
-        to the starting and stopping wavelengths.
-        Note that the wavelength must be calibrated for this to be meaningful!
+        to the start and end wavelengths.
+        Please note that the wavelength must be calibrated for this to be useful.
         """
 
         lambda_min = wavelength_range[0]
@@ -318,21 +317,19 @@ class Spectrometer():
 
         try:
 
-            self.lfm.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, True)
-
-
+            self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, True)
 
         except:
 
-            self.lfm.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-            print('Unable to perform step and glue, check settings.')
+            self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
+            print('Unable to perform step and glue, please check settings.')
 
             return
 
-        self.lfm.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
-        self.lfm.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)
 
-        data = self.lfm.acquire()
+        data = self.light.acquire()
 
         wavelength = np.linspace(lambda_min, lambda_max, data.shape[0])
 
@@ -341,52 +338,8 @@ class Spectrometer():
             'TODO: figure out how step and glue determines which wavelengths are used. This might be done in post processing.')
         print('If you want the true values, use the actual .spe file that is generated.')
 
-        self.lfm.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
 
         return data, wavelength
-
-    
-    def acquire_background(self):
-        """
-        Acquires a background file and sets it to be used in the current scan.
-        """
-        # TODO: take background file, and save it in a location where it be accessed later
-
-        print('not yet implemented')
-
-
-
-
-"""
-def test():
-    # import matplotlib.pyplot as plt
-
-    lfm = LightFieldM(True)
-    lfm.load_experiment('LF_Control')
-
-    lfm.set_frames(5)
-    print(lfm.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore))
-    lfm.set_frames(10)
-    print(lfm.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore))
-    lfm.set_frames(1)
-
-    print(lfm.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime))
-    lfm.set_exposure(0.5)
-    print(lfm.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime))
-    lfm.set_exposure(1.5)
-    print(lfm.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime))
-
-    # data = lfm.acquire()
-    # print(data)
-    # plt.plot(data)
-    # plt.show()
-
-    lfm.set_frames(10)
-    # data = lfm.acquire()
-    # print(data)
-    # plt.plot(data)
-    # plt.show()
-
-"""
 
 

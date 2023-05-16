@@ -18,7 +18,7 @@ print('Sensor temperature setpoint: {} C'.format(s.sensor_setpoint))
 
 print('Sensor temperature: {} C'.format(s.sensor_temperature))
 
-print('Grating: {}'.format(s.grating)) #Grating still needs to be fixed
+print('Grating: {}'.format(s.grating)) #Grating still needs to be figured out
 
 s.center_wavelength = 700.0
 print('Center wavelength:{}'.format(s.center_wavelength))
