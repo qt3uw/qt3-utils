@@ -331,6 +331,8 @@ class Spectrometer():
 
         data = self.light.acquire()
 
+        spectrum = np.mean(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
+
         wavelength = np.linspace(lambda_min, lambda_max, data.shape[0])
 
         print('Wavelength data is not strictly correct, this just interpolates.')
@@ -340,6 +342,6 @@ class Spectrometer():
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
 
-        return data, wavelength
+        return spectrum, wavelength
 
 
