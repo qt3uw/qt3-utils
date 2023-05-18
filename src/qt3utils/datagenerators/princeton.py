@@ -310,6 +310,11 @@ class Spectrometer():
         Wavelength range must have two elements (both in nm), corresponding
         to the start and end wavelengths.
         Please note that the wavelength must be calibrated for this to be useful.
+
+        Note: Wavelength data is not strictly correct, this just interpolates.
+        If you want the true values, use the actual .spe file that is generated.
+        TODO: figure out how step and glue determines which wavelengths are used. 
+        Theory is that this might be done in post processing.
         """
 
         lambda_min = wavelength_range[0]
@@ -334,11 +339,6 @@ class Spectrometer():
         spectrum = np.mean(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
 
         wavelength = np.linspace(lambda_min, lambda_max, data.shape[0])
-
-        print('Wavelength data is not strictly correct, this just interpolates.')
-        print(
-            'TODO: figure out how step and glue determines which wavelengths are used. This might be done in post processing.')
-        print('If you want the true values, use the actual .spe file that is generated.')
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
 
