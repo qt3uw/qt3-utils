@@ -1,4 +1,5 @@
 import matplotlib
+import pickle
 from argparse import Namespace
 import nipiezojenapy
 matplotlib.use('TKAgg')
@@ -16,7 +17,7 @@ controller = nipiezojenapy.PiezoControl(device_name = 'Dev1',
 s = Spectrometer()
 s.initialize()
 #set all the settings you need
-s.exposure_time = 2.0 
+s.exposure_time = 2000.0 
 print('Exposure time: {}ms'.format(s.exposure_time))
 s.num_frames = "1"
 print('Sensor temperature setpoint: {} C'.format(s.sensor_setpoint))
@@ -29,23 +30,26 @@ print('Grating: {}'.format(s.grating))
 
 hyperspectral_im = None
 z = 43
-xs = np.linspace(0, 2, num=2)
-ys = np.linspace(0, 2, num=2)
+xs = np.linspace(7, 12, num=11)
+ys = np.linspace(10, 15, num=11)
 for i, x in enumerate(xs):
     for j, y in enumerate(ys):
         controller.go_to_position(x,y,z)
-        #s.acquire()
-        #data = s.acquire_frame()
-        spectrum, wavelength = s.acquire_step_and_glue([600.0, 800.0])
+        spectrum, wavelength = s.acquire_step_and_glue([600.0, 850.0])
         if i==0 and j==0:
             hyperspectral_im = np.zeros((xs.shape[0], ys.shape[0], spectrum.shape[0]))
         hyperspectral_im[i, j, :] = spectrum
 
 mean_spectrum = np.mean(hyperspectral_im, axis=2)
 
+d = {"wavelength":wavelength, "im":hyperspectral_im}
+
+with open('Date: __, Mordi_Data.pkl', 'wb') as f:
+    pickle.dump(d, f)
+
 plt.imshow(mean_spectrum, cmap='Reds', interpolation='nearest')
 plt.show()
 
-s.finalize()
 
-#need to save the 3d array "hyperspectral_im" and the array "wavelength" in two separate pickle files
+
+s.finalize()
