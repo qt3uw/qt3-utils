@@ -5,7 +5,6 @@ from time import sleep
 try:
     import clr
 
-    # Import DLLs for running spectrometer via LightField
     lf_root = os.environ['LIGHTFIELD_ROOT']
     automation_path = lf_root + '\PrincetonInstruments.LightField.AutomationV4.dll'
     addin_path = lf_root + '\AddInViews\PrincetonInstruments.LightFieldViewV4.dll'
@@ -17,7 +16,6 @@ try:
 
     import PrincetonInstruments.LightField as lf
 
-    # Import some system functions for interfacing with LightField code
     clr.AddReference("System.Collections")
     clr.AddReference("System.IO")
     from System.Collections.Generic import List
@@ -28,11 +26,6 @@ except Exception as e:
 
 
 class LightfieldApp:
-    """
-    Helper class for interfacing between the lantz driver and LightField
-    software.
-    """
-
     def __init__(self, visible):
 
         self._addinbase = lf.AddIns.AddInBase()
@@ -179,6 +172,7 @@ class Spectrometer():
         self.light = LightfieldApp(True)
         self.light.load_experiment('LF_Control')  
 
+    #TODO:Need to create a setting that automatically deletes all saved scans on pc.
     def finalize(self):
         """
         Closes the Lightfield application without saving the settings.
