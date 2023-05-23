@@ -50,6 +50,4 @@ with open('Date: __, Mordi_Data.pkl', 'wb') as f:
 plt.imshow(mean_spectrum, cmap='Reds', interpolation='nearest')
 plt.show()
 
-
-
 s.finalize()
