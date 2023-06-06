@@ -221,7 +221,7 @@ class SidePanel():
 
         row += 1
         bold_font = ('Helvetica', 16, 'bold')
-        tk.Label(frame, text="Confocal View Settings", font=bold_font, underline=0).grid(row=row, column=1, pady=15)
+        tk.Label(frame, text="Confocal View Settings", font=bold_font,).grid(row=row, column=1, pady=15)
         row += 1
         self.set_color_map_button = tk.Button(frame, text="Set Color")
         self.set_color_map_button.grid(row=row, column=0, pady=(2,15))
@@ -263,16 +263,16 @@ class SpectrometerSettingsView:
         tk.Label(frame, text="Spectrometer Settings", font=bold_font).grid(row=row, column=0,pady=10)
         
         row += 1
-        tk.Label(frame, text="Exposure Time (s)").grid(row=row, column=0)
-        self.expose_time_entry = tk.Entry(frame, width=10)
-        self.expose_time_entry.insert(10, self.spectrometer_settings.expose_time)
-        self.expose_time_entry.grid(row=row, column=1)
-        
-        row += 1
         tk.Label(frame, text="Frames to Save").grid(row=row, column=0)
         self.spec_frames_entry = tk.Entry(frame, width=10)
         self.spec_frames_entry.insert(10, self.spectrometer_settings.spec_frames)
         self.spec_frames_entry.grid(row=row, column=1)
+        
+        row += 1
+        tk.Label(frame, text="Exposure Time (ms)").grid(row=row, column=0)
+        self.expose_time_entry = tk.Entry(frame, width=10)
+        self.expose_time_entry.insert(10, self.spectrometer_settings.expose_time)
+        self.expose_time_entry.grid(row=row, column=1)
         
         row += 1
         tk.Label(frame, text="Center Wavelength (nm)").grid(row=row, column=0)
@@ -295,11 +295,11 @@ class SpectrometerSettingsView:
 
 class SpectrometerDAQSettings:
     def __init__(self):
-        self.expose_time = 20
+        self.expose_time = 2000
         self.spec_frames = 1
-        self.center_wlength = 1000
+        self.center_wlength = 700
         self.min_wavelength = 600
-        self.max_wavelength = 800
+        self.max_wavelength = 850
 
 class MainApplicationView():
     def __init__(self, main_frame, scan_range = [0,80]):
@@ -520,9 +520,9 @@ class MainTkApplication():
         ymax = float(self.view.sidepanel.y_max_entry.get())
         
         
-
+        
         args = [xmin, xmax, ymin, ymax]
-        args.append(float(self.view.sidepanel.step_size_entry.get()))
+        args.append(float(self.ievw.sidepanel.step_size_entry.get()))
         args.append(int(self.view.sidepanel.n_sample_size_value.get()))
 
         self.scan_thread = Thread(target=self.scan_thread_function,
