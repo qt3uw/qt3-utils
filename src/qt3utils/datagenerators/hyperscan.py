@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from princeton import Spectrometer
 
+
 piezo_write_channels='ao0,ao1,ao2'
 piezo_read_channels='ai0,ai1,ai2' 
 
