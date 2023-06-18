@@ -30,9 +30,9 @@ class Application(tk.Frame):
         self.master = master
         self.grid()
         self.create_widgets()
-        self.colors = ['Reds', 'Blues', 'Greens', 'Greys', 'Purples']  # Colors for the plot
+        self.colors = ['reds', 'blues', 'greens', 'greys', 'purples']  # Colors for the plot
         self.color_var = tk.StringVar(self)
-        self.color_var.set(self.colors[0])  # default value
+        self.color_var.set('reds')  # default value
     
 
     def create_widgets(self):
@@ -111,7 +111,7 @@ class Application(tk.Frame):
         self.color_var = tk.StringVar()  # to store the selected color map
         self.color_var.set('Reds')  # default color displayed in gui
         color_map_choices = ['Reds', 'Blues', 'Greens', 'Greys', 'Purples', 'Oranges']  # available choices for color maps
-        self.color_map = tk.OptionMenu(text_frame, self.color_var, *color_map_choices)
+        self.color_map = tk.OptionMenu(text_frame, self.color_var, *color_map_choices, command=self.update_color)
         self.color_map.grid(row=row, column=1, pady=5)  # to create color dropdown menu
 
         self.fig = Figure(figsize=(5, 4), dpi=100)
@@ -142,6 +142,9 @@ class Application(tk.Frame):
         self.text_fields["Save Image"].grid(row=row, column=1, pady=5)
         self.save_button = tk.Button(text_frame, text="Save Image", command=self.save_image)
         self.save_button.grid(row=row, column=2, pady=10)
+
+    def update_color(self, value):
+        self.color_var.set(value)
     
     def run_scan(self):
 
@@ -198,7 +201,7 @@ class Application(tk.Frame):
             if wave_end - wave_start < 117:
                 raise ValueError("Ending wavelength must be at least 117 units greater than starting wavelength.")
             """
-            
+
             xs = np.linspace(xs_start, xs_end, num=num)
             ys = np.linspace(ys_start, ys_end, num=num)
             self.hyperspectral_im = None
@@ -215,6 +218,7 @@ class Application(tk.Frame):
 
             self.fig.clear()
             ax = self.fig.add_subplot(111)
+            print(f"Selected color: {self.color_var.get()}")
             ax.imshow(mean_spectrum, cmap=self.color_var.get(), interpolation='nearest')
             self.canvas.draw()
             
