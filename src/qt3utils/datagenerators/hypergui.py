@@ -21,8 +21,8 @@ controller = nipiezojenapy.PiezoControl(device_name = 'Dev1',
                                         write_channels = piezo_write_channels.split(','),
                                         read_channels = piezo_read_channels.split(','))
 
-#s = Spectrometer()
-#s.initialize()
+s = Spectrometer()
+s.initialize()
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -123,7 +123,7 @@ class Application(tk.Frame):
         self.run = tk.Button(text_frame)
         self.run["text"] = "Start Scan"
         self.run["command"] = self.run_scan
-        self.run.grid(row=row, column=2, pady=10)
+        self.run.grid(row=row, column=0, pady=10)
 
         row += 1
         bold_font = ('Helvetica', 16, 'bold')
@@ -162,64 +162,74 @@ class Application(tk.Frame):
         self.scan_thread.start()
 
     def _run_scan_thread(self):
+
+        """
+        The function collecting all user inputs
+        """
         
         try:
             
-            #Note: The # of frames is hard coded to 1 as people will rarely change that
-            #Note: Right now the GUI that pulls the current grating thats set in the "LF_Control" file in lightfield
+            #Note: The # of frames is hard coded to 1 as people most likely never use anything else
+            #Note: Right now the GUI pulls the current grating thats set in the "LF_Control" file in lightfield
 
-            """
-            TODO:   - May need to add a few more features such as the "sensor temparature" and "grating feature". 
-                    Sensor temperature functionality is already implemented, just didnt add it to the GUI.
+            s.num_frames = "1"
 
-                    - Add default values for all the check boxes
-            """
+            s.exposure_time = float(self.text_fields["Exposure Time (ms)"].get())
+            s.sensor_setpoint = float(self.text_fields["Sensor Setpoint (°C)"].get())
+            s.center_wavelength = float(self.text_fields["Center Wavelength (nm)"].get())
 
-            #s.num_frames = "1"
-            #s.exposure_time = float(self.text_fields["Exposure Time (ms)"].get())
-            #s.sensor_setpoint = float(self.text_fields["Sensor Setpoint (°C)"].get())
-            #s.center_wavelength = float(self.text_fields["Center Wavelength (nm)"].get())
-            z = float(self.text_fields["Z"].get())
+            z = float(self.text_fields["Z (um)"].get())
+
             xs_start = float(self.text_fields["X Start (um)"].get())
             xs_end = float(self.text_fields["X End (um)"].get())
+
             ys_start = float(self.text_fields["Y Start (um)"].get())
             ys_end = float(self.text_fields["Y End (um)"].get())
+
             wave_start = float(self.text_fields["Wave Start (nm)"].get())
             wave_end = float(self.text_fields["Wave End (nm)"].get())
             
-            step = int(self.text_fields["Step Size (um)"].get())
+            num = int(self.text_fields["Step Size (um)"].get())
             
-            if step <= 0:
+            if num <= 0:
                 raise ValueError("Step Size must be a positive integer")
             
+            """
+            TODO: Need to figure out how to implement this without causin the buttons to stay disabled when any error
+            the issue is most likely related to the threading feature you implemented.
+            """
+            
+            #if wave_end - wave_start < 117:
+                #raise ValueError("Ending wavelength must be at least 117 units greater than starting wavelength.")
+            
+            xs = np.linspace(xs_start, xs_end, num=num)
+            ys = np.linspace(ys_start, ys_end, num=num)
+            self.hyperspectral_im = None
+
+            for i, x in enumerate(xs):
+                for j, y in enumerate(ys):
+                    controller.go_to_position(x,y,z)
+                    spectrum, self.wavelength = s.acquire_step_and_glue([wave_start, wave_end])
+                    if i==0 and j==0:
+                        self.hyperspectral_im = np.zeros((xs.shape[0], ys.shape[0], spectrum.shape[0]))
+                    self.hyperspectral_im[i, j, :] = spectrum
+
+            mean_spectrum = np.mean(self.hyperspectral_im, axis=2)
+
+            self.fig.clear()
+            ax = self.fig.add_subplot(111)
+            ax.imshow(mean_spectrum, cmap=self.color_var.get(), interpolation='nearest')
+            self.canvas.draw()
+            
         except Exception as e:
-            # Handle any exceptions here. For instance, you could show an error message.
-            messagebox.showerror("Error", str(e))
+            # handling broad exceptions here
+            messagebox.showerror("Error", "An unexpected error occured at your " + str(e) + " input.")
 
         finally:
             # Re-enable all the text fields and buttons at the end of the function
             # Use the tkinter's `after` method to safely perform UI operations from the new thread
             self.master.after(0, self._enable_widgets)
-
-        xs = np.linspace(xs_start, xs_end, step=step)
-        ys = np.linspace(ys_start, ys_end, step=step)
-        hyperspectral_im = None
-
-        for i, x in enumerate(xs):
-            for j, y in enumerate(ys):
-                controller.go_to_position(x,y,z)
-                spectrum, self.wavelength = s.acquire_step_and_glue([wave_start, wave_end])
-                if i==0 and j==0:
-                    self.hyperspectral_im = np.zeros((xs.shape[0], ys.shape[0], spectrum.shape[0]))
-                self.hyperspectral_im[i, j, :] = spectrum
-
-        mean_spectrum = np.mean(hyperspectral_im, axis=2)
-
-        self.fig.clear()
-        ax = self.fig.add_subplot(111)
-        ax.imshow(mean_spectrum, cmap=self.color_var.get(), interpolation='nearest')
-        self.canvas.draw()
-    
+        
     def _enable_widgets(self):
 
         #renable all the buttons after the scan
@@ -259,4 +269,4 @@ class Application(tk.Frame):
 root = tk.Tk()
 app = Application(master=root)
 app.mainloop()
-#s.finalize()
+s.finalize()
