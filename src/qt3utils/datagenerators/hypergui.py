@@ -218,7 +218,6 @@ class Application(tk.Frame):
 
             self.fig.clear()
             ax = self.fig.add_subplot(111)
-            print(f"Selected color: {self.color_var.get()}")
             ax.imshow(mean_spectrum, cmap=self.color_var.get(), interpolation='nearest')
             self.canvas.draw()
             
