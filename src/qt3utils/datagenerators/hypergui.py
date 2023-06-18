@@ -195,12 +195,9 @@ class Application(tk.Frame):
                 raise ValueError("Step Size must be a positive integer")
             
             """
-            TODO: Need to figure out how to implement this without causin the buttons to stay disabled when any error
-            the issue is most likely related to the threading feature you implemented.
+            if wave_end - wave_start < 117:
+                raise ValueError("Ending wavelength must be at least 117 units greater than starting wavelength.")
             """
-            
-            #if wave_end - wave_start < 117:
-                #raise ValueError("Ending wavelength must be at least 117 units greater than starting wavelength.")
             
             xs = np.linspace(xs_start, xs_end, num=num)
             ys = np.linspace(ys_start, ys_end, num=num)
