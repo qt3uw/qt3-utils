@@ -318,7 +318,11 @@ If you and your reviewer decide changes are needed, go back
 to your branch, make changes and push new commits. Repeat
 steps 7, 8, 10, 11 and 12 until you are satisfied. 
 
+### 13. Merge!
 
+If you are satisfied and confident that your changes are 
+ready, and your reviewer has approved the changes, press the
+green Merge button. 
 ## Notes
 
 
