@@ -128,55 +128,73 @@ Similarly, this applications can be configured via command line options to match
 
 If you wish you make changes to qt3-utils (and hopefully merge those improvements into this repository), here are some brief instructions to get started. These instructions assume you are a member of the QT3 development team and have permission to push branches to this repo. If you are not, you can instead fork this repo into your own GitHub account, perform development and then issue a pull-request from your forked repo to this repo through GitHub. Alternatively, reach out to a maintainer of this repo to be added as a developer. 
 
-1. Create a new development python environment (using Conda, venv or virtualenv) with Python = 3.9 or greater
+### 1. Create a development environment 
+
+Use Conda, venv or virtualenv with Python = 3.9. 
 
 ```
 > conda create --name qt3utilsdev python=3.9
 ```
 
-2. Activate that environment
+As of this writing, we have primarily tested and used Python 3.9. 
+Reach out to a Maintainer to discuss moving to newer versions of
+Python if this is needed. 
+
+### 2. Activate that environment
 
 ```
 > conda activate qt3utilsdev
 ```
 
-3. Clone this repository
+### 3. Clone this repository
 
 ```
 > git clone https://github.com/qt3uw/qt3-utils.git
 ```
 
-4. Install qt3-utils in "editor" mode
+### 4. Install qt3-utils in "editor" mode
 
 ```
 > cd qt3-utils
 > pip install -e . 
 ```
 
-5. Create a new branch for your work
-
-```
-> git checkout -b add-my-fancy-new-feature
-```
-
-6. Add your code and test, test, test!
-
-7. Push your branch
-
-```
-> git push -u origin add-my-fancy-new-feature
-```
-
-8. Issue a pull request from this website
-
-
-A few notes about development for this repository.
-
 The `pip install -e .` command installs the package in editor mode. 
 This allows you to make changes to the source code and immediately
 see the effects of those changes in a Python interpreter. It saves
 you from having to call "pip install" each time you make a change and 
 want to test it. 
+
+
+### 5. Create a new Issue
+
+It's generally good practice to first create an Issue in this GitHub
+repository which describes the problem that needs to be addressed. 
+It's also a good idea to be familiar with the current Issues that 
+already exist. The change you want to make may already be 
+reported by another user. In that case, you could collaborate 
+with that person. 
+
+### 6. Create a new branch for your work
+
+```
+> git checkout -b X-add-my-fancy-new-feature
+```
+where it's good practice to use X to refer to a specific Issue to fix 
+in this repository. 
+
+You should create a new branch only for a specific piece of new work
+that will be added to this repository. It is highly discouraged to create
+a separate branch for your microscope only and to use that branch
+to perform version control for Python scripts for Jupyter notebooks. 
+If you need version control for your own scripts and notebooks, you
+should create a separate git repository and install qt3utils 
+in the normal way (`pip install -U qt3utils`) in a Python environment 
+for your experimental work. If you need to have recent changes to qt3utils
+published to PyPI for your work, reach out to a Maintainer of this 
+repo to ask them to release a new version. 
+
+### 7. Add your code and test with your hardware!
 
 We do not have an official style convention, unfortunately. However
 please try to follow best-practices as outlined either in 
@@ -193,15 +211,93 @@ specific local hardware and the setup for each experiment
 is likely to be different. So, be sure to test your code rigorously and 
 make sure there are no unintended side-effects. 
 
+Historically, documentation for this project has been "just okay". Please 
+help this by adding any documentation for your changes where appropriate.
+There is now a `docs` folder that you can use to include any major
+additions or changes. 
+
+### 8. Push your branch
+
+Once development and testing are complete you will want to push your
+branch to Github in order to merge it into the rest of the code-base.
+
+When you first push a branch to Github, you will need to issue this 
+command.
+
+```
+> git push -u origin X-add-my-fancy-new-feature
+```
+
+As you add more commits to your branch, you'll still want to 
+push those changes every once in a while with a simple
+
+```
+> git push
+```
+
+(assuming that X-add-my-fancy-new-feature is your current 
+local working branch)
+
+Finally, before you issue a pull request, you will want to
+synchrononize your branch with any other changes made in 'main'
+to ensure there are no conflicting changes.
+
+This is the following "flow" that has been used successfully in
+various development projects. However, there are other ways
+to do this. 
+
+```
+> git checkout main
+> git pull
+> git checkout X-add-my-fancy-new-feature
+> git rebase main
+> git push -f
+```
+
+The series of commands above will pull down new changes from 
+Github's main branch to your local working copy. The `rebase` 
+command will then "replay" your changes on top of the 
+most recent HEAD of the main branch. If there are conflicts,
+git will notify you and you will be forced to fix those
+conflicts before continuing with the rebase. If it seems too
+complicated, you can `git rebase --abort` to recover and
+then figure out what to do next. Reach out to a more experienced
+colleague, perhaps, for help. 
+
+The final `git push -f` is necessary (if there were indeed new
+commits on the main branch) and will "force" push your branch
+to Github. This is necessary due to the way git works. 
+
+You should then test your local branch with your hardware again!
+
+This particular flow has the benefit of making a very clear git
+history that shows all the commits for each branch being
+merged in logical order. 
+
+Instead of following the instructions above, you may consider
+trying GitHub's "rebase" option when issuing a pull request. 
+It will attempt the same set of operations. However, you may 
+not have the opportunity to test the changes locally. 
+
+### 9. Issue a pull request
+
+At the top of this qt3-utils GitHub repository is a 'pull-request' tab,
+from where you can create a request to merge your branch to another
+branch (usually you merge to main)
+
 When you issue a pull request, be very clear and verbose about the 
 changes you are making. New code must be reviewed by another colleague
-before it gets merged to master. Your pull request should
+before it gets merged to master. Your pull request should be very verbose for your reviewer. Include things like
 
-* clearly state what is changed or new
+* state what is changed or new
+* state what Issue is being fixed here (Github will automatically generate a handy link)
 * state why you chose your specific implementation
-* include results of tests on your hardware setup, which could be data, screenshots, etc. There should be a clear record demonstrating functionality.
-* potentially include a Jupyter notebook in the "examples" folder that demonstrate usage and changes
-* include documentation
+* results of tests on your hardware setup, which could be data, screenshots, etc. There should be a clear record demonstrating functionality.
+* a Jupyter notebook in the "examples" folder that demonstrate usage and changes
+* documentation
+
+
+### 10. Obtain a Code Review from a colleague
 
 Due to our lack of a test rig, merging should be done with care and
 code reviews should be taken seriously. If you are asked by a colleague
@@ -209,10 +305,10 @@ to review their code, make sure to ask a lot of questions as you read
 through it. You may even want to test the branch on your own setup 
 to ensure it doesn't break anything. 
 
-Historically, documentation for this project has been "just okay". Please 
-help this by adding any documentation for your changes where appropriate.
-There is now a `docs` folder that you can use to include any major
-additions or changes. 
+
+## Notes
+
+
 
 # Debugging
 
