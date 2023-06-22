@@ -186,8 +186,9 @@ in this repository.
 You should create a new branch only for a specific piece of new work
 that will be added to this repository. It is highly discouraged to create
 a separate branch for your microscope only and to use that branch
-to perform version control for Python scripts for Jupyter notebooks. 
-If you need version control for your own scripts and notebooks, you
+to perform version control for Python scripts or Jupyter notebooks 
+that run experiments. 
+If you need version control for your exerpiment scripts and notebooks, you
 should create a separate git repository and install qt3utils 
 in the normal way (`pip install -U qt3utils`) in a Python environment 
 for your experimental work. If you need to have recent changes to qt3utils
@@ -296,14 +297,26 @@ before it gets merged to master. Your pull request should be very verbose for yo
 * a Jupyter notebook in the "examples" folder that demonstrate usage and changes
 * documentation
 
+### 10. Perform Self Review
 
-### 10. Obtain a Code Review from a colleague
+Before asking a colleague to review your changes, it's generally
+a good idea to review the changes yourself in Github. 
+When you see your changes from this perspective you may find
+typos and changes that you wish to address. 
+
+### 11. Obtain a Code Review from a colleague
 
 Due to our lack of a test rig, merging should be done with care and
 code reviews should be taken seriously. If you are asked by a colleague
 to review their code, make sure to ask a lot of questions as you read
 through it. You may even want to test the branch on your own setup 
 to ensure it doesn't break anything. 
+
+### 12. Address Changes
+
+If you and your reviewer decide changes are needed, go back 
+to your branch, make changes and push new commits. Repeat
+steps 7, 8, 10, 11 and 12 until you are satisfied. 
 
 
 ## Notes
