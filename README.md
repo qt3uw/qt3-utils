@@ -288,11 +288,11 @@ branch (usually you merge to main)
 
 When you issue a pull request, be very clear and verbose about the 
 changes you are making. New code must be reviewed by another colleague
-before it gets merged to master. Your pull request should be very verbose for your reviewer. Include things like
+before it gets merged to master. Your pull request should include things like
 
-* state what is changed or new
-* state what Issue is being fixed here (Github will automatically generate a handy link)
-* state why you chose your specific implementation
+* a statement describing what is changed or new
+* a reference to the Issue being fixed here (Github will automatically generate a handy link)
+* a statement describing why you chose your specific implementation
 * results of tests on your hardware setup, which could be data, screenshots, etc. There should be a clear record demonstrating functionality.
 * a Jupyter notebook in the "examples" folder that demonstrate usage and changes
 * documentation
@@ -301,8 +301,8 @@ before it gets merged to master. Your pull request should be very verbose for yo
 
 Before asking a colleague to review your changes, it's generally
 a good idea to review the changes yourself in Github. 
-When you see your changes from this perspective you may find
-typos and changes that you wish to address. 
+When you see your updates from this perspective you may find
+typos and changes that you wish to address first.
 
 ### 11. Obtain a Code Review from a colleague
 
