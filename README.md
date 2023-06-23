@@ -11,7 +11,7 @@ various spin-control experiments on quantum systems, such as NV centers in diamo
    * Spin Core PulseBlaster
  * Excelitas SPCM for photon detection
  * NI-DAQ card (PCIx 6363) for data acquisition and control
- * Jena System's Piezo Actuator Stage Control Amplifier
+ * Jena System's Piezo Actuator Control Amplifier
  * [Future] spectrometer
 
 The code in this package facilitates usages of these devices to perform
