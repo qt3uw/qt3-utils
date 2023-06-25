@@ -188,19 +188,18 @@ class Application(tk.Frame):
 
             ys_start = float(self.text_fields["Y Start (um)"].get())
             ys_end = float(self.text_fields["Y End (um)"].get())
-
-            wave_start = float(self.text_fields["Wave Start (nm)"].get())
-            wave_end = float(self.text_fields["Wave End (nm)"].get())
             
             num = int(self.text_fields["Step Size (um)"].get())
-            
+
             if num <= 0:
                 raise ValueError("Step Size must be a positive integer")
             
-            """
+            wave_start = float(self.text_fields["Wave Start (nm)"].get())
+            wave_end = float(self.text_fields["Wave End (nm)"].get())
+            
             if wave_end - wave_start < 117:
-                raise ValueError("Ending wavelength must be at least 117 units greater than starting wavelength.")
-            """
+                raise ValueError("End wavelength must be at least 117 units greater than start wavelength.")
+            
 
             xs = np.linspace(xs_start, xs_end, num=num)
             ys = np.linspace(ys_start, ys_end, num=num)
@@ -223,12 +222,12 @@ class Application(tk.Frame):
             
         except Exception as e:
             # handling broad exceptions here
-            messagebox.showerror("Error", "An unexpected error occured at your " + str(e) + " input.")
+            messagebox.showerror("Error", "Error: " + str(e))
 
         finally:
             # Re-enable all the text fields and buttons at the end of the function
-            # Use the tkinter's `after` method to safely perform UI operations from the new thread
-            self.master.after(0, self._enable_widgets)
+            # Use the tkinter's `after` method to safely perform UI operations 0 secs from the new thread
+            self.master.after(500, self._enable_widgets)
         
     def _enable_widgets(self):
 
