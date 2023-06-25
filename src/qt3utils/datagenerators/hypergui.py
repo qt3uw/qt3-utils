@@ -21,6 +21,7 @@ controller = nipiezojenapy.PiezoControl(device_name = 'Dev1',
                                         write_channels = piezo_write_channels.split(','),
                                         read_channels = piezo_read_channels.split(','))
 
+# Initialize spectrometer
 s = Spectrometer()
 s.initialize()
 
@@ -30,12 +31,18 @@ class Application(tk.Frame):
         self.master = master
         self.grid()
         self.create_widgets()
-        self.colors = ['reds', 'blues', 'greens', 'greys', 'purples']  # Colors for the plot
+        self.colors = ['reds', 'blues', 'greens', 'greys', 'purples']
         self.color_var = tk.StringVar(self)
-        self.color_var.set('reds')  # default value
+        self.color_var.set('reds')  
     
 
     def create_widgets(self):
+        '''
+        Creates all the necessary widgets for the tkinter GUI such as the
+        frame, labels, entry fields, a button, and a matplotlib
+        figure for displaying the data.
+        '''
+
         self.text_fields = {}
         text_frame = tk.Frame(self)
         text_frame.grid(column=1, row=0, padx=20)  
@@ -78,7 +85,6 @@ class Application(tk.Frame):
         self.text_fields["X Start (um)"].grid(row=row, column=1, pady=5)
         self.text_fields["X Start (um)"].insert(0, "50")
 
-        #tk.Label(text_frame, text="X End (um)").grid(row=row, column=2, pady=5)
         self.text_fields["X End (um)"] = tk.Entry(text_frame, width=10)
         self.text_fields["X End (um)"].grid(row=row, column=2, pady=5)
         self.text_fields["X End (um)"].insert(0, "60")
@@ -89,7 +95,6 @@ class Application(tk.Frame):
         self.text_fields["Y Start (um)"].grid(row=row, column=1, pady=5)
         self.text_fields["Y Start (um)"].insert(0, "45")
 
-        #tk.Label(text_frame, text="Y End (um)").grid(row=row, column=2, pady=5)
         self.text_fields["Y End (um)"] = tk.Entry(text_frame, width=10)
         self.text_fields["Y End (um)"].grid(row=row, column=2, pady=5)
         self.text_fields["Y End (um)"].insert(0, "55")
@@ -108,16 +113,16 @@ class Application(tk.Frame):
 
         row += 1
         tk.Label(text_frame, text="Select scan color").grid(row=row, column=0, pady=5)
-        self.color_var = tk.StringVar()  # to store the selected color map
-        self.color_var.set('Reds')  # default color displayed in gui
-        color_map_choices = ['Reds', 'Blues', 'Greens', 'Greys', 'Purples', 'Oranges']  # available choices for color maps
+        self.color_var = tk.StringVar()  # Stores the selected color map
+        self.color_var.set('Reds')  # Default color displayed in GUI
+        color_map_choices = ['Reds', 'Blues', 'Greens', 'Greys', 'Purples', 'Oranges']  # Available choices for color maps
         self.color_map = tk.OptionMenu(text_frame, self.color_var, *color_map_choices, command=self.update_color)
-        self.color_map.grid(row=row, column=1, pady=5)  # to create color dropdown menu
+        self.color_map.grid(row=row, column=1, pady=5)
 
         self.fig = Figure(figsize=(5, 4), dpi=100)
         self.canvas = FigureCanvasTkAgg(self.fig, master=self)
         self.canvas.draw()
-        self.canvas.get_tk_widget().grid(column=0, row=0)  # places canvas to the left of text fields
+        self.canvas.get_tk_widget().grid(column=0, row=0)  # Places the scan canvas to the left of text fields
 
         row += 1
         self.run = tk.Button(text_frame)
@@ -145,12 +150,18 @@ class Application(tk.Frame):
         self.save_button.grid(row=row, column=2, pady=10)
 
     def update_color(self, value):
+        '''
+        Updates the value of the color variable when the user
+        selects a different color from the dropdown menu.
+        '''
+
         self.color_var.set(value)
     
     def run_scan(self):
-
         """
-        Threading is implemented to help stop the GUI from glitching during the scan and remain responsive
+        Called when the user clicks the 'Start Scan' button.
+        It disables all input fields to prevent changes during the scan and starts a new thread to run the scan.
+        Note: Threading is implemented to help stop the GUI from glitching during the scan and remain responsive.
         """
 
         # Disable all the text fields and buttons
@@ -166,10 +177,12 @@ class Application(tk.Frame):
         self.scan_thread.start()
 
     def _run_scan_thread(self):
-
-        """
-        The function collecting all user inputs
-        """
+        '''
+        This function runs the actual scan. It is called in a separate thread
+        to keep the GUI responsive. It collects user inputs, validates them,
+        and controls the piezo device and spectrometer to perform the scan.
+        Finally, it plots the mean spectrum.
+        '''
         
         try:
             
@@ -222,17 +235,25 @@ class Application(tk.Frame):
             self.canvas.draw()
             
         except Exception as e:
-            # handling broad exceptions here
+            # Error message shown before the specific error is displayed
             messagebox.showerror("Error", "Error: " + str(e))
 
         finally:
-            # Re-enable all the text fields and buttons at the end of the function
-            # Use the tkinter's `after` method to safely perform UI operations 0 secs from the new thread
+            """
+                Re-enable all the text fields and buttons at the end of the function.
+                Use the tkinter's `after` method to safely perform UI operations 500ms from the new thread.
+                The "after" value is 500ms instead of 0ms as this allows the GUI remember to allow the user 
+                to retry their values and fix their error.
+
+            """
             self.master.after(500, self._enable_widgets)
         
     def _enable_widgets(self):
+        '''
+        This function is called at the end of the scan to re-enable all input fields
+        and buttons, allowing the user to perform another scan or save the data.
+        '''
 
-        #renable all the buttons after the scan
         for widget in self.text_fields.values():
             widget.config(state='normal')
         self.run.config(state='normal')
@@ -241,12 +262,17 @@ class Application(tk.Frame):
         self.color_map.config(state='normal')
 
     def save_data(self):
+        '''
+        This function is called when the user clicks the 'Save Data' button.
+        It prompts the user for a filename and saves the scan data in pickle format.
+        '''
+
         filename = self.text_fields["Save Data"].get()
         if filename:
-            default_file_path = f"{filename}.pkl"  # the default filename, adjust as needed
+            default_file_path = f"{filename}.pkl"  # Default filename, adjust as you see fit
             filetypes = [("Pickle files", "*.pkl")]
             file_path = filedialog.asksaveasfilename(defaultextension=".pkl", initialfile=default_file_path, filetypes=filetypes)
-            if file_path:  # if a file path is selected
+            if file_path: 
                 d = {"wavelength": self.wavelength, "im": self.hyperspectral_im}
                 with open(file_path, 'wb') as f:
                     pickle.dump(d, f)
@@ -255,12 +281,17 @@ class Application(tk.Frame):
             messagebox.showerror("Invalid input", "Please fix your file name, do not put a file extension.")
 
     def save_image(self):
+        '''
+        This function is called when the user clicks the 'Save Image' button.
+        It prompts the user for a filename and saves the plot as an image.
+        '''
+
         filename = self.text_fields["Save Image"].get()
         if filename:
-            default_file_path = f"{filename}.png"  # the default filename, adjust as needed
+            default_file_path = f"{filename}.png"  # Default filename, adjust as you see fit
             filetypes = [("PNG files", "*.png"), ("JPEG files", "*.jpg")]
             file_path = filedialog.asksaveasfilename(defaultextension=".png", initialfile=default_file_path, filetypes=filetypes)
-            if file_path:  # if a file path is selected
+            if file_path:  
                 self.fig.savefig(file_path)
                 messagebox.showinfo("Info", "Image saved successfully!")
         else:
