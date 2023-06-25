@@ -123,6 +123,7 @@ class Application(tk.Frame):
         self.run = tk.Button(text_frame)
         self.run["text"] = "Start Scan"
         self.run["command"] = self.run_scan
+        self.run["font"] = ("Helvetica", 10, "bold")
         self.run.grid(row=row, column=0, pady=10)
 
         row += 1
