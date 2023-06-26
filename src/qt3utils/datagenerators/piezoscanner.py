@@ -15,10 +15,10 @@ class CounterAndScanner:
 
         self.running = False
         self.current_y = 0
-        self.ymin = 0.0
-        self.ymax = 80.0
-        self.xmin = 0.0
-        self.xmax = 80.0
+        self.ymin = stage_controller.minimum_allowed_position
+        self.ymax = stage_controller.maximum_allowed_position
+        self.xmin = stage_controller.minimum_allowed_position
+        self.xmax = stage_controller.maximum_allowed_position
         self.step_size = 0.5
         self.raster_line_pause = 0.150  # wait 150ms for the piezo stage to settle before a line scan
 
