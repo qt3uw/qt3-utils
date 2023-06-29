@@ -60,6 +60,12 @@ parser.add_argument('-cmap', metavar = '<MPL color>', default = 'gray',
                     help='Set the MatplotLib colormap scale')
 parser.add_argument('-pb', '--pulse-blaster', metavar = '<PB board number>', default = 0, type=int,
                     help='Pulse Blaster board number')
+parser.add_argument('-pmin', '--piezo-min-position', metavar = 'microns', default = 0, type=float,
+                    help='sets min allowed position on piezo controller.')
+parser.add_argument('-pmax', '--piezo-max-position', metavar = 'microns', default = 80, type=float,
+                    help='sets min allowed position on piezo controller.')
+parser.add_argument('-pscale', '--piezo-scale-microns-per-volt', default = 8, type=float,
+                    help='sets micron to volt scale for piezo controller.')
 
 args = parser.parse_args()
 
@@ -551,7 +557,10 @@ def build_data_scanner():
     else:
         stage_controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
                                   write_channels = args.piezo_write_channels.split(','),
-                                  read_channels = args.piezo_read_channels.split(','))
+                                  read_channels = args.piezo_read_channels.split(','),
+                                  min_position = args.piezo_min_position,
+                                  max_position = args.piezo_max_position,
+                                  scale_microns_per_volt = args.piezo_scale_microns_per_volt)
 
         data_acq = datasources.NiDaqDigitalInputRateCounter(args.daq_name,
                                                             args.signal_terminal,
