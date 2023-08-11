@@ -149,13 +149,13 @@ class RandomRateCounter(RateCounterBase):
     def __init__(self, simulate_single_light_source=False, num_data_samples_per_batch=10):
         super().__init__()
         self.default_offset = 100
-        self.signal_noise_amp = 0.2
+        self.signal_noise_amp = 0.5
 
         self.current_offset = self.default_offset
         self.current_direction = 1
         self.clock_rate = 0.9302010 # a totally random number :P
         self.simulate_single_light_source = simulate_single_light_source
-        self.possible_offset_values = np.arange(5000, 100000, 1000)  # these create the "bright" positions
+        self.possible_offset_values = np.arange(250, 1000, 50)  # these create the "bright" positions
         self.num_data_samples_per_batch = num_data_samples_per_batch
 
     def _read_samples(self):
