@@ -1,20 +1,14 @@
-import time
 import argparse
 import collections
 import tkinter as Tk
 import logging
 
 import numpy as np
-from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import nidaqmx
-
-import src.qt3utils.nidaq
 import src.qt3utils.datagenerators as datasources
 from src.qt3utils.math_utils import get_rolling_mean
 
