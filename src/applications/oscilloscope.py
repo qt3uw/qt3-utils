@@ -9,8 +9,8 @@ import matplotlib.animation as animation
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import src.qt3utils.datagenerators as datasources
-from src.qt3utils.math_utils import get_rolling_mean
+import qt3utils.datagenerators as datasources
+from qt3utils.math_utils import get_rolling_mean
 
 logger = logging.getLogger(__name__)
 
