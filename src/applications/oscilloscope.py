@@ -262,7 +262,8 @@ class MainTkApplication:
                 self.model.yield_count_rate,
                 init_func=self.view.scope_view.init,
                 interval=args.animation_update_interval,
-                blit=False
+                blit=False,
+                cache_frame_data=False,
             )
         self.model.start()
         self.animation.resume()
@@ -305,7 +306,8 @@ def run_console():
         model.yield_count_rate,
         init_func=view.init,
         interval=args.animation_update_interval,
-        blit=False
+        blit=False,
+        cache_frame_data=False,
     )
     plt.show()
     model.close()
