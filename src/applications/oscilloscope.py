@@ -2,6 +2,7 @@ import argparse
 import collections
 import tkinter as Tk
 import logging
+from typing import Any
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -72,6 +73,24 @@ class ScopeFigure:
     def __init__(self, width: int = 50, rolling_mean_window_size: int = 20,
                  show_rolling_mean: bool = True, show_reading_text: bool = True,
                  fig: plt.Figure = None, ax: plt.Axes = None):
+        """
+        Initializes the ScopeFigure.
+
+        Parameters
+        ----------
+        width: int, default 50
+            Number of points to display in the figure.
+        rolling_mean_window_size: int, default 20
+            Size of the rolling mean window.
+        show_rolling_mean: bool, default True
+            Whether to display the rolling mean line in the figure.
+        show_reading_text: bool, default True
+             Whether to display current reading value as text.
+        fig : matplotlib.figure.Figure
+            Figure to plot the data in.
+        ax : matplotlib.axes.Axes
+            Axis to plot the data in.
+        """
 
         # setting up the figure and main axis
         if ax is None:
@@ -104,6 +123,7 @@ class ScopeFigure:
             self._add_reading_text()
 
     def _add_rolling_mean(self, rolling_mean_window_size: int):
+        """ Adds rolling mean line to figure. """
         self.rolling_mean_window_size = rolling_mean_window_size
         self.half_window_size = int(np.ceil(self.rolling_mean_window_size / 2))
         self.rolling_mean = self.get_rolling_mean()
@@ -111,6 +131,7 @@ class ScopeFigure:
         self.rolling_mean_line: plt.Line2D
 
     def _add_reading_text(self):
+        """Adds current reading value as text on figure."""
         self.text_font_size = 30  # TODO: Add to .mplstyle file
         fig_width = self.fig.get_size_inches()[0]
         fig_height = self.fig.get_size_inches()[1]
@@ -128,6 +149,7 @@ class ScopeFigure:
             0, 1.05, displayed_labels, fontsize=self.text_font_size, transform=self.ax.transAxes, ha='left')
 
     def init(self):
+        """ Initializes the figure data. """
         self.line.set_ydata(self.ydata)
         if self.show_rolling_mean:
             self.rolling_mean_line.set_ydata(self.rolling_mean)
@@ -135,8 +157,8 @@ class ScopeFigure:
             self.current_value_text.set_text('NaN\nNaN\nNaN (NaN)' if self.show_rolling_mean else 'NaN')
         return self.line,
 
-    def update(self, y):
-
+    def update(self, y: Any):
+        """Updates the figure data according given a new data point."""
         self.ydata.popleft()
         self.ydata.append(y)
 
@@ -173,16 +195,19 @@ class ScopeFigure:
         return self.line,
 
     def get_new_rolling_mean_val(self):
+        """ Calculates new rolling mean value. """
         values_of_interest = list(self.ydata)[len(self.ydata) - 2 * self.half_window_size:
                                               len(self.ydata)]
         return np.mean(values_of_interest)
 
     def get_new_rolling_stdev_val(self):
+        """ Calculates new rolling standard deviation. """
         values_of_interest = list(self.ydata)[len(self.ydata) - 2 * self.half_window_size:
                                               len(self.ydata)]
         return np.std(values_of_interest)
 
     def update_rolling_mean(self):
+        """ Updates internal rolling mean buffer. """
         rm = collections.deque(self.rolling_mean[self.half_window_size: len(self.ydata) - self.half_window_size])
         rm.popleft()
         new_rm_value = self.get_new_rolling_mean_val()
@@ -191,6 +216,7 @@ class ScopeFigure:
         return new_rm_value
 
     def get_rolling_mean(self):
+        """ Computes rolling mean of current data. """
         rolling_mean = get_rolling_mean(self.ydata, self.rolling_mean_window_size)
         rolling_mean[:self.half_window_size] = np.nan
         rolling_mean[len(self.ydata) - self.half_window_size:] = np.nan
@@ -198,12 +224,19 @@ class ScopeFigure:
 
     @staticmethod
     def _get_text_value(value: float):
+        """ Formats number for display in figure text. """
         rounded_value = np.around(value, 1)
         return f'{rounded_value:,}'
 
 
 class MainApplicationView:
-    def __init__(self, main_frame):
+    """
+    Represents the application view.
+
+    Contains a matplotlib figure canvas and a sidebar.
+    """
+
+    def __init__(self, main_frame: Tk.Tk):
         frame = Tk.Frame(main_frame)
         frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
 
@@ -222,7 +255,17 @@ class MainApplicationView:
 
 
 class SidePanel:
-    def __init__(self, root):
+    def __init__(self, root: Tk.Tk):
+        """
+        Represents the sidebar panel.
+
+        Contains the start and stop buttons.
+
+        Parameters
+        ----------
+        root: tkinter.Tk
+            The main tkinter window.
+        """
         frame = Tk.Frame(root)
         frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
         self.startButton = Tk.Button(frame, text="Start ")
@@ -234,6 +277,14 @@ class SidePanel:
 class MainTkApplication:
 
     def __init__(self, data_model):
+        """
+        The main Tkinter application window.
+
+        Parameters
+        ----------
+        data_model: Any
+            The data acquisition model that yields new data points.
+        """
         self.root = Tk.Tk()
         self.model = data_model
         self.view = MainApplicationView(self.root)
@@ -244,16 +295,19 @@ class MainTkApplication:
         self.animation = None
 
     def run(self):
+        """ Starts GUI. """
         self.root.title("QT3Scope: NIDAQ Digital Input Count Rate")
         self.root.deiconify()
         self.root.mainloop()
 
     def stop_scope(self, event=None):
+        """ Stops data acquisition and pauses animation. """
         self.model.stop()
         if self.animation is not None:
             self.animation.pause()
 
     def start_scope(self, event=None):
+        """ Starts data acquisition and animation. """
         if self.animation is None:
             self.view.canvas.draw_idle()
             self.animation = animation.FuncAnimation(
@@ -269,6 +323,7 @@ class MainTkApplication:
         self.animation.resume()
 
     def on_closing(self):
+        """ Closes application. """
         try:
             self.stop_scope()
             self.model.close()
@@ -280,6 +335,7 @@ class MainTkApplication:
 
 
 def build_data_model():
+    """ Builds the data acquisition model based on arguments. """
     if args.randomtest:
         data_acquisition_model = datasources.RandomRateCounter()
     else:
@@ -296,6 +352,7 @@ def build_data_model():
 
 
 def run_console():
+    """ Runs only the matplotlib animation, no sidebar. """
     rolling_mean_window_size = np.ceil(args.rolling_mean_window / args.animation_update_interval)
     view = ScopeFigure(args.scope_width, int(rolling_mean_window_size))
     model = build_data_model()
@@ -314,6 +371,7 @@ def run_console():
 
 
 def run_gui():
+    """ Runs Tkinter GUI version. """
     tkapp = MainTkApplication(build_data_model())
     tkapp.run()
 
