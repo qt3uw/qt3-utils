@@ -1,4 +1,5 @@
 import abc
+import logging
 import time
 
 import numpy as np
@@ -11,6 +12,9 @@ import queue
 
 # TODO: Must have only one pyvisa resource manager, resources are bound to said manager.
 
+logger = logging.getLogger(__name__)
+
+
 class Device(abc.ABC):
     """
     Interface class for all device implementations.
@@ -18,6 +22,8 @@ class Device(abc.ABC):
     mediator: Resource | SerialInstrument | USBInstrument | GPIBInstrument
     # TODO: add loaded dll, ni daq task etc?
     #  it can also be an arbitrary class defined by the manufacturer or user?
+    # TODO: Figure out which information I want to retain about each device and the acquisition process itself, so that
+    #  I can save it in the data. I would prefer using a Dataclass for data saving.
 
     verbose: int = 1
 
@@ -78,36 +84,19 @@ class AcquisitionMixin(abc.ABC):
     e.g., `class MyDevice(AcquisitionMixin, Device): ...`
     """
 
-    _required_superclass_methods = ['disconnect']
-
     def __init__(self):
-        super().__init__()  # Refers to the second inherited class in the new device definition
-        self._assert_required_superclass_methods()
-
         # Time-series acquisition thread-related attributes
         self._acquisition_thread: threading.Thread | None = None
         self._acquisition_thread_force_stop: bool = False
-        self._acquisition_thread_running: bool = False
         self._acquisition_pipeline = queue.Queue()
-        self._acquisition_sleep_time = 1
         self.latest_acquired_time_series: dict | None = None
-
-    def _assert_required_superclass_methods(self):
-
-        superclass = self.__class__.__bases__[0]
-
-        missing_methods = []
-        for method in self._required_superclass_methods:
-            if not hasattr(superclass, method) or not callable(getattr(superclass, method)):
-                missing_methods.append(method)
-
-        if missing_methods:
-            raise AttributeError(f"Superclass of {self.__class__.__name__}"
-                                 f" must have all the following methods implemented: '{missing_methods}'.")
+        self._acquisition_sleep_time = 0.1  # seconds
+        self._acquisition_pause_waiting_timeout = 1  # seconds
 
     @abc.abstractmethod
-    def setup_acquisition(self):
-        pass
+    def setup_acquisition(self, acquisition_sleep_time: float = None):
+        if acquisition_sleep_time is not None:
+            self._acquisition_sleep_time = acquisition_sleep_time
 
     @abc.abstractmethod
     def single_acquisition(self) -> list:
@@ -126,22 +115,31 @@ class AcquisitionMixin(abc.ABC):
             self, start_time: float,
             start_event: threading.Event,
             stop_event: threading.Event,
-            pause_event: threading.Event,
+            resume_event: threading.Event,
     ):
+        logging.info(f'Entering acquisition thread.')  # TODO: add object or thread id
+
         time_start_array = np.array([], dtype=float)
         time_end_array = np.array([], dtype=float)
         values_array = np.array([], dtype=object)  # TODO: type to float? maybe define on self.acquisition_value_type?
 
         while not start_event.is_set():
+            self._check_acquisition_pause_request(resume_event)
             if self._acquisition_thread_force_stop:
+                logging.info(f'Acquisition thread was force stopped before starting data accumulation.')
+                # TODO: add object or thread id
                 break
             self._sleep_between_acquisitions()
 
+        logging.info(f'Acquisition thread starting data accumulation.')  # TODO: add object or thread id
+
         while not stop_event.is_set():  # TODO: Put this in a method called acquisition loop?
+            self._check_acquisition_pause_request(resume_event)
             if self._acquisition_thread_force_stop:
+                logging.info(f'Acquisition thread was force stopped after starting data accumulation.')
+                # TODO: add object or thread id
                 break
-            while pause_event.is_set():  # TODO: add force stop handling
-                pause_event.wait()  # TODO: May need to modify.
+
             try:
                 acq_start_time, acq_end_time, single_acq_values = self.timed_single_acquisition()
 
@@ -155,50 +153,79 @@ class AcquisitionMixin(abc.ABC):
 
         stop_time = time.time()
 
+        logging.info(f'Acquisition thread stopped data accumulation.')  # TODO: add object or thread id
+
         # TODO: convert to xarray and add metadata? Maybe handle outside of this method?
         self._acquisition_pipeline.put({'time_start': time_start_array, 'time_end': time_end_array,
                                        'values': values_array, 'start_time': start_time, 'stop_time': stop_time})
+
+        logging.info(f'Acquisition thread put accumulated data in pipeline.')  # TODO: add object or thread id
+        logging.info(f'Exiting acquisition thread.')  # TODO: add object or thread id
 
     # TODO: add acquisition to handle just the return of a value, instead of storing values over time (like
     #  when using a wavemeter to measure the wavelength for to stabilize a laser.
 
     def start_time_series_acquisition(self, start_time: float, start_event: threading.Event,
-                                      stop_event: threading.Event, pause_event: threading.Event):
-        # TODO: check if thread is running.
+                                      stop_event: threading.Event, pause_event: threading.Event,
+                                      daemon_thread: bool = False):
+
+        if self._acquisition_thread is not None:
+            message = f'Acquisition thread already running.'  # TODO: add object or thread id
+            logging.exception(message)
+            raise RuntimeError(message)
+
         self._acquisition_thread_force_stop = False
+
         self._acquisition_thread = threading.Thread(
             target=self.time_series_acquisition,
             args=(start_time, start_event, stop_event, pause_event),
-            daemon=True,
+            daemon=daemon_thread,
         )
 
         self._acquisition_thread.start()
-        self._acquisition_thread_running = True
+        logging.info('Starting acquisition thread.')
 
     def stop_time_series_acquisition(self, force_stop=False):
         if force_stop:
             self._acquisition_thread_force_stop = True
 
+        logging.info('Stopping acquisition thread.')
         if self._acquisition_thread is not None:
             self._acquisition_thread.join()
+            logging.info('Stopped acquisition thread.')
             self.latest_acquired_time_series = self._acquisition_pipeline.get()
+            logging.info('Acquisition thread accumulated data extracted from pipeline.')
             del self._acquisition_thread
             self._acquisition_thread = None
-
-        self._acquisition_thread_running = False
+        else:
+            logging.info('Acquisition thread was already stopped.')
 
     def save_latest_time_series(self, file_path: str):
         # TODO: Decide how to save time series to file.
         if self.latest_acquired_time_series is not None:
             pass
 
-    def _sleep_between_acquisitions(self, start_time: float = time.time()):
-        sleep_time = max([0., self._acquisition_sleep_time - (time.time() - start_time)])
+    def _sleep_between_acquisitions(self, start_time: float = None):
+        if start_time is None:
+            sleep_time = self._acquisition_sleep_time
+        else:
+            sleep_time = max([0., self._acquisition_sleep_time - (time.time() - start_time)])
         time.sleep(sleep_time)
 
-    def disconnect(self):
-        self.stop_time_series_acquisition(force_stop=True)
-        super().disconnect()  # Refers to Device-inherited class.
+    def _check_acquisition_pause_request(self, resume_event: threading.Event):
+        was_paused = False
+        while not resume_event.is_set() and not self._acquisition_thread_force_stop:
+            if not was_paused:
+                was_paused = True
+                logging.info('Acquisition thread paused.')
+            resume_event.wait(self._acquisition_pause_waiting_timeout)
+            continue  # cames back to this loop as long as pause remains
+        logging.info('Acquisition thread resumed.')
+
+
+    # def disconnect(self):
+    #     self.stop_time_series_acquisition(force_stop=True)
+    #     super().disconnect()  # Refers to Device-inherited class.
 
 
 # class PowerMeter(Device):
