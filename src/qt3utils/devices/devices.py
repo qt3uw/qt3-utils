@@ -1,38 +1,48 @@
 import abc
 import logging
 import time
+from dataclasses import dataclass
+from typing import final, Type
 
 import numpy as np
-from pyvisa.resources import Resource, SerialInstrument, USBInstrument, GPIBInstrument
+from pyvisa import ResourceManager
+from pyvisa.attributes import Attribute
+from pyvisa.resources import MessageBasedResource
 
 import threading
 
 import queue
 
+from src.qt3utils.devices.utils import force_clear_message_based_resource, MessageBasedResourceType, ResourceType, \
+    find_available_resources_by_idn, auto_detect_read_termination, find_available_resources_by_visa_attribute
+from src.qt3utils.logger import get_configured_logger
 
 # TODO: Must have only one pyvisa resource manager, resources are bound to said manager.
 
-logger = logging.getLogger(__name__)
+resource_manager = ResourceManager()
+logger = get_configured_logger(__name__)  # TODO: lear more about logging applications from pyvisa logging.
 
 
 class Device(abc.ABC):
     """
     Interface class for all device implementations.
     """
-    mediator: Resource | SerialInstrument | USBInstrument | GPIBInstrument
-    # TODO: add loaded dll, ni daq task etc?
+
+    DEVICE_PY_ALIAS: str
+    """ Device alias for logging purposes."""
+
+    # TODO: add loaded dll, ni daq task etc for mediator?
     #  it can also be an arbitrary class defined by the manufacturer or user?
     # TODO: Figure out which information I want to retain about each device and the acquisition process itself, so that
     #  I can save it in the data. I would prefer using a Dataclass for data saving.
 
-    verbose: int = 1
-
-    def __init__(self, resource_name):
+    def __init__(self, mediator: ResourceType | None = None):
         self._lock = threading.Lock()
+        self.mediator = mediator
         # TODO: Add a device lock, and use it as a decorator every time you access the hardware.
         #  Each function that calls the hardware needs to wait for the lock to be ready.
-        #  This would be inefficient in the case of the time series. For the time-series we only need to do it before
-        #  and after thread initialization and completion.
+        #  This might be inefficient in the case of the time series. For the time-series we only need to do it before
+        #  and after thread initialization and completion?
 
     @abc.abstractmethod
     def connect(self):
@@ -44,6 +54,10 @@ class Device(abc.ABC):
 
     @abc.abstractmethod
     def is_connected(self):
+        pass
+
+    @abc.abstractmethod
+    def clear(self):
         pass
 
     # @abc.abstractmethod
@@ -70,11 +84,13 @@ class Device(abc.ABC):
     # def get_device_id(self):
     #     pass
 
-    @abc.abstractmethod
-    def clear(self):
-        pass
+    @final
+    def _log(self, message, subject: str = None, level: int = logging.INFO):
+        name = getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__)
+        logger.log(level, message, extra={'title': name, 'subtitle': subject}, exc_info=True)
 
-    # TODO: Find universal way to import different kind of devices with the nice device utils I defined.
+    def __del__(self):
+        self.disconnect()
 
 
 class AcquisitionMixin(abc.ABC):
@@ -84,25 +100,57 @@ class AcquisitionMixin(abc.ABC):
     e.g., `class MyDevice(AcquisitionMixin, Device): ...`
     """
 
+    @dataclass
+    class TimeSeriesData:
+        """
+        Data class for time-series data accumulation storage.
+        """
+        start_time: np.ndarray = np.array([], dtype=float)
+        end_time: np.ndarray = np.array([], dtype=float)
+        values: np.ndarray = np.array([], dtype=object)
+
+        def append(self, data: tuple[float, float, list] | 'AcquisitionMixin.TimeSeriesData'):
+            if isinstance(data, tuple):
+                st, et, vs = data
+                self.start_time = np.append(self.start_time, st)
+                self.end_time = np.append(self.end_time, et)
+                self.values = np.append(self.values, vs)
+            elif isinstance(data, AcquisitionMixin.TimeSeriesData):
+                self.start_time = np.append(self.start_time, data.start_time)
+                self.end_time = np.append(self.end_time, data.end_time)
+                self.values = np.append(self.values, data.values)
+            else:
+                raise ValueError(f'Invalid data type: {type(data)}')
+
     def __init__(self):
-        # Time-series acquisition thread-related attributes
         self._acquisition_thread: threading.Thread | None = None
         self._acquisition_thread_force_stop: bool = False
+
         self._acquisition_pipeline = queue.Queue()
-        self.latest_acquired_time_series: dict | None = None
+        self._data_streaming_thread: threading.Thread | None = None
+
+        self.time_series_data: AcquisitionMixin.TimeSeriesData | None = None
+
         self._acquisition_sleep_time = 0.1  # seconds
-        self._acquisition_pause_waiting_timeout = 1  # seconds
+        self._acquisition_slow_sleep_time = 1  # seconds
 
     @abc.abstractmethod
-    def setup_acquisition(self, acquisition_sleep_time: float = None):
+    def setup_acquisition(
+            self,
+            acquisition_sleep_time: float = None,
+            acquisition_slow_sleep_time: float = None
+    ):
         if acquisition_sleep_time is not None:
             self._acquisition_sleep_time = acquisition_sleep_time
+        if acquisition_slow_sleep_time is not None:
+            self._acquisition_slow_sleep_time = acquisition_slow_sleep_time
 
     @abc.abstractmethod
     def single_acquisition(self) -> list:
         """ Returns a list of values acquired from the device. """
         pass
 
+    @final
     def timed_single_acquisition(self) -> tuple[float, float, list]:
         """ Returns a list of values acquired from the device. Includes start and end time. """
         acq_start_time = time.time()
@@ -111,159 +159,288 @@ class AcquisitionMixin(abc.ABC):
 
         return acq_start_time, acq_end_time, single_acq_values
 
+    @final
     def time_series_acquisition(
-            self, start_time: float,
+            self,
             start_event: threading.Event,
             stop_event: threading.Event,
             resume_event: threading.Event,
+            pipeline_mode: str,
     ):
-        logging.info(f'Entering acquisition thread.')  # TODO: add object or thread id
+        self._log_acquisition_thread('Entering.')
 
-        time_start_array = np.array([], dtype=float)
-        time_end_array = np.array([], dtype=float)
-        values_array = np.array([], dtype=object)  # TODO: type to float? maybe define on self.acquisition_value_type?
+        if pipeline_mode == 'at_end':
+            self._log_acquisition_thread('Setting data pipeline. '
+                                         'Data will be accumulated once acquisition thread exits.')
+            time_start_array = np.array([], dtype=float)
+            time_end_array = np.array([], dtype=float)
+            values_array = np.array([], dtype=object)
+
+            def acquire():
+                nonlocal time_start_array, time_end_array, values_array
+                acq_start_time, acq_end_time, single_acq_values = self.timed_single_acquisition()
+
+                time_start_array = np.append(time_start_array, acq_start_time)
+                time_end_array = np.append(time_end_array, acq_end_time)
+                values_array = np.append(values_array, single_acq_values)
+
+                return acq_start_time
+        else:
+            self._log_acquisition_thread('Setting data pipeline. Data will be accumulated continuously.')
+
+            def acquire():
+                acq_start_time, acq_end_time, single_acq_values = self.timed_single_acquisition()
+                self._acquisition_pipeline.put((acq_start_time, acq_end_time, single_acq_values))
+
+                return acq_start_time
 
         while not start_event.is_set():
             self._check_acquisition_pause_request(resume_event)
             if self._acquisition_thread_force_stop:
-                logging.info(f'Acquisition thread was force stopped before starting data accumulation.')
-                # TODO: add object or thread id
+                self._log_acquisition_thread('Force stopped before starting data accumulation.')
                 break
-            self._sleep_between_acquisitions()
+            start_event.wait(self._acquisition_slow_sleep_time)
+            # TODO: Define own thread-wait function to take into
+            #  account other conditions passed as args (e.g. the force stop flag)
 
-        logging.info(f'Acquisition thread starting data accumulation.')  # TODO: add object or thread id
+        self._log_acquisition_thread('Starting data accumulation.')
 
         while not stop_event.is_set():  # TODO: Put this in a method called acquisition loop?
             self._check_acquisition_pause_request(resume_event)
             if self._acquisition_thread_force_stop:
-                logging.info(f'Acquisition thread was force stopped after starting data accumulation.')
-                # TODO: add object or thread id
+                self._log_acquisition_thread('Force stopped after starting data accumulation.')
                 break
-
             try:
-                acq_start_time, acq_end_time, single_acq_values = self.timed_single_acquisition()
-
-                values_array = np.append(values_array, single_acq_values)
-                time_start_array = np.append(time_start_array, acq_start_time)
-                time_end_array = np.append(time_end_array, acq_end_time)
-
-                self._sleep_between_acquisitions(acq_start_time)
+                acquisition_start_time = acquire()
+                self._sleep_between_acquisitions(acquisition_start_time)
             except Exception as e:
                 self._sleep_between_acquisitions()
 
-        stop_time = time.time()
+        self._log_acquisition_thread('Stopping data accumulation.')
 
-        logging.info(f'Acquisition thread stopped data accumulation.')  # TODO: add object or thread id
+        if pipeline_mode == 'at_end':
+            self._acquisition_pipeline.put(
+                AcquisitionMixin.TimeSeriesData(time_start_array, time_end_array, values_array))
 
-        # TODO: convert to xarray and add metadata? Maybe handle outside of this method?
-        self._acquisition_pipeline.put({'time_start': time_start_array, 'time_end': time_end_array,
-                                       'values': values_array, 'start_time': start_time, 'stop_time': stop_time})
+        self._log_acquisition_thread('Accumulated data inserted in pipeline.')
+        self._log_acquisition_thread('Exiting.')
 
-        logging.info(f'Acquisition thread put accumulated data in pipeline.')  # TODO: add object or thread id
-        logging.info(f'Exiting acquisition thread.')  # TODO: add object or thread id
+    @final
+    def start_time_series_acquisition(
+            self,
+            start_time: float,  # TODO: Add metadata attribute
+            start_event: threading.Event,
+            stop_event: threading.Event,
+            pause_event: threading.Event,
+            pipeline_mode: str = 'at_end',
+            daemon_thread: bool = False,
+            clear_data: bool = True,
+    ):
 
-    # TODO: add acquisition to handle just the return of a value, instead of storing values over time (like
-    #  when using a wavemeter to measure the wavelength for to stabilize a laser.
-
-    def start_time_series_acquisition(self, start_time: float, start_event: threading.Event,
-                                      stop_event: threading.Event, pause_event: threading.Event,
-                                      daemon_thread: bool = False):
+        # TODO: assert pipeline_mode in ['at_end', 'stream']
 
         if self._acquisition_thread is not None:
-            message = f'Acquisition thread already running.'  # TODO: add object or thread id
-            logging.exception(message)
-            raise RuntimeError(message)
+            self._log_acquisition_thread('Already running.', level=logging.ERROR)
+            raise RuntimeError('Acquisition thread already running.')   # TODO: change
+
+        if self._data_streaming_thread is not None:
+            self._log_acquisition_thread('Data streaming is running.', level=logging.ERROR)
+            raise RuntimeError('Data streaming is running.')   # TODO: change
 
         self._acquisition_thread_force_stop = False
+        if clear_data:
+            self.time_series_data = AcquisitionMixin.TimeSeriesData()
 
         self._acquisition_thread = threading.Thread(
             target=self.time_series_acquisition,
-            args=(start_time, start_event, stop_event, pause_event),
+            args=(start_event, stop_event, pause_event, pipeline_mode),
             daemon=daemon_thread,
         )
 
-        self._acquisition_thread.start()
-        logging.info('Starting acquisition thread.')
+        if pipeline_mode == 'stream':
+            self._data_streaming_thread = threading.Thread(target=self.catch_streaming_data, daemon=daemon_thread)
 
+        self._acquisition_thread.start()
+        if pipeline_mode == 'stream':
+            self._data_streaming_thread.start()
+
+        self._log_acquisition_thread('Starting.')
+
+    @final
     def stop_time_series_acquisition(self, force_stop=False):
         if force_stop:
             self._acquisition_thread_force_stop = True
 
-        logging.info('Stopping acquisition thread.')
+        self._log_acquisition_thread('Stopping.')
         if self._acquisition_thread is not None:
             self._acquisition_thread.join()
-            logging.info('Stopped acquisition thread.')
-            self.latest_acquired_time_series = self._acquisition_pipeline.get()
-            logging.info('Acquisition thread accumulated data extracted from pipeline.')
+            self._log_acquisition_thread('Stopped.')
             del self._acquisition_thread
             self._acquisition_thread = None
         else:
-            logging.info('Acquisition thread was already stopped.')
+            self._log_acquisition_thread('Already stopped. Nothing changed.')
 
-    def save_latest_time_series(self, file_path: str):
-        # TODO: Decide how to save time series to file.
-        if self.latest_acquired_time_series is not None:
-            pass
-
-    def _sleep_between_acquisitions(self, start_time: float = None):
-        if start_time is None:
-            sleep_time = self._acquisition_sleep_time
+        if self._data_streaming_thread is not None:
+            self._data_streaming_thread.join()
+            self._log_acquisition_thread('Stopped streaming data.')
         else:
-            sleep_time = max([0., self._acquisition_sleep_time - (time.time() - start_time)])
+            try:
+                new_data = self._acquisition_pipeline.get()
+                self.time_series_data.append(new_data)
+                self._acquisition_pipeline.task_done()
+                self._log_acquisition_thread('Retrieved data.')
+            except queue.Empty:
+                self._log_acquisition_thread('Already stopped streaming data. Nothing changed.')
+
+    @final
+    def save_time_series_data(self, file_path: str):
+        # TODO: Decide how to save time series to file.
+        pass
+
+    def catch_streaming_data(self):
+        while self._acquisition_thread is not None or self._acquisition_pipeline.qsize() > 0:
+            start_time = time.time()
+            try:
+                new_data = self._acquisition_pipeline.get()
+                self.time_series_data.append(new_data)
+                self._acquisition_pipeline.task_done()
+            except queue.Empty:
+                continue
+            self._sleep_between_acquisitions(start_time, slow_sleep=True)
+
+    @final
+    def _sleep_between_acquisitions(self, start_time: float = None, slow_sleep: bool = False):
+        sleep_time = self._acquisition_sleep_time if not slow_sleep else self._acquisition_slow_sleep_time
+        if start_time is not None:
+            sleep_time = max([0., sleep_time - (time.time() - start_time)])
         time.sleep(sleep_time)
 
+    @final
     def _check_acquisition_pause_request(self, resume_event: threading.Event):
         was_paused = False
         while not resume_event.is_set() and not self._acquisition_thread_force_stop:
             if not was_paused:
                 was_paused = True
-                logging.info('Acquisition thread paused.')
-            resume_event.wait(self._acquisition_pause_waiting_timeout)
+                self._log_acquisition_thread('Pausing.')
+            resume_event.wait(self._acquisition_slow_sleep_time)
             continue  # cames back to this loop as long as pause remains
-        logging.info('Acquisition thread resumed.')
+        self._log_acquisition_thread('Resuming.')
+
+    @final
+    def _log_acquisition_thread(self, message, level: int = logging.INFO):
+        name = getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__)
+        logger.log(level, message, extra={'title': name, 'subtitle': 'Acquisition thread'}, exc_info=True)
 
 
-    # def disconnect(self):
-    #     self.stop_time_series_acquisition(force_stop=True)
-    #     super().disconnect()  # Refers to Device-inherited class.
+class MessageBasedDevice(Device, abc.ABC):
 
+    WRITE_TERMINATION = r'\n'
+    READ_TERMINATION = r'\n'
 
-# class PowerMeter(Device):
-#     pass
-#
-#
-#
-# class NewportPowerMeter(PowerMeter):
-#
-#     IDN_PART = 'NewportCorp,2835-C'
-#
-#     def __init__(self):
-#         pass
-#
-#     def connect(self):
-#
-#
+    def __init__(self, mediator: MessageBasedResourceType):
+        super(Device).__init__(mediator)
 
+    def connect(self):
+        with self._lock:
+            self.mediator.open()
+        self.clear()
 
+    def disconnect(self):
+        self.clear()
+        with self._lock:
+            self.mediator.before_close()
+            self.mediator.close()
 
+    def is_connected(self):
+        # Accessing the session property itself will raise an InvalidSession exception if the session is not open.
+        with self._lock:
+            return self.mediator._session is not None
 
+    def clear(self, force: bool = False):
+        with self._lock:
+            self.clear()
 
+        if force:
+            self.safe_write('*CLS')
+            force_clear_message_based_resource(self.mediator, lock=self._lock)
 
+    def safe_query(self, message: str, delay: float | None = None) -> str:
+        with self._lock:
+            return self.mediator.query(message, delay)
 
+    def safe_write(self, message: str, termination: str | None = None, encoding: str | None = None):
+        with self._lock:
+            self.mediator.write(message, termination, encoding)
 
+    def safe_read(self, termination: str | None = None, encoding: str | None = None) -> str:
+        with self._lock:
+            return self.mediator.read(termination, encoding)
 
+    @classmethod
+    def from_resource_name(
+            cls,
+            resource_name: str,
+            write_termination: str | None = WRITE_TERMINATION,
+            read_termination: str | None = None,
+            **rm_kwargs,
+    ) -> 'MessageBasedDevice':
 
+        resource = resource_manager.open_resource(resource_name, **rm_kwargs)
 
+        if not isinstance(resource, MessageBasedResource):
+            # TODO: Change message
+            raise ValueError(f'Resource {resource} with resource_name {resource_name} is not a MessageBasedResource.')
 
+        resource.write_termination = write_termination
+        if read_termination is None:
+            read_termination = auto_detect_read_termination(resource)
+        resource.read_termination = read_termination
 
+        return cls(resource)
 
+    @classmethod
+    def from_visa_attribute(
+            cls,
+            visa_attribute: Type[Attribute],
+            desired_attr_value: str,
+            is_partial=False,
+            write_termination: str | None = WRITE_TERMINATION,
+            read_termination: str | None = READ_TERMINATION,
+            **rm_kwargs,
+    ) -> 'MessageBasedDevice':
 
+        resource = find_available_resources_by_visa_attribute(
+            resource_manager, visa_attribute, desired_attr_value, is_partial, **rm_kwargs)
 
+        if not isinstance(resource, MessageBasedResource):
+            # TODO: Change message
+            raise ValueError(f'Resource {resource} is not a MessageBasedResource.')
 
+        resource.write_termination = write_termination
+        if read_termination is None:
+            read_termination = auto_detect_read_termination(resource)
+        resource.read_termination = read_termination
 
+        return cls(resource)
 
+    @classmethod
+    def from_idn(
+            cls,
+            idn: str,
+            is_partial: bool = False,
+            write_termination: str | None = WRITE_TERMINATION,
+            read_termination: str | None = READ_TERMINATION,
+            **rm_kwargs,
+    ) -> 'MessageBasedDevice':
 
+        resource_list = find_available_resources_by_idn(
+            resource_manager, idn, is_partial, write_termination, read_termination, **rm_kwargs)
 
+        if len(resource_list) == 0:
+            raise ValueError(f'No resource found for idn {idn}.')  # TODO: Change message
+        elif len(resource_list) > 1:
+            raise ValueError(f'Multiple resources found for idn {idn}.')  # TODO: Change message
 
+        return cls(resource_list[0])
 
 
