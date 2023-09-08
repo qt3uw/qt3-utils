@@ -2,7 +2,7 @@ import abc
 import logging
 import time
 from dataclasses import dataclass
-from typing import final, Type
+from typing import final, Type, Any
 
 import numpy as np
 from pyvisa import ResourceManager
@@ -21,6 +21,23 @@ from src.qt3utils.logger import get_configured_logger
 
 resource_manager = ResourceManager()
 logger = get_configured_logger(__name__)  # TODO: lear more about logging applications from pyvisa logging.
+
+
+def _str_is_float(string: str) -> bool:
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
+
+
+def _convert_str(string: str) -> int | float | str:
+    if string.isdigit():
+        return int(string)
+    elif _str_is_float(string):
+        return float(string)
+    else:
+        return string
 
 
 class Device(abc.ABC):
@@ -241,11 +258,11 @@ class AcquisitionMixin(abc.ABC):
 
         if self._acquisition_thread is not None:
             self._log_acquisition_thread('Already running.', level=logging.ERROR)
-            raise RuntimeError('Acquisition thread already running.')   # TODO: change
+            raise RuntimeError('Acquisition thread already running.')  # TODO: change
 
         if self._data_streaming_thread is not None:
             self._log_acquisition_thread('Data streaming is running.', level=logging.ERROR)
-            raise RuntimeError('Data streaming is running.')   # TODO: change
+            raise RuntimeError('Data streaming is running.')  # TODO: change
 
         self._acquisition_thread_force_stop = False
         if clear_data:
@@ -333,9 +350,9 @@ class AcquisitionMixin(abc.ABC):
 
 
 class MessageBasedDevice(Device, abc.ABC):
-
-    WRITE_TERMINATION = r'\n'
+    WRITE_TERMINATION = r'\r\n'
     READ_TERMINATION = r'\n'
+    QUERY_DELAY = 10 ** -9  # s, even the smallest delay will help your device-read from crushing on you.
 
     def __init__(self, mediator: MessageBasedResourceType):
         super(Device).__init__(mediator)
@@ -376,12 +393,28 @@ class MessageBasedDevice(Device, abc.ABC):
         with self._lock:
             return self.mediator.read(termination, encoding)
 
+    @staticmethod
+    def parse_response(response: str) -> list[int | float | str] | int | float | str:
+        response = response.strip()
+        response_list: list[str] = response.split(',')
+        response_list = [_convert_str(r.strip()) for r in response_list]
+
+        return response_list if len(response_list) > 1 else response_list[0]
+
+    @staticmethod
+    def _set_rm_kwargs_defaults(method):
+        def wrapper(cls, **rm_kwargs):
+            rm_kwargs.setdefault('write_termination', cls.WRITE_TERMINATION)
+            rm_kwargs.setdefault('read_termination', cls.READ_TERMINATION)
+            rm_kwargs.setdefault('query_delay', cls.QUERY_DELAY)
+            return method(cls, **rm_kwargs)
+        return wrapper
+
     @classmethod
+    @_set_rm_kwargs_defaults
     def from_resource_name(
             cls,
             resource_name: str,
-            write_termination: str | None = WRITE_TERMINATION,
-            read_termination: str | None = None,
             **rm_kwargs,
     ) -> 'MessageBasedDevice':
 
@@ -391,56 +424,42 @@ class MessageBasedDevice(Device, abc.ABC):
             # TODO: Change message
             raise ValueError(f'Resource {resource} with resource_name {resource_name} is not a MessageBasedResource.')
 
-        resource.write_termination = write_termination
-        if read_termination is None:
-            read_termination = auto_detect_read_termination(resource)
-        resource.read_termination = read_termination
-
         return cls(resource)
 
     @classmethod
+    @_set_rm_kwargs_defaults
     def from_visa_attribute(
             cls,
             visa_attribute: Type[Attribute],
             desired_attr_value: str,
             is_partial=False,
-            write_termination: str | None = WRITE_TERMINATION,
-            read_termination: str | None = READ_TERMINATION,
             **rm_kwargs,
     ) -> 'MessageBasedDevice':
 
-        resource = find_available_resources_by_visa_attribute(
+        resource_list = find_available_resources_by_visa_attribute(
             resource_manager, visa_attribute, desired_attr_value, is_partial, **rm_kwargs)
 
+        if len(resource_list) == 0:
+            raise ValueError(f'No resource found with visa_attribute {visa_attribute}.')  # TODO: Change message
+        elif len(resource_list) > 1:
+            raise ValueError(f'Multiple resources found with visa_attribute {visa_attribute}.')  # TODO: Change message
+
+        resource = resource_list[0]
         if not isinstance(resource, MessageBasedResource):
             # TODO: Change message
             raise ValueError(f'Resource {resource} is not a MessageBasedResource.')
 
-        resource.write_termination = write_termination
-        if read_termination is None:
-            read_termination = auto_detect_read_termination(resource)
-        resource.read_termination = read_termination
-
         return cls(resource)
 
     @classmethod
+    @_set_rm_kwargs_defaults
     def from_idn(
             cls,
             idn: str,
             is_partial: bool = False,
-            write_termination: str | None = WRITE_TERMINATION,
-            read_termination: str | None = READ_TERMINATION,
             **rm_kwargs,
     ) -> 'MessageBasedDevice':
 
-        resource_list = find_available_resources_by_idn(
-            resource_manager, idn, is_partial, write_termination, read_termination, **rm_kwargs)
-
-        if len(resource_list) == 0:
-            raise ValueError(f'No resource found for idn {idn}.')  # TODO: Change message
-        elif len(resource_list) > 1:
-            raise ValueError(f'Multiple resources found for idn {idn}.')  # TODO: Change message
+        resource_list = find_available_resources_by_idn(resource_manager, idn, is_partial, **rm_kwargs)
 
         return cls(resource_list[0])
-
-
