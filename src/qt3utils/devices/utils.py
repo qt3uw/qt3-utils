@@ -48,13 +48,18 @@ def find_available_resources_by_visa_attribute(
             except VisaIOError as e:  # the device does not properly implement clear
                 pass
 
+            if isinstance(resource, MessageBasedResource):
+                resource.read_termination = auto_detect_read_termination(resource)
+
             resource_attr_value = resource.get_visa_attribute(visa_attribute.attribute_id)
+            resource.close()
 
             match_condition = (desired_attr_value in resource_attr_value) \
                 if is_partial else (resource_attr_value == desired_attr_value)
+
             if match_condition:
                 matching_attr_resource_list.append(resource)
-            resource.close()
+
         except VisaIOError as e:
             pass  # resource is probably used by another application, so we ignore it.
 
@@ -65,8 +70,6 @@ def find_available_resources_by_idn(
         rm: ResourceManager,
         desired_idn: str,
         is_partial=False,
-        write_termination: str = r'\n',
-        read_termination: str = None,
         **rm_kwargs,
 ) -> list[MessageBasedResourceType]:
     """
@@ -77,11 +80,7 @@ def find_available_resources_by_idn(
 
     for resource_name in connected_resources_names:
         try:
-            resource = rm.open_resource(
-                resource_name,
-                write_termination=write_termination,
-                read_termination=read_termination, **rm_kwargs
-            )
+            resource = rm.open_resource(resource_name, **rm_kwargs)
             if isinstance(resource, MessageBasedResource):
                 try:
                     resource.clear()
@@ -89,10 +88,7 @@ def find_available_resources_by_idn(
                     force_clear_message_based_resource(resource)
 
                 idn = resource.query(r'*IDN?')
-
-                read_termination, idn = auto_detect_read_termination(resource, idn)
-                resource.read_termination = read_termination
-
+                resource.read_termination, idn = auto_detect_read_termination(resource, idn)
                 resource.close()
 
                 match_condition = (desired_idn in idn) if is_partial else (idn == desired_idn)
