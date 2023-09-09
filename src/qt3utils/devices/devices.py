@@ -15,7 +15,7 @@ import queue
 
 from src.qt3utils.devices.utils import force_clear_message_based_resource, MessageBasedResourceType, ResourceType, \
     find_available_resources_by_idn, auto_detect_read_termination, find_available_resources_by_visa_attribute
-from src.qt3utils.logger import get_configured_logger
+from src.qt3utils.logger import get_configured_logger, LoggableMixin
 
 # TODO: Must have only one pyvisa resource manager, resources are bound to said manager.
 
@@ -40,7 +40,7 @@ def _convert_str(string: str) -> int | float | str:
         return string
 
 
-class Device(abc.ABC):
+class Device(abc.ABC, LoggableMixin):
     """
     Interface class for all device implementations.
     """
@@ -54,6 +54,7 @@ class Device(abc.ABC):
     #  I can save it in the data. I would prefer using a Dataclass for data saving.
 
     def __init__(self, mediator: ResourceType | None = None):
+        super(LoggableMixin).__init__(logger=get_configured_logger(self.DEVICE_PY_ALIAS))
         self._lock = threading.Lock()
         self.mediator = mediator
         # TODO: Add a device lock, and use it as a decorator every time you access the hardware.
