@@ -7,6 +7,8 @@ import yaml
 default_folder = Path.home().joinpath('.qt3-utils', 'logs')
 
 
+# TODO: Updated config file and create a dynamic log formatter depending on the extra title and subtitle values.
+
 def get_configured_logger(name: str) -> logging.Logger:
     with open('logger_config.yaml', 'r') as f:
         config = yaml.safe_load(f.read())
@@ -24,10 +26,10 @@ class LoggableMixin:
         if logger is None:
             logger = get_configured_logger(self.__class__.__name__)
 
-        if title is None:
-            title = self.__class__.__name__
-        if subtitle is None:
-            subtitle = ''
+        # if title is None:
+        #     title = ''
+        # if subtitle is None:
+        #     subtitle = ''
 
         self._logger = logger
         self._logger_title = title
