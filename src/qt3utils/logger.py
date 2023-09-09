@@ -17,3 +17,35 @@ def get_configured_logger(name: str) -> logging.Logger:
     logger = logging.getLogger(name)
 
     return logger
+
+
+class LoggableMixin:
+    def __init__(self, logger=None, title: str = None, subtitle: str = None):
+        if logger is None:
+            logger = get_configured_logger(self.__class__.__name__)
+
+        if title is None:
+            title = self.__class__.__name__
+        if subtitle is None:
+            subtitle = ''
+
+        self._logger = logger
+        self._logger_title = title
+        self._logger_subtitle = subtitle
+
+    def log(self, message, level=logging.INFO):
+        """
+        Log messages related to the object.
+
+        Parameters:
+            message (str): The message to log.
+            level (int, optional): The logging level (default is logging.INFO).
+        """
+        self._logger.log(
+            level,
+            message,
+            extra={
+                'title': self._logger_title,
+                'subtitle': self._logger_subtitle
+            },
+            exc_info=True)
