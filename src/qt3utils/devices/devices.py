@@ -350,12 +350,21 @@ class AcquisitionMixin(abc.ABC):
 
 
 class MessageBasedDevice(Device, abc.ABC):
-    WRITE_TERMINATION = r'\r\n'
-    READ_TERMINATION = r'\n'
-    QUERY_DELAY = 10 ** -9  # s, even the smallest delay will help your device-read from crushing on you.
 
-    def __init__(self, mediator: MessageBasedResourceType):
+    DEFAULT_WRITE_TERMINATION = r'\r\n'
+    DEFAULT_READ_TERMINATION = r'\n'
+
+    DEFAULT_QUERY_DELAY = 10 ** -9  # s, even the smallest delay will help your device-read from crushing on you.
+    DEFAULT_POST_COMMUNICATION_DELAY = 10 ** -9  # same communication issue when device is not ready to move forward.
+
+    def __init__(
+            self,
+            mediator: MessageBasedResourceType,
+            post_communication_delay: float = DEFAULT_POST_COMMUNICATION_DELAY):
+        super(MessageBasedDevice).__init__(mediator)
         super(Device).__init__(mediator)
+
+        self._post_communication_delay = post_communication_delay
 
     def connect(self):
         with self._lock:
@@ -376,6 +385,7 @@ class MessageBasedDevice(Device, abc.ABC):
     def clear(self, force: bool = False):
         with self._lock:
             self.clear()
+            time.sleep(self.DEFAULT_POST_COMMUNICATION_DELAY)
 
         if force:
             self.safe_write('*CLS')
@@ -383,15 +393,28 @@ class MessageBasedDevice(Device, abc.ABC):
 
     def safe_query(self, message: str, delay: float | None = None) -> str:
         with self._lock:
-            return self.mediator.query(message, delay)
+            response = self.mediator.query(message, delay)
+            time.sleep(self.DEFAULT_POST_COMMUNICATION_DELAY)
+        return response
 
     def safe_write(self, message: str, termination: str | None = None, encoding: str | None = None):
         with self._lock:
             self.mediator.write(message, termination, encoding)
+            time.sleep(self.DEFAULT_POST_COMMUNICATION_DELAY)
 
     def safe_read(self, termination: str | None = None, encoding: str | None = None) -> str:
         with self._lock:
-            return self.mediator.read(termination, encoding)
+            response = self.mediator.read(termination, encoding)
+            time.sleep(self.DEFAULT_POST_COMMUNICATION_DELAY)
+        return response
+
+    @property
+    def post_communication_delay(self):
+        return self._post_communication_delay
+
+    @post_communication_delay.setter
+    def post_communication_delay(self, value: float):
+        self._post_communication_delay = value
 
     @staticmethod
     def parse_response(response: str) -> list[int | float | str] | int | float | str:
@@ -404,9 +427,9 @@ class MessageBasedDevice(Device, abc.ABC):
     @staticmethod
     def _set_rm_kwargs_defaults(method):
         def wrapper(cls, **rm_kwargs):
-            rm_kwargs.setdefault('write_termination', cls.WRITE_TERMINATION)
-            rm_kwargs.setdefault('read_termination', cls.READ_TERMINATION)
-            rm_kwargs.setdefault('query_delay', cls.QUERY_DELAY)
+            rm_kwargs.setdefault('write_termination', cls.DEFAULT_WRITE_TERMINATION)
+            rm_kwargs.setdefault('read_termination', cls.DEFAULT_READ_TERMINATION)
+            rm_kwargs.setdefault('query_delay', cls.DEFAULT_QUERY_DELAY)
             return method(cls, **rm_kwargs)
         return wrapper
 
@@ -415,6 +438,7 @@ class MessageBasedDevice(Device, abc.ABC):
     def from_resource_name(
             cls,
             resource_name: str,
+            post_communication_delay: float = DEFAULT_POST_COMMUNICATION_DELAY,
             **rm_kwargs,
     ) -> 'MessageBasedDevice':
 
@@ -424,7 +448,7 @@ class MessageBasedDevice(Device, abc.ABC):
             # TODO: Change message
             raise ValueError(f'Resource {resource} with resource_name {resource_name} is not a MessageBasedResource.')
 
-        return cls(resource)
+        return cls(resource, post_communication_delay)
 
     @classmethod
     @_set_rm_kwargs_defaults
@@ -433,6 +457,7 @@ class MessageBasedDevice(Device, abc.ABC):
             visa_attribute: Type[Attribute],
             desired_attr_value: str,
             is_partial=False,
+            post_communication_delay: float = DEFAULT_POST_COMMUNICATION_DELAY,
             **rm_kwargs,
     ) -> 'MessageBasedDevice':
 
@@ -449,7 +474,7 @@ class MessageBasedDevice(Device, abc.ABC):
             # TODO: Change message
             raise ValueError(f'Resource {resource} is not a MessageBasedResource.')
 
-        return cls(resource)
+        return cls(resource, post_communication_delay)
 
     @classmethod
     @_set_rm_kwargs_defaults
@@ -457,9 +482,15 @@ class MessageBasedDevice(Device, abc.ABC):
             cls,
             idn: str,
             is_partial: bool = False,
+            post_communication_delay: float = DEFAULT_POST_COMMUNICATION_DELAY,
             **rm_kwargs,
     ) -> 'MessageBasedDevice':
 
         resource_list = find_available_resources_by_idn(resource_manager, idn, is_partial, **rm_kwargs)
 
-        return cls(resource_list[0])
+        if len(resource_list) == 0:
+            raise ValueError(f'No resource found with idn {idn}.')  # TODO: Change message
+        elif len(resource_list) > 1:
+            raise ValueError(f'Multiple resources found with idn {idn}.')  # TODO: Change message
+
+        return cls(resource_list[0], post_communication_delay)
