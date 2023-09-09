@@ -4,7 +4,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import final, Callable
+from typing import final, Callable, Any, Protocol, Type
 
 import numpy as np
 
@@ -12,17 +12,30 @@ from src.qt3utils.logger import get_configured_logger
 
 logger = get_configured_logger(__name__)
 
+# TODO: create a 'LoggableMixin' decorator that defines a log method for a given class.
+
+
+class Appendable(Protocol):
+    """
+    Protocol for classes that define an `append` method.
+    Used for type-hinting appendable objects (e.g., list).
+    """
+    def append(self, item):
+        pass
+
 
 def acquisition_sleep(acquisition_interval: float, start_time: float = None):
     """
-    Sleep for a given amount of time, accounting for the time it took to acquire data.
+    Sleep for a given amount of time, accounting
+    for the time it took to acquire data.
 
     Parameters
     ----------
     acquisition_interval: float
         Time to sleep.
     start_time: float, optional
-        Time at which the acquisition started. If None, sleep for full duration.
+        Time at which the acquisition started.
+        If None, sleep for full duration.
 
     Returns
     -------
@@ -58,13 +71,20 @@ class TimeSeriesData:
 
 class AcquisitionThread(threading.Thread):
     """
-    A threaded data acquisition class for time-series data.
+    A threaded data acquisition class for time-series data
+    collection.
 
     This class provides functionality for collecting data
     from a device using a specified acquisition method.
     Data can be collected in different pipeline modes,
     {'stream' or 'aggregate'}, and can be paused or stopped
     as needed.
+
+    The aggregation mode is suited best for data accumulation
+    where little to no temporal overhead is critical.
+    Alternatively, the stream mode is suited for accumulation
+    of data that need to be processed in real-time
+    (e.g., displayed on a GUI graph).
     """
 
     PIPELINE_MODES = ['stream', 'aggregate']  # TODO: assert
@@ -73,13 +93,13 @@ class AcquisitionThread(threading.Thread):
             self,
             acquisition_interval: float,
             idle_timeout: float,
-            acquisition_method: Callable,
+            acquisition_method: Callable[[], Any],
             pipeline: queue.Queue,
             start_event: threading.Event,
             stop_event: threading.Event,
             resume_event: threading.Event,
             pipeline_mode: str = 'aggregate',
-            collection_data_type: type = list,
+            collection_data_type: Type[Appendable] = list,
             parent_identifier: str = 'Unknown',
     ):
         """
@@ -111,7 +131,6 @@ class AcquisitionThread(threading.Thread):
         """
 
         super().__init__()
-        # TODO: Define directly through parent?
         self.acquisition_interval = acquisition_interval
         self.idle_timeout = idle_timeout
         self.acquisition_method = acquisition_method
@@ -133,7 +152,8 @@ class AcquisitionThread(threading.Thread):
             self._data_handling_method: Callable = self._data.append
 
     def stop(self):
-        """ Force-stops the data acquisition thread, ignoring the `stop_event`. """
+        """ Force-stops the data acquisition thread,
+        ignoring the `stop_event`. """
         self._force_stop = True
 
     def stop_and_join(self):
@@ -147,7 +167,7 @@ class AcquisitionThread(threading.Thread):
         The main method for the data acquisition thread.
 
         This method runs the data acquisition loop, acquires data,
-        and handles pause and exit conditions.
+        and handles entry, pause, and exit conditions.
         """
         self._handle_entry()
 
@@ -200,7 +220,7 @@ class AcquisitionThread(threading.Thread):
                 self._check_and_handle_pause_request()
 
         if not self._force_stop:
-            self._log('Started.')
+            self.log('Started data acquisition.')
 
     def _check_and_handle_pause_request(self):
         """ Checks and handles pause/resume requests.
@@ -209,21 +229,21 @@ class AcquisitionThread(threading.Thread):
         while not self.resume_event.is_set() and not self._force_stop:
             if not was_paused:
                 was_paused = True
-                self._log('Pausing.')
+                self.log('Pausing data acquisition.')
             self.resume_event.wait(self.idle_timeout)
 
         if not self._force_stop:
-            self._log('Resuming.')
+            self.log('Resuming data acquisition.')
 
     def _handle_entry(self):
         """ Handle the thread's entry behavior and waits for
         the start event before beginning data acquisition. """
-        self._log('Entered.', logging.DEBUG)
+        self.log('Entered.', logging.DEBUG)
 
         if self.pipeline_mode == 'stream':
-            self._log('Data will be continuously streamed to pipeline.')
+            self.log('Data will be continuously streamed to pipeline.')
         else:
-            self._log('Data will be put to pipeline at end of acquisition.')
+            self.log('Data will be put to pipeline at end of acquisition.')
 
         self._wait_to_start()
 
@@ -231,17 +251,17 @@ class AcquisitionThread(threading.Thread):
         """ Handle the thread's exit behavior and puts
         data to pipeline if in aggregate mode. """
         if self._force_stop:
-            self._log('Force stopped.')
+            self.log('Force stopped data acquisition.')
         else:
-            self._log('Stopped.')
+            self.log('Stopped data acquisition.')
 
         if self.pipeline_mode == 'aggregate':
             self.pipeline.put(self._data)
 
-        self._log('Exited.', logging.DEBUG)
+        self.log('Exited.', logging.DEBUG)
 
     @final
-    def _log(self, message, level: int = logging.INFO):
+    def log(self, message, level: int = logging.INFO):
         """
         Log messages related to the acquisition thread.
 
@@ -266,6 +286,12 @@ class TimeSeriesAcquisitionThread(AcquisitionThread):
     Data can be collected in different pipeline modes,
     {'stream' or 'aggregate'}, and can be paused or stopped
     as needed.
+
+    The aggregation mode is suited best for data accumulation
+    where little to no temporal overhead is critical.
+    Alternatively, the stream mode is suited for accumulation
+    of data that need to be processed in real-time
+    (e.g., displayed on a GUI graph).
     """
 
     def __init__(
@@ -291,15 +317,23 @@ class TimeSeriesAcquisitionThread(AcquisitionThread):
             The mode for data pipeline handling ('aggregate' or 'stream'). Default is 'aggregate'.
         """
         super().__init__(
-            ...
+            parent.ts_acquisition_interval,
+            parent.ts_idle_timeout,
+            parent.timed_single_acquisition,
+            parent.ts_pipeline,
+            start_event,
+            stop_event,
+            resume_event,
+            pipeline_mode,
+            TimeSeriesData,
+            getattr(parent, 'DEVICE_PY_ALIAS', parent.__class__.__name__),
         )
 
 
-class StreamingDataThread(threading.Thread):
+class StreamingThread(threading.Thread):
     """
-    A thread class that streams data from an acquisition
-    thread to a device implemented using the `AcquisitionMixin`
-    class.
+    A thread class that collects streamed data from an
+    AcquisitionThread.
     """
 
     def __init__(
@@ -307,32 +341,59 @@ class StreamingDataThread(threading.Thread):
             acquisition_thread: AcquisitionThread,
             pipeline: queue.Queue,
             idle_timeout: float,
-            parent_identifier: str = 'Unknown'
+            data_collection_object: Appendable,
+            data_collection_object_lock: threading.Lock,
+            parent_identifier: str = 'Unknown',
     ):
+        """
+        Parameters
+        ----------
+        acquisition_thread : AcquisitionThread
+            The acquisition thread to collect data from.
+        pipeline : queue.Queue
+            The pipeline to put data into.
+        idle_timeout : float
+            The timeout for the thread when it is idle.
+        data_collection_object : Appendable
+            The object to append data to.
+        data_collection_object_lock : threading.Lock
+            The lock for the data collection object.
+        parent_identifier : str, optional
+            The identifier of the parent object.
+            Default is 'Unknown'.
+        """
         super().__init__()
         self.acquisition_thread = acquisition_thread
         self.pipeline = pipeline
         self.idle_timeout = idle_timeout
         self.parent_identifier = parent_identifier
+
+        self.data = data_collection_object
+        self._data_lock = data_collection_object_lock
+
         self._force_stop = False
 
     def stop(self):
         self._force_stop = True
 
-    def run(self):
-        self._log('Entered thread.', logging.DEBUG)
+    def stop_and_join(self):
+        self.stop()
+        self.join()
 
-        while not self._should_stop_reading_stream():
+    def run(self):
+        self.log('Entered.', logging.DEBUG)
+
+        while not self._should_stop_collecting_streamed_data():
             try:
-                data = self.pipeline.get(timeout=self.idle_timeout)
-                self.process_streamed_data(data)
+                datum = self.pipeline.get(timeout=self.idle_timeout)
+                self.process_streamed_data(datum)
                 self.pipeline.task_done()
             except queue.Empty:
                 self.handle_idle_timeout()
 
-        self._log('Exited thread.', logging.DEBUG)
+        self.log('Exited.', logging.DEBUG)
 
-    def _should_stop_reading_stream(self):
+    def _should_stop_collecting_streamed_data(self):
         """
         Check if the thread should stop reading data from the
         pipeline.
@@ -343,29 +404,30 @@ class StreamingDataThread(threading.Thread):
         """
         return self._force_stop or (not self.acquisition_thread.is_alive() and self.pipeline.qsize() == 0)
 
-    def process_streamed_data(self, data):
+    def process_streamed_data(self, datum):
         """
-        Process streamed data.
+        Process streamed datum.
 
-        This method is called when new data is streamed from the pipeline.
+        This method is called when new data is streamed
+        from the pipeline.
 
         Parameters:
-            data: The streamed data.
+            datum: The streamed datum.
         """
-        # Add your custom data processing logic here
-        pass
+        with self._data_lock:
+            self.data.append(datum)
 
     def handle_idle_timeout(self):
         """
         Handle the idle timeout.
 
-        This method is called when no new data is received within the idle timeout.
-        You can customize the behavior when the thread is idle.
+        This method is called when no new data
+        is received within the idle timeout.
         """
         pass
 
     @final
-    def _log(self, message, level=logging.INFO):
+    def log(self, message, level=logging.INFO):
         """
         Log messages related to the streaming thread.
 
@@ -377,6 +439,27 @@ class StreamingDataThread(threading.Thread):
         logger.log(level, message, extra={'title': name, 'subtitle': 'Streaming thread'}, exc_info=True)
 
 
+class TimeSeriesStreamingThread(StreamingThread):
+    """
+    A thread class that collects time-series data for
+    devices implemented using the `AcquisitionMixin` class.
+    """
+
+    def __init__(
+            self,
+            parent: 'AcquisitionMixin',
+    ):
+        self.parent = parent
+        super().__init__(
+            parent.ts_acquisition_thread,
+            parent.ts_pipeline,
+            parent.ts_idle_timeout,
+            parent.ts_data,
+            parent.ts_data_lock,
+            getattr(parent, 'DEVICE_PY_ALIAS', parent.__class__.__name__),
+        )
+
+
 class AcquisitionMixin(abc.ABC):
     """
     AcquisitionMixin is a mixin that provides the ability to acquire single and time-series data from a device.
@@ -385,27 +468,87 @@ class AcquisitionMixin(abc.ABC):
     """
 
     def __init__(self):
-        self._acquisition_thread: threading.Thread | None = None
-        self._acquisition_thread_force_stop: bool = False
+        self._ts_acquisition_thread: TimeSeriesAcquisitionThread | None = None
+        self._ts_streaming_thread: TimeSeriesStreamingThread | None = None
 
-        self._acquisition_pipeline = queue.Queue()
-        self._data_streaming_thread: threading.Thread | None = None
+        self._ts_pipeline = queue.Queue()
+        self._ts_data = TimeSeriesData()
+        self._ts_data_lock = threading.Lock()
 
-        self.time_series_data: AcquisitionMixin.TimeSeriesData | None = None
+        self._ts_acquisition_interval = 0.01  # seconds
+        self._ts_idle_timeout = 0.1  # seconds
 
-        self._acquisition_acquisition_interval = 0.1  # seconds
-        self._acquisition_idle_timeout = 1  # seconds
+    @property
+    def ts_acquisition_thread(self) -> TimeSeriesAcquisitionThread | None:
+        """ Returns the time-series acquisition thread. """
+        return self._ts_acquisition_thread
+
+    @property
+    def ts_streaming_thread(self) -> TimeSeriesStreamingThread | None:
+        """ Returns the time-series streaming thread. """
+        return self._ts_streaming_thread
+
+    @property
+    def ts_pipeline(self) -> queue.Queue:
+        """ Returns the time-series pipeline. """
+        return self._ts_pipeline
+
+    @property
+    def ts_data(self) -> TimeSeriesData:
+        """ Returns the time-series data. """
+        return self._ts_data
+
+    @property
+    def ts_data_lock(self) -> threading.Lock:
+        """ Returns the time-series data lock. """
+        return self._ts_data_lock
+
+    @property
+    def ts_acquisition_interval(self) -> float:
+        """ Returns the time-series acquisition interval. """
+        return self._ts_acquisition_interval
+
+    @ts_acquisition_interval.setter
+    def ts_acquisition_interval(self, value: float | None):
+        """ Sets the time-series acquisition interval. """
+        if value is not None:
+            self._ts_acquisition_interval = value
+
+    @property
+    def ts_idle_timeout(self) -> float:
+        """ Returns the time-series idle timeout. """
+        return self._ts_idle_timeout
+
+    @ts_idle_timeout.setter
+    def ts_idle_timeout(self, value: float | None):
+        """ Sets the time-series idle timeout. """
+        if value is not None:
+            self._ts_idle_timeout = value
 
     @abc.abstractmethod
     def setup_acquisition(
             self,
-            acquisition_acquisition_interval: float = None,
-            acquisition_idle_timeout: float = None
+            ts_acquisition_interval: float = None,
+            ts_idle_timeout: float = None
     ):
-        if acquisition_acquisition_interval is not None:
-            self._acquisition_acquisition_interval = acquisition_acquisition_interval
-        if acquisition_idle_timeout is not None:
-            self._acquisition_idle_timeout = acquisition_idle_timeout
+        """
+        Sets up acquisition-related parameters.
+
+        When passing None values, the object attribute
+        values will not be updated.
+
+        Override method in subclass to set up other device
+        parameters critical to the acquisition process.
+
+        Parameters
+        ----------
+        ts_acquisition_interval: float, optional
+            The time-series acquisition interval.
+        ts_idle_timeout: float, optional:
+            The time-series idle timeout.
+        """
+        self.ts_acquisition_interval = ts_acquisition_interval
+        self.ts_idle_timeout = ts_idle_timeout
 
     @abc.abstractmethod
     def single_acquisition(self) -> list:
@@ -426,79 +569,129 @@ class AcquisitionMixin(abc.ABC):
             self,
             start_event: threading.Event,
             stop_event: threading.Event,
-            pause_event: threading.Event,
-            pipeline_mode: str = 'at_end',
-            daemon_thread: bool = False,
+            resume_event: threading.Event,
+            pipeline_mode: str = 'aggregate',
             clear_data: bool = True,
     ):
+        """
+        Initializes all threads and starts the time-series acquisition.
+
+        Parameters
+        ----------
+        start_event : threading.Event
+            An event to trigger the start of data acquisition.
+        stop_event : threading.Event
+            An event to signal the end of data acquisition.
+        resume_event : threading.Event
+            An event to handle pause-resume requests of data acquisition.
+        pipeline_mode : str, optional
+            The mode for data pipeline handling ('aggregate' or 'stream').
+            Default is 'aggregate'.
+        clear_data: bool, optional
+            Whether to clear old data.
+            If False, the new data will be appended to the old data.
+
+        Raises
+        ------
+        RuntimeError
+            If the acquisition or streaming threads are already running.
+
+        Notes
+        -----
+        """
 
         # TODO: assert pipeline_mode in ['at_end', 'stream']
 
-        if self._acquisition_thread is not None:
-            self._log_acquisition_thread('Already running.', level=logging.ERROR)
-            raise RuntimeError('Acquisition thread already running.')  # TODO: change
+        if self.ts_acquisition_thread is not None:
+            self.ts_acquisition_thread.log('Attempted to start when it was already running.', level=logging.ERROR)
+            raise RuntimeError('Attempted to start acquisition thread when it was already running.')  # TODO: change
 
-        if self._data_streaming_thread is not None:
-            self._log_acquisition_thread('Data streaming is running.', level=logging.ERROR)
-            raise RuntimeError('Data streaming is running.')  # TODO: change
+        if self.ts_streaming_thread is not None:
+            self.ts_streaming_thread.log('Attempted to start when it was already running.', level=logging.ERROR)
+            raise RuntimeError('Attempted to start streaming thread when it was already running.')  # TODO: change
 
-        self._acquisition_thread_force_stop = False
         if clear_data:
-            self.time_series_data = AcquisitionMixin.TimeSeriesData()
+            self._ts_data = TimeSeriesData()
 
-        self._acquisition_thread = threading.Thread(
-            target=self.time_series_acquisition,
-            args=(start_event, stop_event, pause_event, pipeline_mode),
-            daemon=daemon_thread,
-        )
+        self._ts_acquisition_thread = TimeSeriesAcquisitionThread(
+                self, start_event, stop_event, resume_event, pipeline_mode)
 
         if pipeline_mode == 'stream':
-            self._data_streaming_thread = threading.Thread(target=self.catch_streaming_data, daemon=daemon_thread)
+            self._ts_streaming_thread = TimeSeriesStreamingThread(self)
 
-        self._acquisition_thread.start()
+        self._ts_acquisition_thread.start()
         if pipeline_mode == 'stream':
-            self._data_streaming_thread.start()
-
-        self._log_acquisition_thread('Starting.')
+            self.ts_streaming_thread.start()
 
     @final
     def stop_time_series_acquisition(self, force_stop=False):
-        if force_stop:
-            self._acquisition_thread_force_stop = True
+        """
+        Stops the time-series acquisition.
 
-        self._log_acquisition_thread('Stopping.')
-        if self._acquisition_thread is not None:
-            self._acquisition_thread.join()
-            self._log_acquisition_thread('Stopped.')
-            del self._acquisition_thread
-            self._acquisition_thread = None
-        else:
-            self._log_acquisition_thread('Already stopped. Nothing changed.')
+        Parameters
+        ----------
+        force_stop: bool, optional
+            Whether to forcefully stop the acquisition and streaming threads.
+            Default to False.
+        """
+        if self._ts_acquisition_thread is not None:
+            self._stop_and_join_thread('_ts_acquisition_thread', force_stop)
 
-        if self._data_streaming_thread is not None:
-            self._data_streaming_thread.join()
-            self._log_acquisition_thread('Stopped streaming data.')
+        if self.ts_streaming_thread is not None:
+            self._stop_and_join_thread('_ts_streaming_thread', force_stop)
         else:
-            try:
-                new_data = self._acquisition_pipeline.get()
-                self.time_series_data.append(new_data)
-                self._acquisition_pipeline.task_done()
-                self._log_acquisition_thread('Retrieved data.')
-            except queue.Empty:
-                self._log_acquisition_thread('Already stopped streaming data. Nothing changed.')
+            self._collect_aggregated_data_from_pipeline()
 
     @final
     def save_time_series_data(self, file_path: str):
         # TODO: Decide how to save time series to file.
         pass
 
-    def catch_streaming_data(self):
-        while self._acquisition_thread is not None or self._acquisition_pipeline.qsize() > 0:
-            start_time = time.time()
-            try:
-                new_data = self._acquisition_pipeline.get()
-                self.time_series_data.append(new_data)
-                self._acquisition_pipeline.task_done()
-            except queue.Empty:
-                continue
-            self._sleep_between_acquisitions(start_time, slow_sleep=True)
+    def _stop_and_join_thread(self, thread_attribute_name: str, force_stop=False):
+        """
+        Stops and joins the acquisition or streaming thread.
+
+        This method is used by the stop_time_series_acquisition method.
+        It is not intended to be called directly.
+
+        Parameters
+        ----------
+        thread_attribute_name: str
+            The thread attribute name to stop and join.
+        force_stop: bool, optional
+            Whether to forcefully stop the acquisition and streaming threads.
+            Default to False.
+        """
+        thread = getattr(self, thread_attribute_name)
+        if force_stop:
+            thread.stop()
+        thread.join()
+        del thread
+        setattr(self, thread_attribute_name, None)
+        thread_name = 'Acquisition thread' if thread_attribute_name == '_ts_acquisition_thread' else 'Streaming thread'
+        self.log(f'Cleared {thread_name}.')
+
+    def _collect_aggregated_data_from_pipeline(self):
+        """
+        Collects the data from the pipeline.
+        Used when the streaming thread is not running.
+        """
+        try:
+            data = self.ts_pipeline.get()
+            self.ts_data.append(data)
+            self.ts_pipeline.task_done()
+            self.log('Retrieved data.')
+        except queue.Empty:
+            self.log('Already stopped streaming data. No new data retrieved.')
+
+    @final
+    def log(self, message, level=logging.INFO):
+        """
+        Log messages related to the acquisition device.
+
+        Parameters:
+            message (str): The message to log.
+            level (int, optional): The logging level (default is logging.INFO).
+        """
+        name = getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__)
+        logger.log(level, message, extra={'title': name, 'subtitle': ''}, exc_info=True)
