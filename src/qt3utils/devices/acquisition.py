@@ -8,7 +8,7 @@ from typing import final, Callable, Any, Protocol, Type
 
 import numpy as np
 
-from src.qt3utils.logger import get_configured_logger
+from src.qt3utils.logger import get_configured_logger, LoggableMixin
 
 logger = get_configured_logger(__name__)
 
@@ -69,7 +69,7 @@ class TimeSeriesData:
             raise ValueError(f'Invalid data type: {type(data)}')
 
 
-class AcquisitionThread(threading.Thread):
+class AcquisitionThread(threading.Thread, LoggableMixin):
     """
     A threaded data acquisition class for time-series data
     collection.
@@ -130,7 +130,11 @@ class AcquisitionThread(threading.Thread):
             python alias or class name).
         """
 
-        super().__init__()
+        super(threading.Thread).__init__()
+        super(LoggableMixin).__init__(logger, parent_identifier, 'Acquisition Thread')
+
+        if pipeline_mode not in self.PIPELINE_MODES:
+            raise ValueError(f'Invalid pipeline mode: {pipeline_mode}')
         self.acquisition_interval = acquisition_interval
         self.idle_timeout = idle_timeout
         self.acquisition_method = acquisition_method
@@ -330,7 +334,7 @@ class TimeSeriesAcquisitionThread(AcquisitionThread):
         )
 
 
-class StreamingThread(threading.Thread):
+class StreamingThread(threading.Thread, LoggableMixin):
     """
     A thread class that collects streamed data from an
     AcquisitionThread.
@@ -362,7 +366,8 @@ class StreamingThread(threading.Thread):
             The identifier of the parent object.
             Default is 'Unknown'.
         """
-        super().__init__()
+        super(threading.Thread).__init__()
+        super(LoggableMixin).__init__(logger, parent_identifier, 'Streaming Thread')
         self.acquisition_thread = acquisition_thread
         self.pipeline = pipeline
         self.idle_timeout = idle_timeout
@@ -426,18 +431,6 @@ class StreamingThread(threading.Thread):
         """
         pass
 
-    @final
-    def log(self, message, level=logging.INFO):
-        """
-        Log messages related to the streaming thread.
-
-        Parameters:
-            message (str): The message to log.
-            level (int, optional): The logging level (default is logging.INFO).
-        """
-        name = self.parent_identifier
-        logger.log(level, message, extra={'title': name, 'subtitle': 'Streaming thread'}, exc_info=True)
-
 
 class TimeSeriesStreamingThread(StreamingThread):
     """
@@ -460,7 +453,7 @@ class TimeSeriesStreamingThread(StreamingThread):
         )
 
 
-class AcquisitionMixin(abc.ABC):
+class AcquisitionMixin(abc.ABC, LoggableMixin):
     """
     AcquisitionMixin is a mixin that provides the ability to acquire single and time-series data from a device.
     Must be used as a subclass. Must be the first in order of the Device definition,
@@ -468,6 +461,7 @@ class AcquisitionMixin(abc.ABC):
     """
 
     def __init__(self):
+        super(LoggableMixin).__init__(logger, getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__))
         self._ts_acquisition_thread: TimeSeriesAcquisitionThread | None = None
         self._ts_streaming_thread: TimeSeriesStreamingThread | None = None
 
@@ -683,15 +677,3 @@ class AcquisitionMixin(abc.ABC):
             self.log('Retrieved data.')
         except queue.Empty:
             self.log('Already stopped streaming data. No new data retrieved.')
-
-    @final
-    def log(self, message, level=logging.INFO):
-        """
-        Log messages related to the acquisition device.
-
-        Parameters:
-            message (str): The message to log.
-            level (int, optional): The logging level (default is logging.INFO).
-        """
-        name = getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__)
-        logger.log(level, message, extra={'title': name, 'subtitle': ''}, exc_info=True)
