@@ -3,7 +3,8 @@ import logging
 import queue
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import singledispatchmethod
 from typing import final, Callable, Any, Protocol, Type
 
 import numpy as np
@@ -11,8 +12,6 @@ import numpy as np
 from src.qt3utils.logger import get_configured_logger, LoggableMixin
 
 logger = get_configured_logger(__name__)
-
-# TODO: create a 'LoggableMixin' decorator that defines a log method for a given class.
 
 
 class Appendable(Protocol):
@@ -50,23 +49,37 @@ def acquisition_sleep(acquisition_interval: float, start_time: float = None):
 class TimeSeriesData:
     """
     Data class for time-series data accumulation storage.
-    """
-    start_time: np.ndarray = np.array([], dtype=float)
-    end_time: np.ndarray = np.array([], dtype=float)
-    values: np.ndarray = np.array([], dtype=object)
+    This class does not enforce any specific data type,
+    only the size of the tuple when passing a single datum.
 
-    def append(self, data: tuple[float, float, list] | 'TimeSeriesData'):
-        if isinstance(data, tuple):
-            st, et, vs = data
-            self.start_time = np.append(self.start_time, st)
-            self.end_time = np.append(self.end_time, et)
-            self.values = np.append(self.values, vs)
-        elif isinstance(data, TimeSeriesData):
-            self.start_time = np.concatenate(self.start_time, data.start_time)
-            self.end_time = np.concatenate(self.end_time, data.end_time)
-            self.values = np.concatenate(self.values, data.values)
-        else:
-            raise ValueError(f'Invalid data type: {type(data)}')
+    The size of a single measurement list is also not enforced.
+    This increases the flexibility of the class, but can be
+    dangerous when not used correctly.
+    """
+    start_times: list[float] = field(default_factory=list, init=False)
+    end_times: list[float] = field(default_factory=list, init=False)
+    measurements: list[list[Any]] = field(default_factory=list, init=False)
+
+    @singledispatchmethod
+    def append(self, data):
+        raise ValueError(f"Unsupported data type: {type(data)}")
+
+    @append.register
+    def _append_time_series_data(self, data: 'TimeSeriesData'):
+        self.start_times.extend(data.start_times)
+        self.end_times.extend(data.end_times)
+        self.measurements.extend(data.measurements)
+
+    @append.register(tuple)
+    def _append_tuple(self, data: tuple[float, float, list]):
+        if len(data) != 3:
+            raise ValueError('Data must be a tuple of length 3.')
+        self.append_separately(*data)
+
+    def append_separately(self, start_time: float, end_time: float, measurement: list):
+        self.start_times.append(start_time)
+        self.end_times.append(end_time)
+        self.measurements.append(measurement)
 
 
 class AcquisitionThread(threading.Thread, LoggableMixin):
@@ -454,6 +467,9 @@ class TimeSeriesStreamingThread(StreamingThread):
 
 
 class AcquisitionMixin(abc.ABC, LoggableMixin):
+
+    DEFAULT_ACQ_INTERVAL = 0.01  # seconds
+    DEFAULT_IDLE_TIMEOUT = 0.1  # seconds
     """
     AcquisitionMixin is a mixin that provides the ability to acquire single and time-series data from a device.
     Must be used as a subclass. Must be the first in order of the Device definition,
@@ -469,8 +485,8 @@ class AcquisitionMixin(abc.ABC, LoggableMixin):
         self._ts_data = TimeSeriesData()
         self._ts_data_lock = threading.Lock()
 
-        self._ts_acquisition_interval = 0.01  # seconds
-        self._ts_idle_timeout = 0.1  # seconds
+        self._ts_acquisition_interval = self.DEFAULT_ACQ_INTERVAL  # seconds
+        self._ts_idle_timeout = self.DEFAULT_IDLE_TIMEOUT  # seconds
 
     @property
     def ts_acquisition_thread(self) -> TimeSeriesAcquisitionThread | None:
