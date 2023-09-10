@@ -7,8 +7,6 @@ from dataclasses import dataclass, field
 from functools import singledispatchmethod
 from typing import final, Callable, Any, Protocol, Type
 
-import numpy as np
-
 from src.qt3utils.logger import get_configured_logger, LoggableMixin
 
 logger = get_configured_logger(__name__)
@@ -55,20 +53,52 @@ class TimeSeriesData:
     The size of a single measurement list is also not enforced.
     This increases the flexibility of the class, but can be
     dangerous when not used correctly.
+
+    MAKE SURE YOU ALWAYS ACCESS THE DATA WITH THE LOCK!
+    Not doing so may result in data-related attributes
+    of different lengths, which is probably going to
+    cause problems in your code.
+
+    SAFEST WAY TO TRANSEFER THE DATA TO ANOTHER VARIABLE:
+    Acquire the lock, transfer all data to new variables
+    within the same lock acquisition and create deep copies.
+
+    Example
+    -------
+    >>> import copy
+    >>>
+    >>> ts1 = TimeSeriesData()
+    >>> ts1.append_separately(0.0, 1.0, [1, 2, 3])
+    >>> ts1.append((1.0, 2.0, [4, 5, 6]))
+    >>> ts2 = TimeSeriesData()
+    >>> ts2.append_separately(2.0, 3.0, [7, 8, 9])
+    >>> ts1.append(ts2)
+    >>>
+    >>> with ts1.lock:
+    >>>     start_times = copy.deepcopy(ts1.start_times)
+    >>>     end_times = copy.deepcopy(ts1.end_times)
+    >>>     measurements = copy.deepcopy(ts1.measurements)
+    >>> print(start_times)
+    [0.0, 1.0, 2.0]
+    >>> print(end_times)
+    [1.0, 2.0, 3.0]
+    >>> print(measurements)
+    [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
     """
     start_times: list[float] = field(default_factory=list, init=False)
     end_times: list[float] = field(default_factory=list, init=False)
     measurements: list[list[Any]] = field(default_factory=list, init=False)
+    lock: threading.RLock = field(default_factory=threading.RLock, init=False)
 
     @singledispatchmethod
     def append(self, data):
-        raise ValueError(f"Unsupported data type: {type(data)}")
+        if not isinstance(data, TimeSeriesData):
+            raise ValueError(f"Unsupported data type: {type(data)}")
 
-    @append.register
-    def _append_time_series_data(self, data: 'TimeSeriesData'):
-        self.start_times.extend(data.start_times)
-        self.end_times.extend(data.end_times)
-        self.measurements.extend(data.measurements)
+        with self.lock:
+            self.start_times.extend(data.start_times)
+            self.end_times.extend(data.end_times)
+            self.measurements.extend(data.measurements)
 
     @append.register(tuple)
     def _append_tuple(self, data: tuple[float, float, list]):
@@ -77,9 +107,10 @@ class TimeSeriesData:
         self.append_separately(*data)
 
     def append_separately(self, start_time: float, end_time: float, measurement: list):
-        self.start_times.append(start_time)
-        self.end_times.append(end_time)
-        self.measurements.append(measurement)
+        with self.lock:
+            self.start_times.append(start_time)
+            self.end_times.append(end_time)
+            self.measurements.append(measurement)
 
 
 class AcquisitionThread(threading.Thread, LoggableMixin):
@@ -359,7 +390,7 @@ class StreamingThread(threading.Thread, LoggableMixin):
             pipeline: queue.Queue,
             idle_timeout: float,
             data_collection_object: Appendable,
-            data_collection_object_lock: threading.Lock,
+            data_collection_object_lock: threading.RLock,
             parent_identifier: str = 'Unknown',
     ):
         """
@@ -373,8 +404,9 @@ class StreamingThread(threading.Thread, LoggableMixin):
             The timeout for the thread when it is idle.
         data_collection_object : Appendable
             The object to append data to.
-        data_collection_object_lock : threading.Lock
-            The lock for the data collection object.
+        data_collection_object_lock : threading.RLock, optional
+            A thread-safe reentrant lock for the data
+            collection object.
         parent_identifier : str, optional
             The identifier of the parent object.
             Default is 'Unknown'.
@@ -461,20 +493,19 @@ class TimeSeriesStreamingThread(StreamingThread):
             parent.ts_pipeline,
             parent.ts_idle_timeout,
             parent.ts_data,
-            parent.ts_data_lock,
+            parent.ts_data.lock,
             getattr(parent, 'DEVICE_PY_ALIAS', parent.__class__.__name__),
         )
 
 
 class AcquisitionMixin(abc.ABC, LoggableMixin):
+    """
+    AcquisitionMixin provides the ability to acquire single
+    and time-series data from a device.
+    """
 
     DEFAULT_ACQ_INTERVAL = 0.01  # seconds
     DEFAULT_IDLE_TIMEOUT = 0.1  # seconds
-    """
-    AcquisitionMixin is a mixin that provides the ability to acquire single and time-series data from a device.
-    Must be used as a subclass. Must be the first in order of the Device definition,
-    e.g., `class MyDevice(AcquisitionMixin, Device): ...`
-    """
 
     def __init__(self):
         super(LoggableMixin).__init__(logger, getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__))
@@ -483,7 +514,6 @@ class AcquisitionMixin(abc.ABC, LoggableMixin):
 
         self._ts_pipeline = queue.Queue()
         self._ts_data = TimeSeriesData()
-        self._ts_data_lock = threading.Lock()
 
         self._ts_acquisition_interval = self.DEFAULT_ACQ_INTERVAL  # seconds
         self._ts_idle_timeout = self.DEFAULT_IDLE_TIMEOUT  # seconds
@@ -507,11 +537,6 @@ class AcquisitionMixin(abc.ABC, LoggableMixin):
     def ts_data(self) -> TimeSeriesData:
         """ Returns the time-series data. """
         return self._ts_data
-
-    @property
-    def ts_data_lock(self) -> threading.Lock:
-        """ Returns the time-series data lock. """
-        return self._ts_data_lock
 
     @property
     def ts_acquisition_interval(self) -> float:
