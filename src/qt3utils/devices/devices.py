@@ -1,10 +1,8 @@
 import abc
 import logging
 import time
-from dataclasses import dataclass
-from typing import final, Type, Any
+from typing import final, Type
 
-import numpy as np
 from pyvisa import ResourceManager
 from pyvisa.attributes import Attribute
 from pyvisa.resources import MessageBasedResource
@@ -14,7 +12,7 @@ import threading
 import queue
 
 from src.qt3utils.devices.utils import force_clear_message_based_resource, MessageBasedResourceType, ResourceType, \
-    find_available_resources_by_idn, auto_detect_read_termination, find_available_resources_by_visa_attribute
+    find_available_resources_by_idn, find_available_resources_by_visa_attribute
 from src.qt3utils.logger import get_configured_logger, LoggableMixin
 
 # TODO: Must have only one pyvisa resource manager, resources are bound to said manager.
@@ -101,11 +99,6 @@ class Device(abc.ABC, LoggableMixin):
     # @abc.abstractmethod
     # def get_device_id(self):
     #     pass
-
-    @final
-    def _log(self, message, subject: str = None, level: int = logging.INFO):
-        name = getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__)
-        logger.log(level, message, extra={'title': name, 'subtitle': subject}, exc_info=True)
 
     def __del__(self):
         self.disconnect()

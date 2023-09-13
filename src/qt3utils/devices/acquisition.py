@@ -508,7 +508,8 @@ class AcquisitionMixin(abc.ABC, LoggableMixin):
     DEFAULT_IDLE_TIMEOUT = 0.1  # seconds
 
     def __init__(self):
-        super(LoggableMixin).__init__(logger, getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__))
+        if not hasattr(self, '_logger'):
+            super(LoggableMixin, self).__init__(logger, getattr(self, 'DEVICE_PY_ALIAS', self.__class__.__name__))
         self._ts_acquisition_thread: TimeSeriesAcquisitionThread | None = None
         self._ts_streaming_thread: TimeSeriesStreamingThread | None = None
 
@@ -582,6 +583,7 @@ class AcquisitionMixin(abc.ABC, LoggableMixin):
         ts_idle_timeout: float, optional:
             The time-series idle timeout.
         """
+        self.log('Setting up acquisition...', logging.DEBUG)
         self.ts_acquisition_interval = ts_acquisition_interval
         self.ts_idle_timeout = ts_idle_timeout
 
