@@ -11,7 +11,6 @@ import matplotlib.animation as animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
 import qt3utils.datagenerators
-from qt3utils.math_utils import get_rolling_mean
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +69,57 @@ parser.add_argument('--console', action='store_true',
 args = parser.parse_args()
 
 
+class RollingStatisticsTracker:
+    """
+    A class that keeps track of the latest N values (window size)
+    and calculates the most recent rolling mean and standard deviation.
+    """
+    def __init__(self, window_size: int):
+        """
+        Parameters
+        ----------
+        window_size: int
+            Number of values to keep track of.
+        """
+        self._window_size = window_size
+        self._data = collections.deque(maxlen=window_size)
+        self._cum_sum = 0
+        self._cum_sum_sq = 0
+        self._mean = 0
+        self._std = 0
+
+    @property
+    def mean(self):
+        return self._mean
+
+    @property
+    def std(self):
+        return self._std
+
+    @property
+    def _count(self):
+        return len(self._data)
+
+    def update(self, new_value: Any):
+        """
+        Updates the rolling statistics with a new value.
+
+        Parameters
+        ----------
+        new_value: Any
+            New value to be added to the rolling statistics.
+        """
+
+        old_value = self._data.popleft() if self._count == self._window_size else 0
+        self._data.append(new_value)
+
+        self._cum_sum += new_value - old_value
+        self._cum_sum_sq += (new_value ** 2) - (old_value ** 2)
+
+        self._mean = self._cum_sum / self._count
+        self._std = np.sqrt(max(self._cum_sum_sq / self._count - self._mean ** 2, 0))
+
+
 class ScopeFigure:
 
     def __init__(self, width: int = 50, rolling_mean_window_size: int = 20,
@@ -97,7 +147,7 @@ class ScopeFigure:
             Axis to plot the data in.
         """
         # Constraining rolling_mean_window_size value
-        if rolling_mean_window_size > width:
+        if rolling_mean_window_size > width and show_rolling_mean:
             logger.warning('Rolling mean window size must not exceed scope width.'
                            'Rolling mean window size was set equal to scope width.')
             rolling_mean_window_size = width
@@ -134,9 +184,17 @@ class ScopeFigure:
 
     def _add_rolling_mean(self, rolling_mean_window_size: int):
         """ Adds rolling mean line to figure. """
-        self.rolling_mean_window_size = rolling_mean_window_size
-        self.half_window_size = int(np.ceil(self.rolling_mean_window_size / 2))
-        self.rolling_mean = self.get_rolling_mean()
+        self.half_window_size = int(np.ceil(rolling_mean_window_size / 2))
+        self.rolling_mean_window_size = 2 * self.half_window_size
+
+        initial_rolling_mean = np.zeros(len(self.ydata))
+        initial_rolling_mean[:self.half_window_size] = np.nan
+        initial_rolling_mean[-self.half_window_size:] = np.nan
+        self.rolling_mean = collections.deque(initial_rolling_mean)
+
+        self.rolling_mean_statistics_tracker = RollingStatisticsTracker(
+            self.rolling_mean_window_size)
+
         self.rolling_mean_line, = self.ax.plot(self.rolling_mean)
         self.rolling_mean_line: plt.Line2D
 
@@ -145,6 +203,7 @@ class ScopeFigure:
         self.reading_text_font_size = reading_text_font_size  # TODO: Add to .mplstyle file
         fig_width = self.fig.get_size_inches()[0]
         fig_height = self.fig.get_size_inches()[1]
+
         if self.show_rolling_mean:
             self.fig.set_size_inches(fig_width, fig_height * 1.3)
             displayed_values = 'NaN\nNaN\nNaN (NaN)'
@@ -153,6 +212,7 @@ class ScopeFigure:
             self.fig.set_size_inches(fig_width, fig_height * 1.1)
             displayed_values = 'NaN'
             displayed_labels = 'Cur. Val.'
+
         self.current_value_text: plt.Text = self.ax.text(
             1, 1.05, displayed_values, fontsize=self.reading_text_font_size,
             transform=self.ax.transAxes, ha='right')
@@ -166,13 +226,13 @@ class ScopeFigure:
         if self.show_rolling_mean:
             self.rolling_mean_line.set_ydata(self.rolling_mean)
         if self.show_reading_text:
-            self.current_value_text.set_text('NaN\nNaN\nNaN (NaN)' if self.show_rolling_mean else 'NaN')
+            self.current_value_text.set_text(
+                'NaN\nNaN\nNaN (NaN)' if self.show_rolling_mean else 'NaN')
         return self.line,
 
     def update(self, y: Any):
         """Updates the figure data with the given new data point."""
-        self.ydata.popleft()
-        self.ydata.append(y)
+        self._update_y_data(y)
 
         # this doesn't work with blit = True.
         # there's a workaround if we need blit = true
@@ -180,6 +240,19 @@ class ScopeFigure:
         # need to sporadically call
         # fig.canvas.resize_event()
 
+        self._update_rolling_mean()
+        self._update_reading_text()
+        self._update_ax_limits()
+
+        return self.line,
+
+    def _update_y_data(self, new_y: Any):
+        """ Updates the y data. """
+        self.ydata.popleft()
+        self.ydata.append(new_y)
+        self.line.set_ydata(self.ydata)
+
+    def _update_ax_limits(self):
         delta = 0.1 * np.max(self.ydata)
         new_min = np.max([0, np.min(self.ydata) - delta])
         new_max = np.max(self.ydata) + delta
@@ -189,53 +262,42 @@ class ScopeFigure:
                 or (np.abs((new_max - current_max) / current_max) > 0.12):
             self.ax.set_ylim(np.max([0.01, np.min(self.ydata) - delta]), np.max(self.ydata) + delta)
 
-        self.line.set_ydata(self.ydata)
-
+    def _update_rolling_mean(self):
+        """ Updates internal rolling mean buffer. """
         if self.show_rolling_mean:
-            new_rm_value = self.update_rolling_mean()
+            new_y = self.ydata[-1] if len(self.ydata) > 0 else 0
+
+            self.rolling_mean_statistics_tracker.update(new_y)  # update tracker first
+            new_mean = self.rolling_mean_statistics_tracker.mean
+            new_std = self.rolling_mean_statistics_tracker.std
+
+            # instead of popleft - append, we rotate and modify in between the np.nans.
+            self.rolling_mean.rotate(-1)  # shifts all data to the left
+            self.rolling_mean[self.half_window_size - 1] = np.nan  # deletes oldest value
+            self.rolling_mean[- self.half_window_size - 1] = new_mean  # adds new value
+
             self.rolling_mean_line.set_ydata(self.rolling_mean)
 
+            return new_mean, new_std
+
+    def _update_reading_text(self):
+        """ Updates the figure text with the current reading. """
         if self.show_reading_text:
-            text = self._get_text_value(y)  # default rounding of digits
+            new_y = self.ydata[-1] if len(self.ydata) > 0 else np.nan
+            text = self._get_text_value(new_y)  # default rounding of digits
+
             if self.show_rolling_mean:
-                measured_stdev = self.get_new_rolling_stdev_val()
-                expected_stdev = np.sqrt(new_rm_value)
+                new_mean = self.rolling_mean_statistics_tracker.mean
+                new_std = self.rolling_mean_statistics_tracker.std
+                std_poison = np.sqrt(new_mean)
 
-                text = self._get_text_value(y, measured_stdev)  # rounding to STD's first significant digit
-                text = f'{text}\n {self._get_text_value(new_rm_value, measured_stdev)}'
-                text = f'{text}\n {self._get_text_value(measured_stdev)} ({self._get_text_value(expected_stdev)})'
+                # rounding to STD's first significant digit
+                text = self._get_text_value(new_y, new_std)
+                text = f'{text}\n {self._get_text_value(new_mean, new_std)}'
+                text = (f'{text}\n {self._get_text_value(new_std)} '
+                        f'({self._get_text_value(std_poison)})')
+
             self.current_value_text.set_text(text)
-
-        return self.line,
-
-    # TODO: Change implementation of how we calculate and update the rolling mean and stdev in every data entry.
-    def get_new_rolling_mean_val(self):
-        """ Calculates new rolling mean value. """
-        values_of_interest = list(self.ydata)[len(self.ydata) - 2 * self.half_window_size:
-                                              len(self.ydata)]
-        return np.mean(values_of_interest)
-
-    def get_new_rolling_stdev_val(self):
-        """ Calculates new rolling standard deviation. """
-        values_of_interest = list(self.ydata)[len(self.ydata) - 2 * self.half_window_size:
-                                              len(self.ydata)]
-        return np.std(values_of_interest)
-
-    def update_rolling_mean(self):
-        """ Updates internal rolling mean buffer. """
-        rm = collections.deque(self.rolling_mean[self.half_window_size: len(self.ydata) - self.half_window_size])
-        rm.popleft()
-        new_rm_value = self.get_new_rolling_mean_val()
-        rm.append(new_rm_value)
-        self.rolling_mean[self.half_window_size: len(self.ydata) - self.half_window_size] = list(rm)
-        return new_rm_value
-
-    def get_rolling_mean(self):
-        """ Computes rolling mean of current data. """
-        rolling_mean = get_rolling_mean(self.ydata, self.rolling_mean_window_size)
-        rolling_mean[:self.half_window_size] = np.nan
-        rolling_mean[len(self.ydata) - self.half_window_size:] = np.nan
-        return rolling_mean
 
     @staticmethod
     def _get_text_value(value: float, decimal_limiter: float = None):
@@ -259,7 +321,9 @@ class MainApplicationView:
         frame = Tk.Frame(main_frame)
         frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
 
-        rolling_mean_window_size = np.ceil(args.rolling_mean_window / args.animation_update_interval)
+        rolling_mean_window_size = int(np.ceil(
+            args.rolling_mean_window / args.animation_update_interval))
+
         self.scope_view = ScopeFigure(
             args.scope_width,
             rolling_mean_window_size,
