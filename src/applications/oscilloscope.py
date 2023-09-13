@@ -10,7 +10,7 @@ import matplotlib.animation as animation
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import qt3utils.datagenerators as datasources
+import qt3utils.datagenerators
 from qt3utils.math_utils import get_rolling_mean
 
 logger = logging.getLogger(__name__)
@@ -55,13 +55,15 @@ parser.add_argument('-aut', '--animation-update-interval', metavar='milliseconds
 parser.add_argument('-rmw', '--rolling-mean-window', metavar='milliseconds', default=400, type=float,
                     help='''Sets the displayed rolling mean window size, w, (in milliseconds).
                     Actual value will set as the ceil(rmw/aut) * aut.''')
-parser.add_argument('-srm', '--show-rolling-mean', default='Υ',
-                    help='''Show (Y) or hide (N) the rolling mean line.''')
-parser.add_argument('-srt', '--show-reading-text', default='Υ',
-                    help='''Show (Y) or hide (N) the reading text. 
+parser.add_argument('-srm', '--show-rolling-mean', action='store_true',
+                    help='''When true, the rolling mean line will be displayed in the figure.''')
+parser.add_argument('-srt', '--show-reading-text', action='store_true',
+                    help='''When True, the current reading value will be displayed as text. 
                     If rolling mean is enabled, rolling mean, rolling standard
                     deviation (STD) and expected STD (from Poison distribution) 
                     text will also be displayed.''')
+parser.add_argument('-rtfs', '--reading-text-font-size', metavar='pixels', default=12, type=float,
+                    help='''Sets the font size of the current reading text.''')
 
 parser.add_argument('--console', action='store_true',
                     help='Run as console app -- just the figure without buttons.')
@@ -72,6 +74,7 @@ class ScopeFigure:
 
     def __init__(self, width: int = 50, rolling_mean_window_size: int = 20,
                  show_rolling_mean: bool = True, show_reading_text: bool = True,
+                 reading_text_font_size: float = 12,
                  fig: plt.Figure = None, ax: plt.Axes = None):
         """
         Initializes the ScopeFigure.
@@ -86,11 +89,18 @@ class ScopeFigure:
             Whether to display the rolling mean line in the figure.
         show_reading_text: bool, default True
              Whether to display current reading value as text.
+         reading_text_font_size: float, default 12
+            Font size of the displayed current reading text.
         fig : matplotlib.figure.Figure
             Figure to plot the data in.
         ax : matplotlib.axes.Axes
             Axis to plot the data in.
         """
+        # Constraining rolling_mean_window_size value
+        if rolling_mean_window_size > width:
+            logger.warning('Rolling mean window size must not exceed scope width.'
+                           'Rolling mean window size was set equal to scope width.')
+            rolling_mean_window_size = width
 
         # setting up the figure and main axis
         if ax is None:
@@ -113,14 +123,14 @@ class ScopeFigure:
 
         # Setting up axis preferences
         # TODO: Put all axis preferences to .mplstyle and load through terminal or gui.
-        self.ax.set_ylabel('Reading (counts / sec)')
+        self.ax.set_ylabel('Rate (counts / sec)')
         self.ax.ticklabel_format(style='sci', scilimits=(-3, 4), axis='y')
-        self.ax.set_xlabel('Acquisition Number')
+        self.ax.set_xlabel('Time bin (arb. units)')
 
         if self.show_rolling_mean:
             self._add_rolling_mean(rolling_mean_window_size)
         if self.show_reading_text:
-            self._add_reading_text()
+            self._add_reading_text(reading_text_font_size)
 
     def _add_rolling_mean(self, rolling_mean_window_size: int):
         """ Adds rolling mean line to figure. """
@@ -130,9 +140,9 @@ class ScopeFigure:
         self.rolling_mean_line, = self.ax.plot(self.rolling_mean)
         self.rolling_mean_line: plt.Line2D
 
-    def _add_reading_text(self):
+    def _add_reading_text(self, reading_text_font_size: float):
         """Adds current reading value as text on figure."""
-        self.text_font_size = 30  # TODO: Add to .mplstyle file
+        self.reading_text_font_size = reading_text_font_size  # TODO: Add to .mplstyle file
         fig_width = self.fig.get_size_inches()[0]
         fig_height = self.fig.get_size_inches()[1]
         if self.show_rolling_mean:
@@ -144,9 +154,11 @@ class ScopeFigure:
             displayed_values = 'NaN'
             displayed_labels = 'Cur. Val.'
         self.current_value_text: plt.Text = self.ax.text(
-            1, 1.05, displayed_values, fontsize=self.text_font_size, transform=self.ax.transAxes, ha='right')
+            1, 1.05, displayed_values, fontsize=self.reading_text_font_size,
+            transform=self.ax.transAxes, ha='right')
         self.ax.text(
-            0, 1.05, displayed_labels, fontsize=self.text_font_size, transform=self.ax.transAxes, ha='left')
+            0, 1.05, displayed_labels, fontsize=self.reading_text_font_size,
+            transform=self.ax.transAxes, ha='left')
 
     def init(self):
         """ Initializes the figure data. """
@@ -158,7 +170,7 @@ class ScopeFigure:
         return self.line,
 
     def update(self, y: Any):
-        """Updates the figure data according given a new data point."""
+        """Updates the figure data with the given new data point."""
         self.ydata.popleft()
         self.ydata.append(y)
 
@@ -184,16 +196,19 @@ class ScopeFigure:
             self.rolling_mean_line.set_ydata(self.rolling_mean)
 
         if self.show_reading_text:
-            text = self._get_text_value(y)
+            text = self._get_text_value(y)  # default rounding of digits
             if self.show_rolling_mean:
-                text = f'{text}\n {self._get_text_value(new_rm_value)}'
                 measured_stdev = self.get_new_rolling_stdev_val()
                 expected_stdev = np.sqrt(new_rm_value)
+
+                text = self._get_text_value(y, measured_stdev)  # rounding to STD's first significant digit
+                text = f'{text}\n {self._get_text_value(new_rm_value, measured_stdev)}'
                 text = f'{text}\n {self._get_text_value(measured_stdev)} ({self._get_text_value(expected_stdev)})'
             self.current_value_text.set_text(text)
 
         return self.line,
 
+    # TODO: Change implementation of how we calculate and update the rolling mean and stdev in every data entry.
     def get_new_rolling_mean_val(self):
         """ Calculates new rolling mean value. """
         values_of_interest = list(self.ydata)[len(self.ydata) - 2 * self.half_window_size:
@@ -223,10 +238,14 @@ class ScopeFigure:
         return rolling_mean
 
     @staticmethod
-    def _get_text_value(value: float):
+    def _get_text_value(value: float, decimal_limiter: float = None):
         """ Formats number for display in figure text. """
-        rounded_value = np.around(value, 1)
-        return f'{rounded_value:,}'
+        if decimal_limiter is None:
+            decimal_limiter = value * 1e-4  # defaults to 4 digits of precision
+
+        # Round the value to the first significant digit of the decimal_limiter
+        rounded_value = round(value, -int(np.floor(np.log10(decimal_limiter))))
+        return f'{rounded_value:e}'
 
 
 class MainApplicationView:
@@ -241,7 +260,13 @@ class MainApplicationView:
         frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
 
         rolling_mean_window_size = np.ceil(args.rolling_mean_window / args.animation_update_interval)
-        self.scope_view = ScopeFigure(args.scope_width, int(rolling_mean_window_size))
+        self.scope_view = ScopeFigure(
+            args.scope_width,
+            rolling_mean_window_size,
+            args.show_rolling_mean,
+            args.show_reading_text,
+            args.reading_text_font_size,
+        )
         self.sidepanel = SidePanel(main_frame)
 
         self.canvas = FigureCanvasTkAgg(self.scope_view.fig, master=frame)
@@ -337,9 +362,9 @@ class MainTkApplication:
 def build_data_model():
     """ Builds the data acquisition model based on arguments. """
     if args.randomtest:
-        data_acquisition_model = datasources.RandomRateCounter()
+        data_acquisition_model = qt3utils.datagenerators.RandomRateCounter()
     else:
-        data_acquisition_model = datasources.NiDaqDigitalInputRateCounter(
+        data_acquisition_model = qt3utils.datagenerators.NiDaqDigitalInputRateCounter(
             daq_name=args.daq_name,
             signal_terminal=args.signal_terminal,
             clock_rate=args.clock_rate,
@@ -353,8 +378,16 @@ def build_data_model():
 
 def run_console():
     """ Runs only the matplotlib animation, no sidebar. """
-    rolling_mean_window_size = np.ceil(args.rolling_mean_window / args.animation_update_interval)
-    view = ScopeFigure(args.scope_width, int(rolling_mean_window_size))
+    rolling_mean_window_size = int(
+        np.ceil(args.rolling_mean_window / args.animation_update_interval))
+
+    view = ScopeFigure(
+        args.scope_width,
+        rolling_mean_window_size,
+        args.show_rolling_mean,
+        args.show_reading_text,
+        args.reading_text_font_size,
+    )
     model = build_data_model()
     model.start()
     ani = animation.FuncAnimation(
