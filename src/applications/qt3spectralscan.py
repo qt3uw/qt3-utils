@@ -1,19 +1,18 @@
 import sys
 import os
 
+import pickle
+import threading
+
 import tkinter as tk
-from tkinter import ttk
 from tkinter import messagebox
 import tkinter.filedialog as filedialog
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import matplotlib
-import matplotlib.pyplot as plt
 
 import numpy as np
-import pickle
-import threading
 import nipiezojenapy
 
 # Add the path to the qt3utils folder to sys.path
@@ -202,7 +201,7 @@ class Application(tk.Frame):
             s.num_frames = "1"
 
             s.exposure_time = float(self.text_fields["Exposure Time (ms)"].get())
-            s.sensor_setpoint = float(self.text_fields["Sensor Setpoint (°C)"].get())
+            s.temperature_sensor_setpoint = float(self.text_fields["Temperature Sensor Setpoint (°C)"].get())
             s.center_wavelength = float(self.text_fields["Center Wavelength (nm)"].get())
 
             z = float(self.text_fields["Z (um)"].get())

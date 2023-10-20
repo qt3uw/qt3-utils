@@ -63,36 +63,24 @@ class LightfieldApp:
         Helper function for setting experiment parameters with basic value
         checking.
         """
-
         if self.experiment.Exists(setting):
             if self.experiment.IsValid(setting, value):
-
                 self.experiment.SetValue(setting, value)
-
             else:
-
                 # TODO: might need to add a proper exception
                 print('Invalid value: {} for setting: {}.'.format(value, setting))
-
         else:
-
             # TODO: might need to add a proper exception
             print('Invalid setting:{}'.format(setting))
-
-        return
 
     def get(self, setting):
         """
         Helper function for getting experiment parameters with a basic check
         to see if a specific setting is valid.
         """
-
         if self.experiment.Exists(setting):
-
             value = self.experiment.GetValue(setting)
-
         else:
-
             value = []
             print('Invalid setting: {}'.format(setting))
 
@@ -103,18 +91,20 @@ class LightfieldApp:
 
     def acquire(self):
         """
-        Helper function to acquire the data from the PIXIS-style cameras.
-        Need to check array reorganization since there is only a single vertical pixel.
-        For a single frame, the data is returned as a 2D array (just raw counts
-        from each pixel). Taking a section in the vertical (400-pixel) direction
-        corresponds to wavelength averaging.
-        For multiple frames, each exposure is stacked in a third dimension, so
-        averaging can be performed simply by summing over the different planes.
+        This function retrieves image data with special consideration for the unique configuration of the camera, 
+        which possesses a single vertical pixel. The following describes the data handling:
+
+        - **Single Frame**: 
+        - Data is returned as a 2D array representing raw counts from each pixel.
+        - A vertical section (spanning 400 pixels) represents a range for wavelength averaging.
+
+        - **Multiple Frames**:
+        - Data from successive exposures is added as a new dimension, resulting in a 3D array.
+        - Averaging across frames can be done by summing over this additional dimension.
         """
 
         acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) #to allow the camera to capture the desired amount of data during the specified exposure time.
         num_frames = self.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore)
-
         self.experiment.Acquire()
 
         sleep(0.001 * acquisition_time * num_frames)  #sleep delay that waits for the exposure duration of the camera
@@ -123,38 +113,31 @@ class LightfieldApp:
             sleep(0.1)  #loop that repeatedly checks whether the experiment is still running so it decided when to move to next block of code
 
         last_file = self.application.FileManager.GetRecentlyAcquiredFileNames().get_Item(0)
-
         frame_count = self.application.FileManager.OpenFile(last_file, FileAccess.Read)
 
         if frame_count.Regions.Length == 1:
-
             if frame_count.Frames == 1:
-
                 frame = frame_count.GetFrame(0, 0)
                 data = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height], order='F')
-
             else:
                 data = np.array([])
+                
                 for i in range(0, frame_count.Frames):
                     frame = frame_count.GetFrame(0, i)
                     new_frame = np.fromiter(frame.GetData(), 'uint16')
-
-                    new_frame = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height],
-                                           order='F')
+                    new_frame = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height],order='F')
                     data = np.dstack((data, new_frame)) if data.size else new_frame
-
             return data
-
-
         else:
-            
             print('frame_count.Regions is not. Please retry.')
             print(frame_count.Frames)
-        
+            
+        return np.array([[]])  # Return an empty 2D numpy array by default
+
 
     def close(self):
         """
-        Similar to finalize as seen a few lines below. 
+        Closes the Lightfield application without saving the settings.
         """
         self.automation.Dispose()
         print('Closed AddInProcess.exe')
@@ -191,9 +174,7 @@ class Spectrometer():
         Returns the wavelength calibration for a single frame.
         """
         size = self.light.experiment.SystemColumnCalibration.get_Length()
-
         result = np.empty(size)
-
         for i in range(size):
             result[i] = self.light.experiment.SystemColumnCalibration[i]
 
@@ -206,7 +187,6 @@ class Spectrometer():
         """
         # this avoids bug where if step and glue is selected, doesn't allow setting center wavelength
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-
         return self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
 
     @property
@@ -233,9 +213,7 @@ class Spectrometer():
         break_down = False
 
         if break_down:
-
             import re
-
             for g in GRATINGS:
                 match = re.search(r"\[(\d+\.?\d+[nu]m),(\d+)\]\[(\d+)\]\[(\d+)\])", g)
                 blaze, g_per_mm, slot, turret = match.groups()
@@ -278,16 +256,20 @@ class Spectrometer():
         return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureReading)
 
     @property
-    def sensor_setpoint(self):
+    def temperature_sensor_setpoint(self):
         """
         Returns the sensor setpoint temperature (celcius).
         """
         return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureSetPoint)
 
-    @sensor_setpoint.setter
-    def sensor_setpoint(self, deg_C):
+    @temperature_sensor_setpoint.setter
+    def temperature_sensor_setpoint(self, deg_C):
         """
         Sets the sensor target temperature (in degrees Celsius) to deg_C.
+        This function retrieves image data, with particular attention to the camera's configuration determined by the `temperature_sensor_setpoint`. 
+        The `temperature_sensor_setpoint` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition. 
+        Depending on the setpoint, the behavior or response of the camera sensor might vary.
+
         """
         return self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
 
@@ -305,35 +287,31 @@ class Spectrometer():
         to the start and end wavelengths.
         Please note that the wavelength must be calibrated for this to be useful.
 
-        Note: Wavelength data is not strictly correct, this just interpolates.
-        If you want the true values, use the actual .spe file that is generated.
-        TODO: figure out how step and glue determines which wavelengths are used. 
-        Theory is that this might be done in post processing.
+        Returns:
+        - tuple:
+        - spectrum (numpy.ndarray): The average spectrum obtained from the acquisition.
+        - wavelength (numpy.ndarray): An array of wavelengths corresponding to the spectrum.
         """
 
         lambda_min = wavelength_range[0]
         lambda_max = wavelength_range[1]
 
         try:
-
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, True)
-
         except:
 
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
             print('Unable to perform step and glue, please check settings.')
-
+            
             return
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)
-
+        
         data = self.light.acquire()
-
         spectrum = np.mean(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
-
         wavelength = np.linspace(lambda_min, lambda_max, data.shape[0])
-
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
 
         return spectrum, wavelength
+    
