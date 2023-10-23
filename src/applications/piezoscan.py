@@ -135,6 +135,14 @@ class ScanImage:
             self.fig.canvas.draw()
             
 
+            # draws a x for clicked point
+            for line in self.ax.lines:
+                if line.get_label() == 'pointer':
+                    line.set_marker('')
+            self.ax.plot(event.xdata, event.ydata,'yx', label='pointer')
+            self.fig.canvas.draw()
+            
+
 
 class SidePanel():
     def __init__(self, root, scan_range):
