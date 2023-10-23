@@ -85,7 +85,6 @@ class ScanImage:
         self.ax.set_xlabel('x position (um)')
         self.ax.set_ylabel('y position (um)')
         self.log_data = False
-        self.circle_pos = [0, 0] 
 
     def update(self, model):
 
@@ -125,24 +124,6 @@ class ScanImage:
             else:
                 self.ax.plot(event.xdata, event.ydata, 'yx', label='pointer')
             self.fig.canvas.draw()
-            
-
-            # draws a x for clicked point
-            for line in self.ax.lines:
-                if line.get_label() == 'pointer':
-                    line.set_marker('')
-            self.ax.plot(event.xdata, event.ydata,'yx', label='pointer')
-            self.fig.canvas.draw()
-            
-
-            # draws a x for clicked point
-            for line in self.ax.lines:
-                if line.get_label() == 'pointer':
-                    line.set_marker('')
-            self.ax.plot(event.xdata, event.ydata,'yx', label='pointer')
-            self.fig.canvas.draw()
-            
-
 
 class SidePanel():
     def __init__(self, root, scan_range):
@@ -531,7 +512,7 @@ class MainTkApplication():
                                              data,
                                              coeff)
             self.view.sidepanel.update_go_to_position(**{axis:self.optimized_position[axis]})
-
+            
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
