@@ -85,7 +85,6 @@ class ScanImage:
         self.ax.set_xlabel('x position (um)')
         self.ax.set_ylabel('y position (um)')
         self.log_data = False
-        self.circle_pos = [0, 0] 
 
     def update(self, model):
 
@@ -100,11 +99,6 @@ class ScanImage:
                                                                    model.current_y + model.step_size,
                                                                    model.ymin])
         
-        for line in self.ax.lines:
-                if line.get_label() == 'pos':
-                    line.set_marker('')
-        self.ax.plot(self.circle_pos[0],  self.circle_pos[1], 'ro', label = 'pos')
-
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
         else:
@@ -125,12 +119,10 @@ class ScanImage:
     def onclick(self, event):
         if event.inaxes is self.ax:
             self.onclick_callback(event)
-
-            # draws a x for clicked point
-            for line in self.ax.lines:
-                if line.get_label() == 'pointer':
-                    line.set_marker('')
-            self.ax.plot(event.xdata, event.ydata,'yx', label='pointer')
+            if self.ax.lines:
+                self.ax.lines[0].set_data([[event.xdata], [event.ydata]])
+            else:
+                self.ax.plot(event.xdata, event.ydata, 'yx', label='pointer')
             self.fig.canvas.draw()
             
 
@@ -355,8 +347,11 @@ class MainTkApplication():
             print(f'stage_controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
         x, y  = self.view.sidepanel.go_to_x_position_text.get(),  self.view.sidepanel.go_to_y_position_text.get()
         self.optimized_position['x'] = x
-        self.optimized_position['y']  =y
-        self.view.scan_view.circle_pos = [x,y]
+        self.optimized_position['y'] = y
+        if len(self.view.scan_view.ax.lines) > 1:
+            self.view.scan_view.ax.lines[1].set_data([[x], [y]])
+        else:
+            self.view.scan_view.ax.plot(x, y, 'ro', label = 'pos')
         if len(self.counter_scanner.scanned_count_rate) > 0:
             self.view.scan_view.update(self.counter_scanner)
             self.view.canvas.draw()
