@@ -85,6 +85,7 @@ class ScanImage:
         self.ax.set_xlabel('x position (um)')
         self.ax.set_ylabel('y position (um)')
         self.log_data = False
+        self.circle_pos = [0, 0] 
 
     def update(self, model):
 
@@ -123,6 +124,14 @@ class ScanImage:
                 self.ax.lines[0].set_data([[event.xdata], [event.ydata]])
             else:
                 self.ax.plot(event.xdata, event.ydata, 'yx', label='pointer')
+            self.fig.canvas.draw()
+            
+
+            # draws a x for clicked point
+            for line in self.ax.lines:
+                if line.get_label() == 'pointer':
+                    line.set_marker('')
+            self.ax.plot(event.xdata, event.ydata,'yx', label='pointer')
             self.fig.canvas.draw()
             
 
