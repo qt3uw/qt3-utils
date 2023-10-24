@@ -143,19 +143,6 @@ class Application(tk.Frame):
         row += 1
         bold_font = ('Helvetica', 16, 'bold')
         tk.Label(text_frame, text = "Save Options", font=bold_font).grid(row=row, column=1, pady=10)
-
-        #Code below is to test the save and load options feature
-        row += 1
-        bold_font = ('Helvetica', 16, 'bold')
-        tk.Label(text_frame, text="Settings Options", font=bold_font).grid(row=row, column=1, pady=10)
-
-        row += 1
-        self.load_settings_button = tk.Button(text_frame, text="Load Settings", command=self.load_settings)
-        self.load_settings_button.grid(row=row, column=0, pady=10)
-
-        self.save_settings_button = tk.Button(text_frame, text="Save Settings", command=self.save_settings)
-        self.save_settings_button.grid(row=row, column=1, pady=10)
-        #Code above is to test the save and load options feature
         
         row += 1
         tk.Label(text_frame, text="Enter Data File Name").grid(row=row, column=0, pady=5)
@@ -318,47 +305,6 @@ class Application(tk.Frame):
                 messagebox.showinfo("Info", "Image saved successfully!")
         else:
             messagebox.showerror("Invalid input", "Please fix your file name, do not put a file extension.")
-
-    #Code below is added to be able to enable the save and load settings functionality
-
-    def save_settings(self):
-        '''
-        This function is called when the user clicks the 'Save Settings' button.
-        It saves the current GUI settings in a pickle file.
-        '''
-        settings = {}
-        for key, widget in self.text_fields.items():
-            settings[key] = widget.get()
-
-        settings["color_map"] = self.color_var.get()
-
-        with open('settings.pkl', 'wb') as file:
-            pickle.dump(settings, file)
-
-        messagebox.showinfo("Info", "Settings saved successfully!")
-    
-    def load_settings(self):
-        '''
-        This function is called when the user clicks the 'Load Settings' button.
-        It loads the settings from a pickle file and updates the GUI.
-        '''
-        if not os.path.exists('settings.pkl'):
-            messagebox.showerror("Error", "Settings file not found!")
-            return
-
-        with open('settings.pkl', 'rb') as file:
-            settings = pickle.load(file)
-
-        for key, value in settings.items():
-            if key in self.text_fields:
-                self.text_fields[key].delete(0, tk.END)
-                self.text_fields[key].insert(0, value)
-
-        self.color_var.set(settings.get("color_map", "Reds"))
-
-        messagebox.showinfo("Info", "Settings loaded successfully!")
-        
-    #Code above is added to be able to enable the save and load settings functionality
 
 root = tk.Tk()
 app = Application(master=root)
