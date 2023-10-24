@@ -67,10 +67,10 @@ class Application(tk.Frame):
         self.text_fields["Exposure Time (ms)"].insert(0, "2000") 
     
         row += 1
-        tk.Label(text_frame, text="Sensor Setpoint (°C)").grid(row=row, column=0, pady=5)
-        self.text_fields["Sensor Setpoint (°C)"] = tk.Entry(text_frame, width=10)
-        self.text_fields["Sensor Setpoint (°C)"].grid(row=row, column=1, pady=5)
-        self.text_fields["Sensor Setpoint (°C)"].insert(0, "-70")
+        tk.Label(text_frame, text="Temperature Sensor Setpoint (°C)").grid(row=row, column=0, pady=5)
+        self.text_fields["Temperature Sensor Setpoint (°C)"] = tk.Entry(text_frame, width=10)
+        self.text_fields["Temperature Sensor Setpoint (°C)"].grid(row=row, column=1, pady=5)
+        self.text_fields["Temperature Sensor Setpoint (°C)"].insert(0, "-70")
 
         row += 1
         tk.Label(text_frame, text="Center Wavelength (nm)").grid(row=row, column=0, pady=5)
