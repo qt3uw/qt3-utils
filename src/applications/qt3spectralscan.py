@@ -23,6 +23,9 @@ from princeton import Spectrometer
 
 matplotlib.use('TKAgg')
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 class Application(tk.Frame):
     def __init__(self, master=None):

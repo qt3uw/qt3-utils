@@ -1,6 +1,10 @@
 import os
+import logging
 import numpy as np
 from time import sleep
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 try:
     import clr
@@ -22,7 +26,7 @@ try:
     from System import String
     from System.IO import FileAccess
 except Exception as e:
-    print(f"Exception occurred during import: {e}")
+    logger.error(f"Exception occurred during import: {e}")
 
 
 class LightfieldApp:
@@ -56,7 +60,7 @@ class LightfieldApp:
         properly.
         """
         self.automation.Dispose()
-        print('Closed AddInProcess.exe')
+        logger.info('Closed AddInProcess.exe')
 
     def set(self, setting, value):
         """
@@ -68,10 +72,10 @@ class LightfieldApp:
                 self.experiment.SetValue(setting, value)
             else:
                 # TODO: might need to add a proper exception
-                print('Invalid value: {} for setting: {}.'.format(value, setting))
+                logger.error(f'Invalid value: {value} for setting: {setting}.')
         else:
             # TODO: might need to add a proper exception
-            print('Invalid setting:{}'.format(setting))
+            logger.error(f'Invalid setting: {setting}.')
 
     def get(self, setting):
         """
@@ -82,7 +86,7 @@ class LightfieldApp:
             value = self.experiment.GetValue(setting)
         else:
             value = []
-            print('Invalid setting: {}'.format(setting))
+            logger.error(f'Invalid setting: {setting}.')
 
         return value
 
@@ -129,8 +133,8 @@ class LightfieldApp:
                     data = np.dstack((data, new_frame)) if data.size else new_frame
             return data
         else:
-            print('frame_count.Regions is not. Please retry.')
-            print(frame_count.Frames)
+            logger.warning('frame_count.Regions is not valid. Please retry.')
+            logger.info('Frame count: %s', frame_count.Frames)
             
         return np.array([[]])  # Return an empty 2D numpy array by default
 
@@ -140,7 +144,7 @@ class LightfieldApp:
         Closes the Lightfield application without saving the settings.
         """
         self.automation.Dispose()
-        print('Closed AddInProcess.exe')
+        logger.info('Closed AddInProcess.exe')
 
 
 class Spectrometer():
@@ -203,7 +207,7 @@ class Spectrometer():
         """
         # TODO: figure out the format for setting this
 
-        print('still need to figure out the format for this')
+        logger.info('Will still need to figure out the format for this')
 
     @property
     def gratings(self):
@@ -301,7 +305,7 @@ class Spectrometer():
         except:
 
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-            print('Unable to perform step and glue, please check settings.')
+            logger.error('Unable to perform step and glue, please check settings.')
             
             return
 
