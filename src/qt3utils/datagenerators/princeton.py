@@ -87,7 +87,6 @@ class LightfieldApp:
         else:
             value = []
             logger.error(f'Invalid setting: {setting}.')
-
         return value
 
     def load_experiment(self, value):
@@ -302,12 +301,11 @@ class Spectrometer():
 
         try:
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, True)
-        except:
-
+        except Exception as e:
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-            logger.error('Unable to perform step and glue, please check settings.')
-            
+            print(f'Unable to perform step and glue due to error: {e}')
             return
+
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)
@@ -316,6 +314,5 @@ class Spectrometer():
         spectrum = np.mean(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
         wavelength = np.linspace(lambda_min, lambda_max, data.shape[0])
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-
         return spectrum, wavelength
     
