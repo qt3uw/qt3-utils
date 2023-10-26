@@ -3,6 +3,7 @@ import os
 
 import pickle
 import threading
+import logging
 
 import tkinter as tk
 from tkinter import messagebox
@@ -20,15 +21,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from princeton import Spectrometer
 
-
 matplotlib.use('TKAgg')
-
-piezo_write_channels = 'ao0,ao1,ao2'
-piezo_read_channels = 'ai0,ai1,ai2' 
-
-controller = nipiezojenapy.PiezoControl(device_name = 'Dev1',
-                                        write_channels = piezo_write_channels.split(','),
-                                        read_channels = piezo_read_channels.split(','))
 
 
 class Application(tk.Frame):
@@ -304,6 +297,15 @@ class Application(tk.Frame):
             messagebox.showerror("Invalid input", "Please fix your file name, do not put a file extension.")
 
 def main():
+
+    # Necesaary variables for piezo 
+    #TODO: Implement a feature so that the lines are captured by command line options, along with any other optins that are needed to talk to the spectrometer
+    piezo_write_channels = 'ao0,ao1,ao2'
+    piezo_read_channels = 'ai0,ai1,ai2' 
+
+    controller = nipiezojenapy.PiezoControl(device_name = 'Dev1',
+                                            write_channels = piezo_write_channels.split(','),
+                                            read_channels = piezo_read_channels.split(','))
     # Initialize spectrometer
     s = Spectrometer()
     s.initialize()
