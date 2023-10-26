@@ -30,9 +30,6 @@ controller = nipiezojenapy.PiezoControl(device_name = 'Dev1',
                                         write_channels = piezo_write_channels.split(','),
                                         read_channels = piezo_read_channels.split(','))
 
-# Initialize spectrometer
-s = Spectrometer()
-s.initialize()
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -40,9 +37,9 @@ class Application(tk.Frame):
         self.master = master
         self.grid()
         self.create_widgets()
-        self.colors = ['reds', 'blues', 'greens', 'greys', 'purples']
+        self.colors = ['Reds', 'Blues', 'Greens', 'Greys', 'Purples']
         self.color_var = tk.StringVar(self)
-        self.color_var.set('reds')  
+        self.color_var.set('Reds')  
     
 
     def create_widgets(self):
@@ -306,8 +303,19 @@ class Application(tk.Frame):
         else:
             messagebox.showerror("Invalid input", "Please fix your file name, do not put a file extension.")
 
-root = tk.Tk()
-app = Application(master=root)
-app.mainloop()
-s.finalize()
+def main():
+    # Initialize spectrometer
+    s = Spectrometer()
+    s.initialize()
+
+    # Initializing tkinter app
+    root = tk.Tk()
+    app = Application(master=root)
+    app.mainloop()
+
+    #Finalizing the spectrometer
+    s.finalize()
+
+if __name__ == "__main__":
+    main()
 
