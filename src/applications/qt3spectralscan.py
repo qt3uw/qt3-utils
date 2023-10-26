@@ -26,7 +26,6 @@ matplotlib.use('TKAgg')
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 class Application(tk.Frame):
     def __init__(self, master=None):
         super().__init__(master)
@@ -301,6 +300,10 @@ class Application(tk.Frame):
 
 def main():
 
+    # Initialize spectrometer
+    s = Spectrometer()
+    s.initialize()
+
     # Necesaary variables for piezo 
     #TODO: Implement a feature so that the lines are captured by command line options, along with any other optins that are needed to talk to the spectrometer
     piezo_write_channels = 'ao0,ao1,ao2'
@@ -309,9 +312,6 @@ def main():
     controller = nipiezojenapy.PiezoControl(device_name = 'Dev1',
                                             write_channels = piezo_write_channels.split(','),
                                             read_channels = piezo_read_channels.split(','))
-    # Initialize spectrometer
-    s = Spectrometer()
-    s.initialize()
 
     # Initializing tkinter app
     root = tk.Tk()
