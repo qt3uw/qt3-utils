@@ -85,6 +85,8 @@ class ScanImage:
         self.ax.set_xlabel('x position (um)')
         self.ax.set_ylabel('y position (um)')
         self.log_data = False
+        self.pointer_line2d = None
+        self.position_line2d = None
 
     def update(self, model):
 
@@ -116,13 +118,28 @@ class ScanImage:
     def set_onclick_callback(self, f):
         self.onclick_callback = f
 
+    def update_pointer_indicator(self, x_position, y_position):
+        """
+        Updates the pointer marker on the scan image to show a proposed new position on the image.
+        """
+        if self.pointer_line2d:
+            self.pointer_line2d[0].set_data([[x_position], [y_position]])
+        else:
+            self.pointer_line2d = self.ax.plot(x_position, y_position, 'yx', label='pointer')
+
+    def update_position_indicator(self, x_position, y_position):
+        """
+        Updates the position marker on the scan image to show the current position on the image.
+        """
+        if self.position_line2d:
+            self.position_line2d[0].set_data([[x_position], [y_position]])
+        else:
+            self.position_line2d = self.ax.plot(x_position, y_position, 'ro', label='pos')
+
     def onclick(self, event):
         if event.inaxes is self.ax:
             self.onclick_callback(event)
-            if self.ax.lines:
-                self.ax.lines[0].set_data([[event.xdata], [event.ydata]])
-            else:
-                self.ax.plot(event.xdata, event.ydata, 'yx', label='pointer')
+            self.update_pointer_indicator(event.xdata, event.ydata)
             self.fig.canvas.draw()
 
 class SidePanel():
@@ -346,10 +363,8 @@ class MainTkApplication():
         x, y  = self.view.sidepanel.go_to_x_position_text.get(),  self.view.sidepanel.go_to_y_position_text.get()
         self.optimized_position['x'] = x
         self.optimized_position['y'] = y
-        if len(self.view.scan_view.ax.lines) > 1:
-            self.view.scan_view.ax.lines[1].set_data([[x], [y]])
-        else:
-            self.view.scan_view.ax.plot(x, y, 'ro', label = 'pos')
+        self.view.scan_view.update_position_indicator(x, y)
+
         if len(self.counter_scanner.scanned_count_rate) > 0:
             self.view.scan_view.update(self.counter_scanner)
             self.view.canvas.draw()
