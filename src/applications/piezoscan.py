@@ -85,6 +85,8 @@ class ScanImage:
         self.ax.set_xlabel('x position (um)')
         self.ax.set_ylabel('y position (um)')
         self.log_data = False
+        self.pointer_line2d = None
+        self.position_line2d = None
 
     def update(self, model):
 
@@ -98,6 +100,7 @@ class ScanImage:
                                                                    model.xmax + model.step_size,
                                                                    model.current_y + model.step_size,
                                                                    model.ymin])
+        
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
         else:
@@ -115,11 +118,29 @@ class ScanImage:
     def set_onclick_callback(self, f):
         self.onclick_callback = f
 
+    def update_pointer_indicator(self, x_position, y_position):
+        """
+        Updates the pointer marker on the scan image to show a proposed new position on the image.
+        """
+        if self.pointer_line2d:
+            self.pointer_line2d[0].set_data([[x_position], [y_position]])
+        else:
+            self.pointer_line2d = self.ax.plot(x_position, y_position, 'yx', label='pointer')
+
+    def update_position_indicator(self, x_position, y_position):
+        """
+        Updates the position marker on the scan image to show the current position on the image.
+        """
+        if self.position_line2d:
+            self.position_line2d[0].set_data([[x_position], [y_position]])
+        else:
+            self.position_line2d = self.ax.plot(x_position, y_position, 'ro', label='pos')
+
     def onclick(self, event):
         if event.inaxes is self.ax:
-            #todo: draw a circle around clicked point? Maybe with a high alpha, so that its faint
             self.onclick_callback(event)
-
+            self.update_pointer_indicator(event.xdata, event.ydata)
+            self.fig.canvas.draw()
 
 class SidePanel():
     def __init__(self, root, scan_range):
@@ -339,8 +360,14 @@ class MainTkApplication():
             self.counter_scanner.stage_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
         else:
             print(f'stage_controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
-        self.optimized_position['x'] = self.view.sidepanel.go_to_x_position_text.get()
-        self.optimized_position['y'] = self.view.sidepanel.go_to_y_position_text.get()
+        x, y  = self.view.sidepanel.go_to_x_position_text.get(),  self.view.sidepanel.go_to_y_position_text.get()
+        self.optimized_position['x'] = x
+        self.optimized_position['y'] = y
+        self.view.scan_view.update_position_indicator(x, y)
+
+        if len(self.counter_scanner.scanned_count_rate) > 0:
+            self.view.scan_view.update(self.counter_scanner)
+            self.view.canvas.draw()
 
     def go_to_z(self, event = None):
         if self.counter_scanner.stage_controller:
@@ -500,7 +527,7 @@ class MainTkApplication():
                                              data,
                                              coeff)
             self.view.sidepanel.update_go_to_position(**{axis:self.optimized_position[axis]})
-
+            
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
