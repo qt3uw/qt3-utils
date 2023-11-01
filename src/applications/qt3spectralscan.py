@@ -4,6 +4,7 @@ import os
 import pickle
 import threading
 
+import argparse
 import tkinter as tk
 from tkinter import messagebox
 import tkinter.filedialog as filedialog
@@ -21,6 +22,20 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 from princeton import Spectrometer
 
 matplotlib.use('TKAgg')
+
+
+parser = argparse.ArgumentParser(description="A tool for controlling piezo channels.")
+
+parser.add_argument('--piezo-write-channels', metavar='<ch0,ch1,ch2>', default='ao0,ao1,ao2', type=str,
+                    help='List of analog output channels used to control the piezo position')
+
+parser.add_argument('--piezo-read-channels', metavar='<ch0,ch1,ch2>', default='ai0,ai1,ai2', type=str,
+                    help='List of analog input channels used to read the piezo position')
+
+args = parser.parse_args()
+
+write_channels = args.piezo_write_channels.split(',')
+read_channels = args.piezo_read_channels.split(',')
 
 
 class Application(tk.Frame):
@@ -300,15 +315,6 @@ def main():
     # Initialize spectrometer
     s = Spectrometer()
     s.initialize()
-
-    # Necesaary variables for piezo 
-    #TODO: Implement a feature so that the lines are captured by command line options, along with any other optins that are needed to talk to the spectrometer
-    piezo_write_channels = 'ao0,ao1,ao2'
-    piezo_read_channels = 'ai0,ai1,ai2' 
-
-    controller = nipiezojenapy.PiezoControl(device_name = 'Dev1',
-                                            write_channels = piezo_write_channels.split(','),
-                                            read_channels = piezo_read_channels.split(','))
 
     # Initializing tkinter app
     root = tk.Tk()
