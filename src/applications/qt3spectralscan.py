@@ -23,20 +23,17 @@ from princeton import Spectrometer
 
 matplotlib.use('TKAgg')
 
-
 parser = argparse.ArgumentParser(description="A tool for controlling piezo channels.")
-
 parser.add_argument('--piezo-write-channels', metavar='<ch0,ch1,ch2>', default='ao0,ao1,ao2', type=str,
                     help='List of analog output channels used to control the piezo position')
-
 parser.add_argument('--piezo-read-channels', metavar='<ch0,ch1,ch2>', default='ai0,ai1,ai2', type=str,
                     help='List of analog input channels used to read the piezo position')
-
 args = parser.parse_args()
-
 write_channels = args.piezo_write_channels.split(',')
 read_channels = args.piezo_read_channels.split(',')
 
+# constants
+MIN_WAVELENGTH_DIFFERENCE = 117
 
 class Application(tk.Frame):
     def __init__(self, master=None):
@@ -224,8 +221,8 @@ class Application(tk.Frame):
             wave_start = float(self.text_fields["Wave Start (nm)"].get())
             wave_end = float(self.text_fields["Wave End (nm)"].get())
             
-            if wave_end - wave_start < 117:
-                raise ValueError("End wavelength must be at least 117 units greater than start wavelength.")
+            if wave_end - wave_start < MIN_WAVELENGTH_DIFFERENCE:
+                raise ValueError(f"End wavelength must be at least {MIN_WAVELENGTH_DIFFERENCE} units greater than start wavelength.")
             
 
             xs = np.linspace(xs_start, xs_end, num=num)
