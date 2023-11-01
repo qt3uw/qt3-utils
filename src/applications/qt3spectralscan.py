@@ -16,10 +16,7 @@ import matplotlib
 import numpy as np
 import nipiezojenapy
 
-# Add the path to the qt3utils folder to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'qt3utils', 'datagenerators')))
-
-from princeton import Spectrometer
+from qt3utils.datagenerators.princeton import Spectrometer
 
 matplotlib.use('TKAgg')
 
