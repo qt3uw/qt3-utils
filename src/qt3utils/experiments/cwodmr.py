@@ -209,6 +209,3 @@ class CWODMR(qt3utils.experiments.common.Experiment):
             data = np.array(data, dtype=object)
             data = data[data[:,0].argsort()] #sorts the data by values in zeroth column... this is necessary if random_order = True
             return data
-
-    def build_spectrum_animator(self):
-        pass
