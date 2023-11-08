@@ -57,8 +57,6 @@ parser.add_argument('-aut', '--animation-update-interval', metavar = 'millisecon
                     This is the time delay between calls to acquire new data.
                     You should be limited by the data acquisition time = N / clock_rate.''')
 
-parser.add_argument('--console', action = 'store_true',
-                    help='Run as console app -- just the figure without buttons.')
 args = parser.parse_args()
 
 
@@ -190,26 +188,10 @@ def build_data_model():
                                                                           signal_counter = args.signal_counter)
     return data_acquisition_model
 
-def run_console():
-
-    view = ScopeFigure(args.scope_width)
-    model = build_data_model()
-    model.start()
-    ani = animation.FuncAnimation(view.fig, view.update, model.yield_count_rate,
-                                  init_func = view.init,
-                                  interval=args.animation_update_interval, blit=False)
-    plt.show()
-    model.close()
-
-def run_gui():
-    tkapp = MainTkApplication(build_data_model())
-    tkapp.run()
 
 def main():
-    if args.console:
-        run_console()
-    else:
-        run_gui()
+    tkapp = MainTkApplication(build_data_model())
+    tkapp.run()
 
 if __name__ == '__main__':
     main()
