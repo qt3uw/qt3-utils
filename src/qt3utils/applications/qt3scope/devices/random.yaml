@@ -1,0 +1,7 @@
+QT3Scope:
+  Counter:
+    import_path : qt3utils.applications.qt3scope.devices.random
+    class_name  : QT3ScopeRandomDataController
+    configure : 
+      simulate_single_light_source : False
+      num_data_samples_per_batch : 10
