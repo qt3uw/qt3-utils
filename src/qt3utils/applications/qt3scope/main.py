@@ -226,7 +226,8 @@ class MainTkApplication():
                                                      self.data_acquisition_model.yield_count_rate,
                                                      init_func = self.view.scope_view.init,
                                                      interval=args.animation_update_interval,
-                                                     blit=False)
+                                                     blit=False,
+                                                     cache_frame_data=False)
         self.data_acquisition_model.start()
         self.animation.resume()
 
