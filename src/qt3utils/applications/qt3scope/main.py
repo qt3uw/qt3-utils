@@ -21,6 +21,7 @@ import qt3utils.nidaq
 import qt3utils.datagenerators as datasources
 
 import qt3utils.applications.qt3scope.devices as qt3devices
+import qt3utils.applications.qt3scope.interface as qt3interface
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +38,19 @@ parser.add_argument('-aut', '--animation-update-interval', metavar = 'millisecon
                     help='''Sets the animation update period, t, (in milliseconds).
                     This is the time delay between calls to acquire new data.
                     You should be limited by the data acquisition time = N / clock_rate.''')
+parser.add_argument('-v', '--verbose', type=int, default=1,
+                    help='verbose = 0 sets to quiet, 1 sets to info, 2 sets to debug".')
 
 args = parser.parse_args()
+
+logging.basicConfig()
+
+if args.verbose == 0:
+    logger.setLevel(logging.WARNING)
+if args.verbose == 1:
+    logger.setLevel(logging.INFO)
+if args.verbose == 2:
+    logger.setLevel(logging.DEBUG)
 
 DEFAULT_HARDWARE = 'NIDAQ Edge Counter'
 RANDOM_DATA_GENERATOR = 'Random Data Generator'
@@ -199,14 +211,14 @@ class MainTkApplication():
         self.animation = None
 
     def run(self):
-        print('run')
+        logger.debug('run')
         self.root.geometry("1400x600")
         self.root.title("QT3Scope: NIDAQ Digital Input Count Rate")
         self.root.deiconify()
         self.root.mainloop()
 
     def stop_scope(self, event = None):
-        print('clicked stop')
+        logger.debug('clicked stop')
         self.data_acquisition_model.stop()
         if self.animation is not None:
             self.animation.pause()
@@ -218,7 +230,7 @@ class MainTkApplication():
         self.view.get_print_hardware_config_button().config(state=Tk.NORMAL)
 
     def start_scope(self, event = None):
-        print('clicked start')
+        logger.debug('clicked start')
         if self.animation is None:
             self.view.canvas.draw_idle()
             self.animation = animation.FuncAnimation(self.view.scope_view.fig,
@@ -238,20 +250,20 @@ class MainTkApplication():
         self.view.get_print_hardware_config_button().config(state=Tk.DISABLED)
 
     def on_closing(self):
-        print('closing')
+        logger.debug('closing')
         try:
             self.stop_scope()
             self.data_acquisition_model.close()
             self.root.quit()
             self.root.destroy()
         except Exception as e:
-            logger.debug(e)
+            logger.warning(e)
             pass
 
     def hardware_option_callback(self, *args):
-        print(f"New hardware option selected: {self.view.get_hardware_option()}")
+        logger.info(f"New hardware option selected: {self.view.get_hardware_option()}")
 
-        print(f"Passed args: {args}")
+        logger.debug(f"Passed args: {args}")
         # will probly need to reinstantiate the animation here.
         with pkg_resources.resource_stream(__name__, SUPPORTED_HARDWARE[self.view.get_hardware_option()]) as stream:
             config = yaml.safe_load(stream)
@@ -263,7 +275,8 @@ class MainTkApplication():
 
         counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_COUNTER_NAME]
 
-        print(counter_config)
+        logger.info("loading from configuration")
+        logger.info(counter_config)
 
         # Dynamically import the module
         module = importlib.import_module(counter_config['import_path'])

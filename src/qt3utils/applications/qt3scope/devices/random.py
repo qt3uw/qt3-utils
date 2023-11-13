@@ -7,19 +7,20 @@ from qt3utils.applications.qt3scope.interface import QT3ScopeDataControllerInter
 
 class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
 
-    def __init__(self):
+    def __init__(self, logger):
+        super().__init__(logger)
         self.data_generator = daqsamplers.RandomRateCounter()
 
     def configure(self, **kw_config):
         """
         This method is used to configure the data controller.
         """
-        print("calling configure on the random data controller")
+        self.logger.debug("calling configure on the random data controller")
 
         # TODO -- modify the data generator so that these are properties that can be set rather than
         # accessing the private variables directly.
         self.last_config = kw_config
-        print(kw_config)
+        self.logger.debug(kw_config)
 
         self.data_generator.simulate_single_light_source = kw_config.get('simulate_single_light_source', False)
         self.data_generator.num_data_samples_per_batch = kw_config.get('num_data_samples_per_batch', 10)
@@ -48,6 +49,7 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
 
         config_win = tk.Toplevel(gui_root)
         config_win.geometry('400x200')
+        config_win.title('RandomRateCounter Settings')
 
         row = 0
         win_title = tk.Label(config_win, text="RandomRateCounter Settings", font='Helvetica 16')
@@ -72,7 +74,7 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         row += 1
         tk.Button(config_win,
                   text='  Set  ',
-                  command=lambda: self.set_from_gui(**gui_info)).grid(row=row, column=0)
+                  command=lambda: self._set_from_gui(**gui_info)).grid(row=row, column=0)
 
         tk.Button(config_win,
                   text='Close',
@@ -80,16 +82,13 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
 
         config_win.grab_set()
 
-    def set_from_gui(self, **kwargs):
+    def _set_from_gui(self, **kwargs):
         """
         This method is used to set the data controller from the GUI.
         """
-
-        for k, v in kwargs.items():
-            kwargs[k] = v.get()
-
-        print(kwargs)
-        self.configure(**kwargs)
+        outkwargs = {k:v.get() for k, v in kwargs.items()}
+        self.logger.info(outkwargs)
+        self.configure(**outkwargs)
 
     def print_config(self) -> None:
         print("Random Data Controller Configuration:")

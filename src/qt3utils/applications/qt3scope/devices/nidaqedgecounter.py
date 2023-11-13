@@ -8,14 +8,14 @@ from qt3utils.applications.qt3scope.interface import QT3ScopeDataControllerInter
 
 class QT3ScopeNIDAQEdgeCounterController(QT3ScopeDataControllerInterface):
 
-    def __init__(self):
-        pass
+    def __init__(self, logger):
+        super().__init__(logger)
 
     def configure(self, **kw_config):
         """
         This method is used to configure the data controller.
         """
-        print("calling configure on the nidaq edge counter data controller")
+        self.logger.debug("calling configure on the nidaq edge counter data controller")
         self.last_config = kw_config
 
     def start(self) -> Union[dict, type(None)]:
@@ -37,10 +37,11 @@ class QT3ScopeNIDAQEdgeCounterController(QT3ScopeDataControllerInterface):
         """
         This method launches a GUI window to configure the data controller.
         """
-        print('nidaq edge counter configure view')
+        self.logger.debug('nidaq edge counter configure view')
 
     def print_config(self) -> None:
-        print(self.last_config)
+        print('NIDAQ edge counter config')
+        print(self.last_config)  # we dont' use the logger because we want to be sure this is printed to stdout
 
     def configure_from_yaml(self) -> None:
         """

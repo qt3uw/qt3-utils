@@ -5,8 +5,8 @@ import tkinter as Tk
 
 class QT3ScopeDataControllerInterface(abc.ABC):
 
-    def __init__(self):
-        pass
+    def __init__(self, logger):
+        self.logger = logger
 
     def configure(self, **kw_config):
         """
