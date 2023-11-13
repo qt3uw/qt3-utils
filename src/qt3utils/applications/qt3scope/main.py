@@ -1,4 +1,3 @@
-import time
 import argparse
 import collections
 import tkinter as Tk
@@ -8,19 +7,11 @@ import yaml
 import importlib
 
 import numpy as np
-from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import nidaqmx
-
-import qt3utils.nidaq
-import qt3utils.datagenerators as datasources
-
-import qt3utils.applications.qt3scope.devices as qt3devices
 import qt3utils.applications.qt3scope.interface as qt3interface
 
 logger = logging.getLogger(__name__)
@@ -187,8 +178,8 @@ class SidePanel():
         self.hardware_config_button = Tk.Button(frame, text="Configure HW")
         self.hardware_config_button.pack(side="top", fill=Tk.BOTH)
 
-        self.print_hardware_config = Tk.Button(frame, text="Print Config")
-        self.print_hardware_config.pack(side="bottom", fill=Tk.BOTH)
+        self.print_hardware_config = Tk.Button(frame, text="Print HW Config")
+        self.print_hardware_config.pack(side="top", fill=Tk.BOTH)
 
 
 class MainTkApplication():
