@@ -22,8 +22,14 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         self.last_config = kw_config
         self.logger.debug(kw_config)
 
-        self.data_generator.simulate_single_light_source = kw_config.get('simulate_single_light_source', False)
-        self.data_generator.num_data_samples_per_batch = kw_config.get('num_data_samples_per_batch', 10)
+        self.data_generator.simulate_single_light_source = kw_config.get('simulate_single_light_source',
+                                                                         self.data_generator.simulate_single_light_source)
+        self.data_generator.num_data_samples_per_batch = kw_config.get('num_data_samples_per_batch',
+                                                                       self.data_generator.num_data_samples_per_batch)
+        self.data_generator.default_offset = kw_config.get('default_offset',
+                                                           self.data_generator.default_offset)
+        self.data_generator.signal_noise_amp = kw_config.get('signal_noise_amp',
+                                                             self.data_generator.signal_noise_amp)
         ## NB - I don't like how all of these configuration values are being accessed by string name.
 
     def start(self) -> Union[dict, type(None)]:
@@ -52,10 +58,6 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         config_win.title('RandomRateCounter Settings')
 
         row = 0
-        win_title = tk.Label(config_win, text="RandomRateCounter Settings", font='Helvetica 16')
-        win_title.grid(row=row, column=0, columnspan=2, pady=10)
-
-        row += 1
         simulate_single_light_source_var = tk.BooleanVar()
         simulate_single_light_source_var.set(self.data_generator.simulate_single_light_source)
         simToggle = tk.Checkbutton(config_win,
@@ -63,11 +65,38 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
                                    variable=simulate_single_light_source_var,
                                    onvalue=True,
                                    offvalue=False)
-        simToggle.grid(row=row, column=0, columnspan=2, pady=10)
+        simToggle.grid(row=row, column=0, columnspan=2, pady=10, padx=10)
 
-        # pack variables into a dictionary to pass to the set_from_gui method
+        row += 1
+        n_label = tk.Label(config_win, text="N per batch")
+        n_label.grid(row=row, column=0, padx=10)
+        n_var = tk.IntVar()
+        n_var.set(self.data_generator.num_data_samples_per_batch)
+        n_entry = tk.Entry(config_win, textvariable=n_var)
+        n_entry.grid(row=row, column=1)
+
+        row += 1
+        offset_label = tk.Label(config_win, text="Default Offset")
+        offset_label.grid(row=row, column=0, padx=10)
+        offset_var = tk.IntVar()
+        offset_var.set(self.data_generator.default_offset)
+        offset_entry = tk.Entry(config_win, textvariable=offset_var)
+        offset_entry.grid(row=row, column=1)
+
+        row += 1
+        signal_noise_amp_label = tk.Label(config_win, text="Signal to Noise")
+        signal_noise_amp_label.grid(row=row, column=0, padx=10)
+        signal_noise_amp_var = tk.DoubleVar()
+        signal_noise_amp_var.set(self.data_generator.signal_noise_amp)
+        signal_noise_amp_entry = tk.Entry(config_win, textvariable=signal_noise_amp_var)
+        signal_noise_amp_entry.grid(row=row, column=1)
+        
+        # pack variables into a dictionary to pass to the _set_from_gui method
         gui_info = {
             'simulate_single_light_source': simulate_single_light_source_var,
+            'num_data_samples_per_batch': n_var,
+            'default_offset': offset_var,
+            'signal_noise_amp': signal_noise_amp_var
         }
 
         # add a button to set the values and close the window
