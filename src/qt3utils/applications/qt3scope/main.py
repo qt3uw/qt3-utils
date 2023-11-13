@@ -52,12 +52,6 @@ CONFIG_FILE_APPLICATION_NAME = 'QT3Scope'
 CONFIG_FILE_COUNTER_NAME = 'Counter'
 
 
-def open_config_for_hardware(hardware_name):
-    with pkg_resources.resource_stream(__name__, SUPPORTED_HARDWARE[hardware_name]) as stream:
-        config = yaml.safe_load(stream)
-    return config
-
-
 class ScopeFigure:
 
     def __init__(self, width=50, fig = None, ax = None):
@@ -106,7 +100,6 @@ class ScopeFigure:
         return self.line,
 
 
-
 class MainApplicationView():
     def __init__(self, app_controller):
         frame = Tk.Frame(app_controller.root)
@@ -138,6 +131,9 @@ class MainApplicationView():
 
     def get_hardware_config_button(self) -> Tk.Button:
         return self.sidepanel.hardware_config_button
+
+    def get_hardware_config_from_yaml_button(self) -> Tk.Button:
+        return self.sidepanel.hardware_config_from_yaml_button
 
     def get_print_hardware_config_button(self) -> Tk.Button:
         return self.sidepanel.print_hardware_config
@@ -175,8 +171,11 @@ class SidePanel():
 
         self.hardware_menu.pack(side="top", fill=Tk.BOTH)
 
-        self.hardware_config_button = Tk.Button(frame, text="Configure HW")
+        self.hardware_config_button = Tk.Button(frame, text="Configure HW GUI")
         self.hardware_config_button.pack(side="top", fill=Tk.BOTH)
+
+        self.hardware_config_from_yaml_button = Tk.Button(frame, text="Configure HW YAML")
+        self.hardware_config_from_yaml_button.pack(side="top", fill=Tk.BOTH)
 
         self.print_hardware_config = Tk.Button(frame, text="Print HW Config")
         self.print_hardware_config.pack(side="top", fill=Tk.BOTH)
@@ -190,13 +189,14 @@ class MainTkApplication():
 
         self.view.set_hardware_option(init_hardware_name)
 
-        init_config_dict = open_config_for_hardware(init_hardware_name)
+        init_config_dict = self.open_config_for_hardware(init_hardware_name)
         self.load_daq_from_config_dict(init_config_dict)
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
         self.view.get_start_button().bind("<Button>", self.start_scope)
         self.view.get_stop_button().bind("<Button>", self.stop_scope)
+        self.view.get_hardware_config_from_yaml_button().bind("<Button>", self.configure_from_yaml)
         self.view.get_print_hardware_config_button().bind("<Button>", lambda e: self.data_acquisition_model.print_config())
 
         self.animation = None
@@ -218,6 +218,7 @@ class MainTkApplication():
         self.view.get_stop_button().config(state=Tk.NORMAL)
         self.view.get_hardware_menu().config(state=Tk.NORMAL)
         self.view.get_hardware_config_button().config(state=Tk.NORMAL)
+        self.view.get_hardware_config_from_yaml_button().config(state=Tk.NORMAL)
         self.view.get_print_hardware_config_button().config(state=Tk.NORMAL)
 
     def start_scope(self, event = None):
@@ -238,6 +239,7 @@ class MainTkApplication():
         self.view.get_stop_button().config(state=Tk.NORMAL)
         self.view.get_hardware_menu().config(state=Tk.DISABLED)
         self.view.get_hardware_config_button().config(state=Tk.DISABLED)
+        self.view.get_hardware_config_from_yaml_button().config(state=Tk.DISABLED)
         self.view.get_print_hardware_config_button().config(state=Tk.DISABLED)
 
     def on_closing(self):
@@ -256,11 +258,49 @@ class MainTkApplication():
 
         logger.debug(f"Passed args: {args}")
         # will probly need to reinstantiate the animation here.
-        with pkg_resources.resource_stream(__name__, SUPPORTED_HARDWARE[self.view.get_hardware_option()]) as stream:
-            config = yaml.safe_load(stream)
+        config = self.open_config_for_hardware(self.view.get_hardware_option())
 
         self.load_daq_from_config_dict(config)
         self.view.reset_scope()
+
+    def configure_from_yaml(self, button_event=None):
+        """
+        This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
+
+        This does not instantiate a new hardware controller class. It only configures the existing one.
+        """
+        filetypes = (
+            ('YAML', '*.yaml'),
+        )
+        afile = Tk.filedialog.askopenfile(filetypes=filetypes, defaultextension='.yaml')
+        if afile is None:
+            return # selection was canceled.
+
+        config = yaml.safe_load(afile)
+        afile.close()
+
+        counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_COUNTER_NAME]
+
+        same_daq_name = self.data_acquisition_model.__class__.__name__ == counter_config['class_name']
+        same_daq_module = self.data_acquisition_model.__class__.__module__ == counter_config['import_path']
+
+        if same_daq_name is False or same_daq_module is False:
+            msg = f"""\nCurrent data acquisition object is not of type found in YAML
+Found in YAML: {counter_config['import_path']}.{counter_config['class_name']}.
+Current data acquistion object: {self.data_acquisition_model.__class__.__module__}.{self.data_acquisition_model.__class__.__name__}
+Configuration not loaded. Please select approprate controller from the pull-down menu
+or check your YAML file to ensure configuration of supported hardware controller.
+"""
+            logger.warning(msg)
+        else:
+            logger.info("load settings from yaml")
+            logger.info(counter_config['configure'])
+            self.data_acquisition_model.configure(counter_config['configure'])
+
+    def open_config_for_hardware(self, hardware_name):
+        with pkg_resources.resource_stream(__name__, SUPPORTED_HARDWARE[hardware_name]) as stream:
+            config = yaml.safe_load(stream)
+        return config
 
     def load_daq_from_config_dict(self, config):
 

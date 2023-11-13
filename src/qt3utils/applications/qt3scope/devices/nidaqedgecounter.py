@@ -37,14 +37,8 @@ class QT3ScopeNIDAQEdgeCounterController(QT3ScopeDataControllerInterface):
         """
         This method launches a GUI window to configure the data controller.
         """
-        self.logger.debug('nidaq edge counter configure view')
+        self.logger.info('Not Implemented')
 
     def print_config(self) -> None:
         print('NIDAQ edge counter config')
         print(self.last_config_dict)  # we dont' use the logger because we want to be sure this is printed to stdout
-
-    def configure_from_yaml(self) -> None:
-        """
-        This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
-        """
-        pass

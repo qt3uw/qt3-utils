@@ -51,9 +51,10 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         """
         This method launches a GUI window to configure the data controller.
         """
-        print('random configure view')
 
         config_win = tk.Toplevel(gui_root)
+        config_win.grab_set()
+
         config_win.geometry('400x200')
         config_win.title('RandomRateCounter Settings')
 
@@ -90,7 +91,7 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         signal_noise_amp_var.set(self.data_generator.signal_noise_amp)
         signal_noise_amp_entry = tk.Entry(config_win, textvariable=signal_noise_amp_var)
         signal_noise_amp_entry.grid(row=row, column=1)
-        
+
         # pack variables into a dictionary to pass to the _set_from_gui method
         gui_info = {
             'simulate_single_light_source': simulate_single_light_source_var,
@@ -109,8 +110,6 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
                   text='Close',
                   command=config_win.destroy).grid(row=row, column=1)
 
-        config_win.grab_set()
-
     def _set_from_gui(self, gui_vars: dict) -> None:
         """
         This method is used to set the data controller from the GUI.
@@ -120,11 +119,5 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         self.configure(config_dict)
 
     def print_config(self) -> None:
-        print("Random Data Controller Configuration:")
+        print("\nRandom Data Controller Configuration:")
         print(self.last_config_dict)
-
-    def configure_from_yaml(self) -> None:
-        """
-        This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
-        """
-        pass

@@ -44,9 +44,3 @@ class QT3ScopeDataControllerInterface(abc.ABC):
         This method prints the current configuration of the data controller to standard out.
         """
         pass
-
-    def configure_from_yaml(self) -> None:
-        """
-        This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
-        """
-        pass
