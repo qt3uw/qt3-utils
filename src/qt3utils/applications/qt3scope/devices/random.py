@@ -11,7 +11,7 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         super().__init__(logger)
         self.data_generator = daqsamplers.RandomRateCounter()
 
-    def configure(self, **kw_config):
+    def configure(self, config_dict: dict):
         """
         This method is used to configure the data controller.
         """
@@ -19,17 +19,17 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
 
         # TODO -- modify the data generator so that these are properties that can be set rather than
         # accessing the private variables directly.
-        self.last_config = kw_config
-        self.logger.debug(kw_config)
+        self.last_config_dict = config_dict
+        self.logger.debug(config_dict)
 
-        self.data_generator.simulate_single_light_source = kw_config.get('simulate_single_light_source',
-                                                                         self.data_generator.simulate_single_light_source)
-        self.data_generator.num_data_samples_per_batch = kw_config.get('num_data_samples_per_batch',
-                                                                       self.data_generator.num_data_samples_per_batch)
-        self.data_generator.default_offset = kw_config.get('default_offset',
-                                                           self.data_generator.default_offset)
-        self.data_generator.signal_noise_amp = kw_config.get('signal_noise_amp',
-                                                             self.data_generator.signal_noise_amp)
+        self.data_generator.simulate_single_light_source = config_dict.get('simulate_single_light_source',
+                                                                           self.data_generator.simulate_single_light_source)
+        self.data_generator.num_data_samples_per_batch = config_dict.get('num_data_samples_per_batch',
+                                                                         self.data_generator.num_data_samples_per_batch)
+        self.data_generator.default_offset = config_dict.get('default_offset',
+                                                             self.data_generator.default_offset)
+        self.data_generator.signal_noise_amp = config_dict.get('signal_noise_amp',
+                                                               self.data_generator.signal_noise_amp)
         ## NB - I don't like how all of these configuration values are being accessed by string name.
 
     def start(self) -> Union[dict, type(None)]:
@@ -103,7 +103,7 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         row += 1
         tk.Button(config_win,
                   text='  Set  ',
-                  command=lambda: self._set_from_gui(**gui_info)).grid(row=row, column=0)
+                  command=lambda: self._set_from_gui(gui_info)).grid(row=row, column=0)
 
         tk.Button(config_win,
                   text='Close',
@@ -111,17 +111,17 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
 
         config_win.grab_set()
 
-    def _set_from_gui(self, **kwargs):
+    def _set_from_gui(self, gui_vars: dict) -> None:
         """
         This method is used to set the data controller from the GUI.
         """
-        outkwargs = {k:v.get() for k, v in kwargs.items()}
-        self.logger.info(outkwargs)
-        self.configure(**outkwargs)
+        config_dict = {k:v.get() for k, v in gui_vars.items()}
+        self.logger.info(config_dict)
+        self.configure(config_dict)
 
     def print_config(self) -> None:
         print("Random Data Controller Configuration:")
-        print(self.last_config)
+        print(self.last_config_dict)
 
     def configure_from_yaml(self) -> None:
         """

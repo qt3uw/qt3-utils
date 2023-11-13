@@ -279,7 +279,7 @@ class MainTkApplication():
         assert isinstance(self.data_acquisition_model, qt3interface.QT3ScopeDataControllerInterface)
 
         # configure the data acquisition model
-        self.data_acquisition_model.configure(**counter_config['configure'])
+        self.data_acquisition_model.configure(counter_config['configure'])
         self.view.get_hardware_config_button().bind("<Button>", lambda e: self.data_acquisition_model.configure_view(self.root))
         self.animation = None  # reset the animation
 

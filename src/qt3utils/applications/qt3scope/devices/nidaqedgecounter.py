@@ -11,12 +11,12 @@ class QT3ScopeNIDAQEdgeCounterController(QT3ScopeDataControllerInterface):
     def __init__(self, logger):
         super().__init__(logger)
 
-    def configure(self, **kw_config):
+    def configure(self, config_dict: dict):
         """
         This method is used to configure the data controller.
         """
         self.logger.debug("calling configure on the nidaq edge counter data controller")
-        self.last_config = kw_config
+        self.last_config_dict = config_dict
 
     def start(self) -> Union[dict, type(None)]:
         pass
@@ -41,7 +41,7 @@ class QT3ScopeNIDAQEdgeCounterController(QT3ScopeDataControllerInterface):
 
     def print_config(self) -> None:
         print('NIDAQ edge counter config')
-        print(self.last_config)  # we dont' use the logger because we want to be sure this is printed to stdout
+        print(self.last_config_dict)  # we dont' use the logger because we want to be sure this is printed to stdout
 
     def configure_from_yaml(self) -> None:
         """

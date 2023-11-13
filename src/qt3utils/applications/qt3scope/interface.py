@@ -3,12 +3,13 @@ from typing import Union
 import numpy as np
 import tkinter as Tk
 
+
 class QT3ScopeDataControllerInterface(abc.ABC):
 
     def __init__(self, logger):
         self.logger = logger
 
-    def configure(self, **kw_config):
+    def configure(self, config_dict: dict):
         """
         This method is used to configure the data controller.
         """
