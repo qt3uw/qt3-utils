@@ -283,7 +283,9 @@ class MainTkApplication():
 
         # Dynamically instantiate the class
         cls = getattr(module, counter_config['class_name'])
-        self.data_acquisition_model = cls()
+        # cls should be instance of QT3ScopeDataControllerInterface
+        self.data_acquisition_model = cls(logger)
+        assert isinstance(self.data_acquisition_model, qt3interface.QT3ScopeDataControllerInterface)
 
         # configure the data acquisition model
         self.data_acquisition_model.configure(**counter_config['configure'])
