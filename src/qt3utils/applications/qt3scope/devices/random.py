@@ -10,6 +10,7 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
     def __init__(self, logger):
         super().__init__(logger)
         self.data_generator = daqsamplers.RandomRateCounter()
+        self.last_config_dict = {}
 
     def configure(self, config_dict: dict):
         """
@@ -19,7 +20,7 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
 
         # TODO -- modify the data generator so that these are properties that can be set rather than
         # accessing the private variables directly.
-        self.last_config_dict = config_dict
+        self.last_config_dict.update(config_dict)
         self.logger.debug(config_dict)
 
         self.data_generator.simulate_single_light_source = config_dict.get('simulate_single_light_source',
