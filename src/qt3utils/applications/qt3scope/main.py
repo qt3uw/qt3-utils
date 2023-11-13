@@ -194,9 +194,9 @@ class MainTkApplication():
 
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        self.view.get_start_button().bind("<Button>", self.start_scope)
-        self.view.get_stop_button().bind("<Button>", self.stop_scope)
-        self.view.get_hardware_config_from_yaml_button().bind("<Button>", self.configure_from_yaml)
+        self.view.get_start_button().bind("<Button>", lambda e: self.start_scope())
+        self.view.get_stop_button().bind("<Button>", lambda e: self.stop_scope())
+        self.view.get_hardware_config_from_yaml_button().bind("<Button>", lambda e: self.configure_from_yaml())
         self.view.get_print_hardware_config_button().bind("<Button>", lambda e: self.data_acquisition_model.print_config())
 
         self.animation = None
@@ -208,7 +208,7 @@ class MainTkApplication():
         self.root.deiconify()
         self.root.mainloop()
 
-    def stop_scope(self, event = None):
+    def stop_scope(self):
         logger.debug('clicked stop')
         self.data_acquisition_model.stop()
         if self.animation is not None:
@@ -221,7 +221,7 @@ class MainTkApplication():
         self.view.get_hardware_config_from_yaml_button().config(state=Tk.NORMAL)
         self.view.get_print_hardware_config_button().config(state=Tk.NORMAL)
 
-    def start_scope(self, event = None):
+    def start_scope(self):
         logger.debug('clicked start')
         if self.animation is None:
             self.view.canvas.draw_idle()
@@ -263,7 +263,7 @@ class MainTkApplication():
         self.load_daq_from_config_dict(config)
         self.view.reset_scope()
 
-    def configure_from_yaml(self, button_event=None):
+    def configure_from_yaml(self):
         """
         This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
 

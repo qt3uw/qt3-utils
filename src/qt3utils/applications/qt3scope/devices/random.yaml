@@ -5,3 +5,5 @@ QT3Scope:
     configure : 
       simulate_single_light_source : False
       num_data_samples_per_batch : 10
+      default_offset: 100
+      signal_noise_amp: 0.2
