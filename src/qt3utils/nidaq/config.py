@@ -76,7 +76,7 @@ class EdgeCounter:
 
         '''
         Creates and configures a clock task using a dummy channel. A clock task
-        using an internal clock surce is needed
+        using an internal clock source is needed
         for edge counting tasks (maybe -- documentation is confusing) if you do not
         supply your own exernal clock.
 

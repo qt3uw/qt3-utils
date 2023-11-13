@@ -8,6 +8,9 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
 import nidaqmx
+import nipiezojenapy
+from qt3utils.nidaq.customcontrollers import VControl
+from qt3utils.datagenerators import PLEscanner
 
 import qt3utils.datagenerators as datasources
 
@@ -43,8 +46,16 @@ parser.add_argument('-to', '--rwtimeout', metavar = 'seconds', default = 10, typ
                     help='NI DAQ read/write timeout in seconds.')
 parser.add_argument('-sc', '--signal-counter', metavar = 'ctrN', default = 'ctr2', type=str,
                     help='NI DAQ interal counter (ctr1, ctr2, ctr3, ctr4)')
-parser.add_argument('--piezo-write-channel', metavar = '<ch0>', default = 'ao0', type=str,
+parser.add_argument('--wavelength-write-channel', metavar = 'ch0', default = 'ao0', type=str,
                     help='Analog output channel used to control the wavelength of the laser')
+parser.add_argument('--wavelength-read-channel', metavar = 'ch0', default = 'ai0', type=str,
+                    help='Analog input channels used to read the instantaneous wavelength')
+parser.add_argument('-lmin', '--wavelength-min-position', metavar = 'nanometers', default = 0, type=float,
+                    help='sets min allowed wavelength on PLE controller.')
+parser.add_argument('-lmax', '--wavelength-max-position', metavar = 'nanometers', default = 80, type=float,
+                    help='sets min allowed wavelength on PLE controller.')
+parser.add_argument('-lscale', '--wavelength-scale-nm-per-volt', default = 8, type=float,
+                    help='sets nanometer to volt scale for PLE controller.')
 parser.add_argument('-r', '--randomtest', action = 'store_true',
                     help='When true, program will run showing random numbers. This is for development testing.')
 parser.add_argument('-q', '--quiet', action = 'store_true',
@@ -83,14 +94,29 @@ class SidePanel():
         tk.Label(frame, text="Scan Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
         row += 1
         tk.Label(frame, text="x range (um)").grid(row=row, column=0)
-        self.x_min_entry = tk.Entry(frame, width=10)
-        self.x_max_entry = tk.Entry(frame, width=10)
-        self.x_min_entry.insert(10, scan_range[0])
-        self.x_max_entry.insert(10, scan_range[1])
-        self.x_min_entry.grid(row=row, column=1)
-        self.x_max_entry.grid(row=row, column=2)
+        self.v_min_entry = tk.Entry(frame, width=10)
+        self.v_max_entry = tk.Entry(frame, width=10)
+        self.v_min_entry.insert(10, scan_range[0])
+        self.v_max_entry.insert(10, scan_range[1])
+        self.v_min_entry.grid(row=row, column=1)
+        self.v_max_entry.grid(row=row, column=2)
         self.startButton = tk.Button(frame, text="Start Scan")
         self.startButton.grid(row=row, column=0)
+
+        row += 1
+        tk.Label(frame, text="step size (um)").grid(row=row, column=0)
+        self.step_size_entry = tk.Entry(frame, width=10)
+        self.step_size_entry.insert(10, 1.0)
+        self.step_size_entry.grid(row=row, column=1)
+
+        row += 1
+        tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+        row += 1
+        tk.Label(frame, text="N samples/step").grid(row=row, column=0)
+        self.n_sample_size_value = tk.IntVar()
+        self.n_sample_size_entry = tk.Entry(frame, width=10, textvariable = self.n_sample_size_value)
+        self.n_sample_size_entry.grid(row=row, column=1)
+        self.n_sample_size_value.set(args.num_data_samples_per_batch)
 
 class MainApplicationView():
     def __init__(self, main_frame, scan_range = [0,80]):
@@ -111,27 +137,99 @@ class MainApplicationView():
 
 class MainTkApplication():
 
-    def __init__(self):
+    def __init__(self, counter_scanner):
+        self.counter_scanner = counter_scanner
         self.root = tk.Tk()
         self.view = MainApplicationView(self.root)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
     #TODO: add device/channel name, change functionality to nidaq, add sweep loop and sleep() with settling time
     def start_scan(self, event = None):
         self.view.sidepanel.startButton['state'] = 'disabled'
-        xmin = float(self.view.sidepanel.x_min_entry.get())
-        xmax = float(self.view.sidepanel.x_max_entry.get())
-        with nidaqmx.Task() as task:
-            task.ao_channels.add_ao_voltage_chan("Dev1/ai0")
-            task.write(xmin)
+        vmin = float(self.view.sidepanel.v_min_entry.get())
+        vmax = float(self.view.sidepanel.v_max_entry.get())
+        args = [vmin, vmax]
+        args.append(float(self.view.sidepanel.step_size_entry.get()))
+        args.append(int(self.view.sidepanel.n_sample_size_value.get()))
+
+        self.scan_thread = Thread(target=self.scan_thread_function, args = args)
+        self.scan_thread.start()
+
+
+        #with nidaqmx.Task() as task:
+        #    task.ao_channels.add_ao_voltage_chan("Dev1/ai0")
+        #    task.write(xmin)
 
     def run(self):
         self.root.title("QT3PLE: Run PLE scan")
         self.root.deiconify()
         self.root.mainloop()
 
+    def stop_scan(self, event = None):
+        self.counter_scanner.stop()
+
+    def on_closing(self):
+        try:
+            self.stop_scan()
+            self.root.quit()
+            self.root.destroy()
+        except Exception as e:
+            logger.debug(e)
+            pass
+
+    def scan_thread_function(self, vmin, vmax, step_size, N):
+
+        self.counter_scanner.set_scan_range(vmin, vmax)
+        self.counter_scanner.step_size = step_size
+        self.counter_scanner.set_num_data_samples_per_batch(N)
+
+        try:
+            self.counter_scanner.reset()  # clears the data
+            self.counter_scanner.start()  # starts the DAQ
+            self.counter_scanner.set_to_starting_position()  # moves the stage to starting position
+
+            while self.counter_scanner.still_scanning():
+                self.counter_scanner.scan_v()
+                self.view.scan_view.update(self.counter_scanner)
+                self.view.canvas.draw()
+
+            self.counter_scanner.stop()
+
+        except nidaqmx.errors.DaqError as e:
+            logger.info(e)
+            logger.info(
+                'Check for other applications using resources. If not, you may need to restart the application.')
+
+        self.view.sidepanel.startButton['state'] = 'normal'
+
+def build_data_scanner():
+
+    if args.randomtest:
+        data_acq = datasources.RandomRateCounter(simulate_single_light_source=True,
+                                                 num_data_samples_per_batch=args.num_data_samples_per_batch)
+    else:
+        data_acq = datasources.NiDaqDigitalInputRateCounter(args.daq_name,
+                                                            args.signal_terminal,
+                                                            args.clock_rate,
+                                                            args.num_data_samples_per_batch,
+                                                            args.clock_terminal,
+                                                            args.rwtimeout,
+                                                            args.signal_counter)
+
+    voltage_controller = VControl(device_name = args.daq_name,
+                                  write_channel = args.wavelength_write_channel,
+                                  read_channel = args.wavelength_read_channel,
+                                  min_position = args.wavelength_min_position,
+                                  max_position = args.wavelength_max_position,
+                                  scale_nm_per_volt = args.wavelength_scale_nm_per_volt)
+
+    scanner = PLEscanner.CounterAndScanner(data_acq, voltage_controller)
+
+    return scanner
+
 def main():
-    tkapp = MainTkApplication()
+    tkapp = MainTkApplication(build_data_scanner())
     tkapp.run()
 
 
