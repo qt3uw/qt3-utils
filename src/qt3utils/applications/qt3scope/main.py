@@ -22,8 +22,6 @@ parser = argparse.ArgumentParser(description='Digital input terminal rate counte
 # TODO -- eventually move this to adjustable option in GUI
 parser.add_argument('-w', '--scope-width', metavar = 'width', default = 500, type=int,
                     help='Number of measurements to display in window.')
-parser.add_argument('-r', '--randomtest', action = 'store_true',
-                    help='When true, program will run showing random numbers. This is for development testing.')
 # TODO -- eventually move this to adjustable option in GUI
 parser.add_argument('-aut', '--animation-update-interval', metavar = 'milliseconds', default = 20,
                     help='''Sets the animation update period, t, (in milliseconds).
@@ -326,11 +324,7 @@ or check your YAML file to ensure configuration of supported hardware controller
 
 def main():
 
-    hardware_name = DEFAULT_HARDWARE
-    if args.randomtest:
-        hardware_name = RANDOM_DATA_GENERATOR
-
-    tkapp = MainTkApplication(hardware_name)
+    tkapp = MainTkApplication(DEFAULT_HARDWARE)
     tkapp.run()
 
 
