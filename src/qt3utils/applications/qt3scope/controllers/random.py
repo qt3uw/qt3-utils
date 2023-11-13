@@ -55,13 +55,10 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
 
         config_win = tk.Toplevel(gui_root)
         config_win.grab_set()
-
-        config_win.geometry('400x200')
         config_win.title('RandomRateCounter Settings')
 
         row = 0
-        simulate_single_light_source_var = tk.BooleanVar()
-        simulate_single_light_source_var.set(self.data_generator.simulate_single_light_source)
+        simulate_single_light_source_var = tk.BooleanVar(value=self.data_generator.simulate_single_light_source)
         simToggle = tk.Checkbutton(config_win,
                                    text="Simulate Single Light Source",
                                    variable=simulate_single_light_source_var,
@@ -70,28 +67,19 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
         simToggle.grid(row=row, column=0, columnspan=2, pady=10, padx=10)
 
         row += 1
-        n_label = tk.Label(config_win, text="N per batch")
-        n_label.grid(row=row, column=0, padx=10)
-        n_var = tk.IntVar()
-        n_var.set(self.data_generator.num_data_samples_per_batch)
-        n_entry = tk.Entry(config_win, textvariable=n_var)
-        n_entry.grid(row=row, column=1)
+        tk.Label(config_win, text="N per batch").grid(row=row, column=0, padx=10)
+        n_var = tk.IntVar(value=self.data_generator.num_data_samples_per_batch)
+        tk.Entry(config_win, textvariable=n_var).grid(row=row, column=1)
 
         row += 1
-        offset_label = tk.Label(config_win, text="Default Offset")
-        offset_label.grid(row=row, column=0, padx=10)
-        offset_var = tk.IntVar()
-        offset_var.set(self.data_generator.default_offset)
-        offset_entry = tk.Entry(config_win, textvariable=offset_var)
-        offset_entry.grid(row=row, column=1)
+        tk.Label(config_win, text="Default Offset").grid(row=row, column=0, padx=10)
+        offset_var = tk.IntVar(value=self.data_generator.default_offset)
+        tk.Entry(config_win, textvariable=offset_var).grid(row=row, column=1)
 
         row += 1
-        signal_noise_amp_label = tk.Label(config_win, text="Signal to Noise")
-        signal_noise_amp_label.grid(row=row, column=0, padx=10)
-        signal_noise_amp_var = tk.DoubleVar()
-        signal_noise_amp_var.set(self.data_generator.signal_noise_amp)
-        signal_noise_amp_entry = tk.Entry(config_win, textvariable=signal_noise_amp_var)
-        signal_noise_amp_entry.grid(row=row, column=1)
+        tk.Label(config_win, text="Signal to Noise").grid(row=row, column=0, padx=10)
+        signal_noise_amp_var = tk.DoubleVar(value=self.data_generator.signal_noise_amp)
+        tk.Entry(config_win, textvariable=signal_noise_amp_var).grid(row=row, column=1)
 
         # pack variables into a dictionary to pass to the _set_from_gui method
         gui_info = {

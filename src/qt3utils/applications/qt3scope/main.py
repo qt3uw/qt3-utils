@@ -43,8 +43,8 @@ if args.verbose == 2:
 
 DEFAULT_HARDWARE = 'NIDAQ Edge Counter'
 RANDOM_DATA_GENERATOR = 'Random Data Generator'
-SUPPORTED_HARDWARE = {DEFAULT_HARDWARE: 'devices/nidaq_edge_counter.yaml',
-                      RANDOM_DATA_GENERATOR: 'devices/random.yaml',
+SUPPORTED_HARDWARE = {DEFAULT_HARDWARE: 'controllers/nidaq_edge_counter.yaml',
+                      RANDOM_DATA_GENERATOR: 'controllers/random.yaml',
                       }
 CONFIG_FILE_APPLICATION_NAME = 'QT3Scope'
 CONFIG_FILE_COUNTER_NAME = 'Counter'
@@ -201,7 +201,6 @@ class MainTkApplication():
 
     def run(self):
         logger.debug('run')
-        self.root.geometry("1400x600")
         self.root.title("QT3Scope: NIDAQ Digital Input Count Rate")
         self.root.deiconify()
         self.root.mainloop()
