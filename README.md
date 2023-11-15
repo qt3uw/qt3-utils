@@ -34,6 +34,17 @@ SpinCore for the PulseBlaster. These libraries must be installed separately.
 
 Once the prerequisite packages have been installed, qt3utils can be installed from pip.
 
+### Update Tk/Tcl
+
+This is especially helpful for development on Mac OS Sonoma. Upgrading Tcl/Tk 
+via Anaconda overcomes some GUI bugs
+
+```
+conda install 'tk>=8.6.13'
+```
+
+### Normal Installation
+
 ```
 pip install qt3utils
 ```
