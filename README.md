@@ -104,6 +104,48 @@ If default settings are correct, then should be able to run without options
 > qt3scope
 ```
 
+#### Configuration
+
+Data Acquisition hardware supported by QT3Scope can be configured via the application in two ways. 
+For each hardware supported, there will be a GUI window that allows the user to enter specific values. 
+Additionally, one can configure the hardware by uploading a YAML file. The YAML file must contain
+a specific structure. All hardware controllers that are built for QT3Scope must supply a default
+configuration YAML file, which will be found in 
+[src/qt3utils/applications/qt3scope/controllers](src/qt3utils/applications/qt3scope/controllers).
+
+For convenience, example YAML files for NIDAQ Edge Counter and the Random Data Generator are shown
+below.
+
+```yaml
+QT3Scope:
+  Counter:
+    import_path : qt3utils.applications.qt3scope.controllers.nidaqedgecounter
+    class_name  : QT3ScopeNIDAQEdgeCounterController
+    configure : 
+      daq_name : Dev1  # NI DAQ Device Name
+      signal_terminal : PFI0  # NI DAQ terminal connected to input digital TTL signal
+      clock_terminal :    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
+      clock_rate: 100000  # NI DAQ clock rate in Hz
+      num_data_samples_per_batch : 1000
+      read_write_timeout : 10  # timeout in seconds for read/write operations
+      signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
+```
+
+```yaml
+QT3Scope:
+  Counter:
+    import_path : qt3utils.applications.qt3scope.controllers.random
+    class_name  : QT3ScopeRandomDataController
+    configure : 
+      simulate_single_light_source : False
+      num_data_samples_per_batch : 10
+      default_offset: 100
+      signal_noise_amp: 0.2
+```
+
+If you create a YAML file on your local machine it must contain the same structure as found above for the 
+hardware you're trying to configure. 
+
 ### QT3 Confocal Scan
 
 The console program `qt3scan` comes with this package.  This program launches
