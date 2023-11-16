@@ -50,10 +50,10 @@ parser.add_argument('--wavelength-write-channel', metavar = 'ch0', default = 'ao
                     help='Analog output channel used to control the wavelength of the laser')
 parser.add_argument('--wavelength-read-channel', metavar = 'ch0', default = 'ai0', type=str,
                     help='Analog input channels used to read the instantaneous wavelength')
-parser.add_argument('-lmin', '--wavelength-min-position', metavar = 'nanometers', default = 0, type=float,
-                    help='sets min allowed wavelength on PLE controller.')
-parser.add_argument('-lmax', '--wavelength-max-position', metavar = 'nanometers', default = 80, type=float,
-                    help='sets min allowed wavelength on PLE controller.')
+parser.add_argument('-lmin', '--wavelength-min-position', metavar = 'voltage', default = -10, type=float,
+                    help='sets min allowed voltage on PLE controller.')
+parser.add_argument('-lmax', '--wavelength-max-position', metavar = 'voltage', default = 10, type=float,
+                    help='sets min allowed voltage on PLE controller.')
 parser.add_argument('-lscale', '--wavelength-scale-nm-per-volt', default = 8, type=float,
                     help='sets nanometer to volt scale for PLE controller.')
 parser.add_argument('-r', '--randomtest', action = 'store_true',
@@ -93,33 +93,60 @@ class SidePanel():
         row = 0
         tk.Label(frame, text="Scan Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
         row += 1
-        tk.Label(frame, text="x range (um)").grid(row=row, column=0)
+        self.startButton = tk.Button(frame, text="Start Scan")
+        self.startButton.grid(row=row, column=0)
+        row += 1
+        tk.Label(frame, text="Voltage Range (V)").grid(row=row, column=0)
         self.v_min_entry = tk.Entry(frame, width=10)
         self.v_max_entry = tk.Entry(frame, width=10)
         self.v_min_entry.insert(10, scan_range[0])
         self.v_max_entry.insert(10, scan_range[1])
         self.v_min_entry.grid(row=row, column=1)
         self.v_max_entry.grid(row=row, column=2)
-        self.startButton = tk.Button(frame, text="Start Scan")
-        self.startButton.grid(row=row, column=0)
 
         row += 1
-        tk.Label(frame, text="step size (um)").grid(row=row, column=0)
-        self.step_size_entry = tk.Entry(frame, width=10)
-        self.step_size_entry.insert(10, 1.0)
-        self.step_size_entry.grid(row=row, column=1)
+        tk.Label(frame, text="Number of Pixels").grid(row=row, column=0)
+        self.num_pixels= tk.Entry(frame, width=10)
+        self.num_pixels.insert(10, 150)
+        self.num_pixels.grid(row=row, column=1)
+
+        row += 1
+        tk.Label(frame, text="Number of Scans").grid(row=row, column=0)
+        self.scan_num_entry = tk.Entry(frame, width=10)
+        self.scan_num_entry.insert(10, 10)
+        self.scan_num_entry.grid(row=row, column=1)
+
+        row += 1
+        tk.Label(frame, text="Sweep Time").grid(row=row, column=0)
+        self.sweep_time_entry = tk.Entry(frame, width=10)
+        self.sweep_time_entry.insert(10, 3)
+        self.sweep_time_entry.grid(row=row, column=1)
 
         row += 1
         tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+
         row += 1
-        tk.Label(frame, text="N samples/step").grid(row=row, column=0)
-        self.n_sample_size_value = tk.IntVar()
-        self.n_sample_size_entry = tk.Entry(frame, width=10, textvariable = self.n_sample_size_value)
-        self.n_sample_size_entry.grid(row=row, column=1)
-        self.n_sample_size_value.set(args.num_data_samples_per_batch)
+        self.GotoButton = tk.Button(frame, text="Go To Voltage")
+        self.GotoButton.grid(row=row, column=0)
+        row += 1
+        tk.Label(frame, text="Voltage (V)").grid(row=row, column=0)
+        self.v_entry = tk.Entry(frame, width=10)
+        self.v_entry.insert(10, 0)
+        self.v_entry.grid(row=row, column=1)
+
+        row += 1
+        tk.Label(frame, text="Voltage Limits (V)").grid(row=row, column=0)
+        self.v_lmin_entry = tk.Entry(frame, width=10)
+        self.v_lmax_entry = tk.Entry(frame, width=10)
+        self.v_lmin_entry.insert(10, args.wavelength_min_position)
+        self.v_lmax_entry.insert(10, args.wavelength_max_position)
+        self.v_lmin_entry.grid(row=row, column=1)
+        self.v_lmax_entry.grid(row=row, column=2)
+
+
 
 class MainApplicationView():
-    def __init__(self, main_frame, scan_range = [0,80]):
+    def __init__(self, main_frame, scan_range = [-3, 5]):
         frame = tk.Frame(main_frame)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -142,16 +169,31 @@ class MainTkApplication():
         self.root = tk.Tk()
         self.view = MainApplicationView(self.root)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
+        self.view.sidepanel.GotoButton.bind("<Button>", self.go_to_voltage)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def go_to_voltage(self, event = None):
+        self.view.sidepanel.startButton['state'] = 'disabled'
+        self.view.sidepanel.GotoButton['state'] = 'disabled'
+        self.counter_scanner.go_to_v(self.view.sidepanel.v_entry.get())
+        self.view.sidepanel.startButton['state'] = 'normal'
+        self.view.sidepanel.GotoButton['state'] = 'normal'
 
     #TODO: add device/channel name, change functionality to nidaq, add sweep loop and sleep() with settling time
     def start_scan(self, event = None):
         self.view.sidepanel.startButton['state'] = 'disabled'
+        self.view.sidepanel.GotoButton['state'] = 'disabled'
+
+        n_sample_size = self.view.sidepanel.num_pixels.get()
         vmin = float(self.view.sidepanel.v_min_entry.get())
         vmax = float(self.view.sidepanel.v_max_entry.get())
+        step_size = int((vmax - vmin) / n_sample_size)
         args = [vmin, vmax]
-        args.append(float(self.view.sidepanel.step_size_entry.get()))
-        args.append(int(self.view.sidepanel.n_sample_size_value.get()))
+        args.append(step_size)
+        args.append(n_sample_size)
+
+        settling_time = self.view.sidepanel.sweep_tme_entry.get() / n_sample_size
+        self.counter_scanner.waelength_controller.settling_time_in_seconds = settling_time
 
         self.scan_thread = Thread(target=self.scan_thread_function, args = args)
         self.scan_thread.start()
@@ -202,6 +244,7 @@ class MainTkApplication():
                 'Check for other applications using resources. If not, you may need to restart the application.')
 
         self.view.sidepanel.startButton['state'] = 'normal'
+        self.view.sidepanel.GotoButton['state'] = 'normal'
 
 def build_data_scanner():
 

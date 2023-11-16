@@ -22,16 +22,16 @@ class VControl(nipiezojenapy.BaseControl):
         self.scale_nm_per_volt = scale_nm_per_volt
         self.minimum_allowed_position = min_position
         self.maximum_allowed_position = max_position
-        self.settling_time_in_seconds = move_settle_time #10 millisecond settle time
+        self._settling_time_in_seconds = move_settle_time #10 millisecond settle time
         self.last_write_value = None
 
 
 
     def go_to_voltage(self, v: float = None) -> None:
         '''
-        Sets the x,y,z position in microns.
+        !//Sets the x,y,z position in microns.
 
-        You do not need to specify all three axis values in order
+        //You do not need to specify all three axis values in order
         to move in one direction. For example, you can call: go_to_position(z = 40)
 
         raises ValueError if try to set position out of bounds.
@@ -91,4 +91,10 @@ class VControl(nipiezojenapy.BaseControl):
 
     @staticmethod
     def _volts_to_nm(self, volts: float) -> float:
-        return  self.scale_nm_per_volt * volts
+        return self.scale_nm_per_volt * volts
+    @property
+    def settling_time_in_seconds (self):
+        return self._settling_time_in_seconds
+    @settling_time_in_seconds.setter
+    def settling_time_in_seconds (self, val):
+        self._settling_time_in_seconds = val
