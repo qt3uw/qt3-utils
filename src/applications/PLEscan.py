@@ -184,7 +184,8 @@ class MainTkApplication():
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
 
-        n_sample_size = self.view.sidepanel.num_pixels.get()
+        n_sample_size = int(self.view.sidepanel.num_pixels.get())
+        sweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
         vmin = float(self.view.sidepanel.v_min_entry.get())
         vmax = float(self.view.sidepanel.v_max_entry.get())
         step_size = int((vmax - vmin) / n_sample_size)
@@ -192,8 +193,8 @@ class MainTkApplication():
         args.append(step_size)
         args.append(n_sample_size)
 
-        settling_time = self.view.sidepanel.sweep_tme_entry.get() / n_sample_size
-        self.counter_scanner.waelength_controller.settling_time_in_seconds = settling_time
+        settling_time = sweep_time_entry / n_sample_size
+        self.counter_scanner.wavelength_controller.settling_time_in_seconds = settling_time
 
         self.scan_thread = Thread(target=self.scan_thread_function, args = args)
         self.scan_thread.start()
