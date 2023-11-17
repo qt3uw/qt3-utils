@@ -45,7 +45,7 @@ DEFAULT_HARDWARE = 'NIDAQ Edge Counter'
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
 SUPPORTED_HARDWARE = {DEFAULT_HARDWARE: 'nidaq_edge_counter.yaml',
-                      'Random Data Generator': 'random.yaml',
+                      'Random Data Generator': 'random_data_generator.yaml',
                       }
 CONFIG_FILE_APPLICATION_NAME = 'QT3Scope'
 CONFIG_FILE_COUNTER_NAME = 'Counter'
