@@ -42,10 +42,10 @@ if args.verbose == 2:
     logger.setLevel(logging.DEBUG)
 
 DEFAULT_HARDWARE = 'NIDAQ Edge Counter'
-RANDOM_DATA_GENERATOR = 'Random Data Generator'
+
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
 SUPPORTED_HARDWARE = {DEFAULT_HARDWARE: 'nidaq_edge_counter.yaml',
-                      RANDOM_DATA_GENERATOR: 'random.yaml',
+                      'Random Data Generator': 'random.yaml',
                       }
 CONFIG_FILE_APPLICATION_NAME = 'QT3Scope'
 CONFIG_FILE_COUNTER_NAME = 'Counter'
