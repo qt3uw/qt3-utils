@@ -2,9 +2,9 @@ import argparse
 import collections
 import tkinter as Tk
 import logging
-import pkg_resources
 import yaml
 import importlib
+import importlib.resources
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -43,8 +43,9 @@ if args.verbose == 2:
 
 DEFAULT_HARDWARE = 'NIDAQ Edge Counter'
 RANDOM_DATA_GENERATOR = 'Random Data Generator'
-SUPPORTED_HARDWARE = {DEFAULT_HARDWARE: 'controllers/nidaq_edge_counter.yaml',
-                      RANDOM_DATA_GENERATOR: 'controllers/random.yaml',
+CONTROLLER_PATH = 'qt3utils.applications.controllers'
+SUPPORTED_HARDWARE = {DEFAULT_HARDWARE: 'nidaq_edge_counter.yaml',
+                      RANDOM_DATA_GENERATOR: 'random.yaml',
                       }
 CONFIG_FILE_APPLICATION_NAME = 'QT3Scope'
 CONFIG_FILE_COUNTER_NAME = 'Counter'
@@ -295,8 +296,11 @@ or check your YAML file to ensure configuration of supported hardware controller
             self.data_acquisition_model.configure(counter_config['configure'])
 
     def open_config_for_hardware(self, hardware_name):
-        with pkg_resources.resource_stream(__name__, SUPPORTED_HARDWARE[hardware_name]) as stream:
-            config = yaml.safe_load(stream)
+        with importlib.resources.path(CONTROLLER_PATH, SUPPORTED_HARDWARE[hardware_name]) as yaml_path:
+            logger.info(f"opening config file: {yaml_path}")
+            with open(yaml_path, 'r') as yaml_file:
+                config = yaml.safe_load(yaml_file)
+
         return config
 
     def load_daq_from_config_dict(self, config):
