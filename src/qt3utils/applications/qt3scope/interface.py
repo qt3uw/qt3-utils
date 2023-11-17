@@ -8,6 +8,9 @@ class QT3ScopeDataControllerInterface(abc.ABC):
 
     def __init__(self, logger):
         self.logger = logger
+        # TODO: probably shouldn't pass in a logger here. Instead, the logger should be created
+        # by the implementation, but the logger level should be set by the application.
+        # this way, when logger makes print statements its clear where they are coming from.
 
     @abc.abstractmethod
     def configure(self, config_dict: dict):
