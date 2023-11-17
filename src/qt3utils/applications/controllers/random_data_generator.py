@@ -1,14 +1,16 @@
 from typing import Union
 import tkinter as tk
-
+import numpy as np
 import qt3utils.datagenerators.daqsamplers as daqsamplers
-from qt3utils.applications.qt3scope.interface import QT3ScopeDataControllerInterface
 
 
-class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
+class QT3ScopeRandomDataController:
+    """
+    Implements the qt3utils.applications.qt3scope.interface.QT3ScopeDataControllerInterface for a random data generator.
+    """
 
     def __init__(self, logger):
-        super().__init__(logger)
+        self.logger = logger
         self.data_generator = daqsamplers.RandomRateCounter()
         self.last_config_dict = {}
 
@@ -42,7 +44,7 @@ class QT3ScopeRandomDataController(QT3ScopeDataControllerInterface):
     def close(self) -> Union[dict, type(None)]:
         self.data_generator.close()
 
-    def yield_count_rate(self):
+    def yield_count_rate(self) -> np.ndarray:
         """
         This method is used to yield data from the data controller.
         """
