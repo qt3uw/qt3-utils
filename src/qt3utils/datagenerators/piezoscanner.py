@@ -177,7 +177,7 @@ class CounterAndScanner:
         optimal_position = axis_vals[np.argmax(count_rates)]
         coeff = None
         params = [np.max(count_rates), optimal_position, 1.0, np.min(count_rates)]
-        bounds = (len(params)*tuple((0,)), len(params)*tuple((np.inf,)))
+        bounds = ((0, -np.inf, 0, 0), (np.inf, np.inf, np.inf, np.inf))
         try:
             coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, count_rates, p0=params, bounds=bounds)
             optimal_position = coeff[1]
