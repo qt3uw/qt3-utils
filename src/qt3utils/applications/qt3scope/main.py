@@ -48,7 +48,7 @@ SUPPORTED_HARDWARE = {DEFAULT_HARDWARE: 'nidaq_edge_counter.yaml',
                       'Random Data Generator': 'random_data_generator.yaml',
                       }
 CONFIG_FILE_APPLICATION_NAME = 'QT3Scope'
-CONFIG_FILE_COUNTER_NAME = 'Counter'
+CONFIG_FILE_DAQ_DEVICE = 'DAQDevice'
 
 
 class ScopeFigure:
@@ -277,7 +277,7 @@ class MainTkApplication():
         config = yaml.safe_load(afile)
         afile.close()
 
-        counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_COUNTER_NAME]
+        counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_DEVICE]
 
         same_daq_name = self.data_acquisition_model.__class__.__name__ == counter_config['class_name']
         same_daq_module = self.data_acquisition_model.__class__.__module__ == counter_config['import_path']
@@ -305,7 +305,7 @@ or check your YAML file to ensure configuration of supported hardware controller
 
     def load_daq_from_config_dict(self, config):
 
-        counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_COUNTER_NAME]
+        counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_DEVICE]
 
         logger.info("loading from configuration")
         logger.info(counter_config)

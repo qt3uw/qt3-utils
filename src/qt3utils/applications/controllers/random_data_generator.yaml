@@ -1,5 +1,5 @@
 QT3Scope:
-  Counter:
+  DAQDevice:
     import_path : qt3utils.applications.controllers.random_data_generator
     class_name  : QT3ScopeRandomDataController
     configure : 
