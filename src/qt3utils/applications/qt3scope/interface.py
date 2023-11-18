@@ -6,6 +6,9 @@ import tkinter as Tk
 @runtime_checkable
 class QT3ScopeDataControllerInterface(Protocol):
 
+    def __init__(self, logger_level):
+        pass
+
     def configure(self, config_dict: dict):
         """
         This method is used to configure the data controller.

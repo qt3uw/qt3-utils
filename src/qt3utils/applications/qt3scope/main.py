@@ -316,7 +316,7 @@ or check your YAML file to ensure configuration of supported hardware controller
         # Dynamically instantiate the class
         cls = getattr(module, counter_config['class_name'])
         # cls should be instance of QT3ScopeDataControllerInterface
-        self.data_acquisition_model = cls(logger)
+        self.data_acquisition_model = cls(logger.level)
         assert isinstance(self.data_acquisition_model, QT3ScopeDataControllerInterface)
 
         # configure the data acquisition model

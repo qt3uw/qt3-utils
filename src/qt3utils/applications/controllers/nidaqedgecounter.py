@@ -1,6 +1,7 @@
 from typing import Union
 import numpy as np
 import tkinter as tk
+import logging
 
 import qt3utils.datagenerators.daqsamplers as daqsamplers
 
@@ -10,8 +11,10 @@ class QT3ScopeNIDAQEdgeCounterController:
     Implements the qt3utils.applications.qt3scope.interface.QT3ScopeDataControllerInterface for a NIDAQ edge counter.
     """
 
-    def __init__(self, logger):
-        self.logger = logger
+    def __init__(self, logger_level):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logger_level)
+
         self.data_generator = daqsamplers.NiDaqDigitalInputRateCounter()
         self.last_config_dict = {}
 
