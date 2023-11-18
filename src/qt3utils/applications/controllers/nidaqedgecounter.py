@@ -125,3 +125,47 @@ class QT3ScopeNIDAQEdgeCounterController:
     def print_config(self) -> None:
         print('NIDAQ edge counter config')
         print(self.last_config_dict)  # we dont' use the logger because we want to be sure this is printed to stdout
+
+
+class QT3ScanNIDAQEdgeCounterController(QT3ScopeNIDAQEdgeCounterController):
+
+    def __init__(self, logger_level):
+        super().__init__(logger_level)
+
+    @property
+    def clock_rate(self) -> float:
+        return self.data_generator.clock_rate
+
+    def sample_counts(self, num_batches: int) -> np.ndarray:
+        return self.data_generator.sample_counts(num_batches)
+
+    def sample_count_rate(self, data_counts: np.ndarray) -> np.ndarray:
+        return self.data_generator.sample_count_rate(data_counts)
+
+    @property
+    def num_data_samples_per_batch(self) -> int:
+        return self.data_generator.num_data_samples_per_batch
+
+    @num_data_samples_per_batch.setter
+    def num_data_samples_per_batch(self, value):
+        """Abstract property setter for num_data_samples_per_batch"""
+        self.data_generator.num_data_samples_per_batch = value
+
+    def get_daq_data(self) -> dict:
+        """
+        This method packages the data into a format that can be saved to disk.
+        Data must be serializable.
+        """
+        data = dict(
+                    raw_counts=self.data_generator.scanned_raw_counts,
+                    count_rate=self.data_generator.scanned_count_rate,
+                    step_size=self.data_generator.step_size,
+                    daq_clock_rate=self.data_generator.clock_rate,
+                    )
+        return data
+
+    def scan_image_rightclick_event(self, event) -> None:
+        """
+        This method is called when the user right clicks on the scan image.
+        """
+        self.logger.debug(f"scan_image_rightclick_event. click at {event.x}, {event.y}")

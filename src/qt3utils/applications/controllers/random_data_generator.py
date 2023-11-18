@@ -1,8 +1,12 @@
-from typing import Union
+from typing import Union, Tuple, Optional
 import tkinter as tk
 import logging
 import numpy as np
-import qt3utils.datagenerators.daqsamplers as daqsamplers
+
+import nipiezojenapy
+
+import qt3utils.datagenerators.daqsamplers
+import qt3utils.datagenerators
 
 
 class QT3ScopeRandomDataController:
@@ -14,7 +18,7 @@ class QT3ScopeRandomDataController:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
-        self.data_generator = daqsamplers.RandomRateCounter()
+        self.data_generator = qt3utils.datagenerators.daqsamplers.RandomRateCounter()
         self.last_config_dict = {}
 
     def configure(self, config_dict: dict):
@@ -119,7 +123,7 @@ class QT3ScopeRandomDataController:
 
 class QT3ScanRandomDataController(QT3ScopeRandomDataController):
     """
-    Implements the qt3utils.applications.qt3scan.interface.QT3ScanDataControllerInterface for a random data generator.
+    Implements the qt3utils.applications.qt3scan.interface.QT3ScanDAQControllerInterface for a random data generator.
     """
     @property
     def clock_rate(self) -> float:
@@ -139,3 +143,116 @@ class QT3ScanRandomDataController(QT3ScopeRandomDataController):
     def num_data_samples_per_batch(self, value):
         """Abstract property setter for num_data_samples_per_batch"""
         self.data_generator.num_data_samples_per_batch = value
+
+    def get_daq_data(self) -> dict:
+        data = dict(
+                    raw_counts=self.data_generator.scanned_raw_counts,
+                    count_rate=self.data_generator.scanned_count_rate,
+                    step_size=self.data_generator.step_size,
+                    daq_clock_rate=self.data_generator.clock_rate,
+                    )
+        return data
+
+    def scan_image_rightclick_event(self, event) -> None:
+        self.logger.debug(f"scan_image_rightclick_event. click at {event.x}, {event.y}")
+
+
+class QT3ScanDummyPositionController:
+    """
+    Implements the qt3utils.applications.qt3scan.interface.QT3ScanPositionControllerInterface for a dummy position controller.
+    """
+    def __init__(self, logger_level):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logger_level)
+
+        self.dummy_position = nipiezojenapy.BaseControl()
+        self.last_config_dict = {}
+
+    @property
+    def maximum_allowed_position(self):
+        """Abstract property: maximum_allowed_position"""
+        return self.dummy_position.maximum_allowed_position
+
+    @property
+    def minimum_allowed_position(self):
+        """Abstract property: minimum_allowed_position"""
+        return self.dummy_position.minimum_allowed_position
+
+    def go_to_position(self,
+                       x: Optional[float] = None,
+                       y: Optional[float] = None,
+                       z: Optional[float] = None) -> None:
+        """
+        This method is used to move the stage or objective to a position.
+        """
+        self.dummy_position.go_to_position(x, y, z)
+
+    def get_current_position(self) -> Tuple[float, float, float]:
+        return self.dummy_position.get_current_position()
+
+    def check_allowed_position(self,
+                               x: Optional[float] = None,
+                               y: Optional[float] = None,
+                               z: Optional[float] = None) -> None:
+        """
+        This method checks if the position is within the allowed range.
+
+        If the position is not within the allowed range, a ValueError should be raised.
+        """
+        self.dummy_position.check_allowed_position(x, y, z)
+
+    def configure(self, config_dict: dict):
+
+        self.logger.debug("calling configure")
+
+        # TODO -- modify the data generator so that these are properties that can be set rather than
+        # accessing the private variables directly.
+        self.last_config_dict.update(config_dict)
+        self.logger.debug(config_dict)
+
+        self.dummy_position.maximum_allowed_position = config_dict.get('maximum_allowed_position',
+                                                                       self.dummy_position.maximum_allowed_position)
+        self.dummy_position.minimum_allowed_position = config_dict.get('minimum_allowed_position',
+                                                                       self.dummy_position.minimum_allowed_position)
+
+    def configure_view(self, gui_root: tk.Toplevel) -> None:
+        """
+        This method launches a GUI window to configure the controller.
+        """
+        config_win = tk.Toplevel(gui_root)
+        config_win.grab_set()
+        config_win.title(f"{self.__class__.__name__} Settings")
+
+        row = 0
+        tk.Label(config_win, text="Maximum Allowed Position").grid(row=row, column=0)
+        maximum_allowed_position_var = tk.IntVar(value=self.dummy_position.maximum_allowed_position)
+        tk.Entry(config_win, textvariable=maximum_allowed_position_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="Minimum Allowed Position").grid(row=row, column=0)
+        minimum_allowed_position_var = tk.IntVar(value=self.dummy_position.minimum_allowed_position)
+        tk.Entry(config_win, textvariable=minimum_allowed_position_var).grid(row=row, column=1)
+
+        # pack variables into a dictionary to pass to the convert_gui_info_and_configure method
+        gui_info = {
+            'maximum_allowed_position': maximum_allowed_position_var,
+            'minimum_allowed_position': minimum_allowed_position_var,
+        }
+
+        def convert_gui_info_and_configure():
+            """
+            This method sets the configuration values from the GUI.
+            """
+            config_dict = {k: v.get() for k, v in gui_info.items()}
+            self.logger.info(config_dict)
+            self.configure(config_dict)
+
+        # add a button to set the values and close the window
+        row += 1
+        tk.Button(config_win,
+                  text='  Set  ',
+                  command=convert_gui_info_and_configure).grid(row=row, column=0)
+
+        tk.Button(config_win,
+                  text='Close',
+                  command=config_win.destroy).grid(row=row, column=1)

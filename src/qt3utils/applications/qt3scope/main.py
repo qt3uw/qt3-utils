@@ -116,6 +116,7 @@ class MainApplicationView():
 
         self.canvas.draw()
 
+    # todo -- change these to properties / getters
     def get_start_button(self) -> Tk.Button:
         return self.sidepanel.startButton
 
@@ -183,6 +184,8 @@ class SidePanel():
 class MainTkApplication():
 
     def __init__(self, init_hardware_name):
+        # TODO -- change variable names from hardware to "controller", which seems more consistent and conceptually correct.
+        # but this will need changes in the View / SidePanel variable names as well.
         self.root = Tk.Tk()
         self.view = MainApplicationView(self)
 
@@ -251,13 +254,8 @@ class MainTkApplication():
             logger.warning(e)
             pass
 
-    def hardware_option_callback(self, *args):
-        logger.info(f"New hardware option selected: {self.view.get_hardware_option()}")
-
-        logger.debug(f"Passed args: {args}")
-        # will probly need to reinstantiate the animation here.
-        config = self.open_config_for_hardware(self.view.get_hardware_option())
-
+    def hardware_option_callback(self, hardware_option):
+        config = self.open_config_for_hardware(hardware_option)
         self.load_daq_from_config_dict(config)
         self.view.reset_scope()
 

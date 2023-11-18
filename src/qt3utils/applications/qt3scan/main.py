@@ -3,69 +3,27 @@ import tkinter as tk
 import logging
 import datetime
 from threading import Thread
+import importlib.resources
+from typing import Any, Protocol, Optional
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
 import nidaqmx
-import h5py
+import yaml
 
 import qt3utils.nidaq
-import qt3utils.datagenerators as datasources
 import qt3utils.pulsers.pulseblaster
-import nipiezojenapy
+from qt3utils.applications.qt3scan.interface import QT3ScanDAQControllerInterface
+from qt3utils.applications.qt3scan.interface import QT3ScanPositionControllerInterface
+from qt3utils.applications.qt3scan.controller import QT3ScanConfocalApplicationController
 
 matplotlib.use('Agg')
 
 
-parser = argparse.ArgumentParser(description='NI DAQ (PCIx 6363) / Jena Piezo Scanner',
-                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
-parser.add_argument('-d', '--daq-name', default = 'Dev1', type=str, metavar = 'daq_name',
-                    help='NI DAQ Device Name')
-parser.add_argument('-st', '--signal-terminal', metavar = 'terminal', default = 'PFI0', type=str,
-                    help='NI DAQ terminal connected to input digital TTL signal')
-parser.add_argument('-c', '--clock-rate', metavar = 'rate (Hz)', default = 100000, type=int,
-                    help='''Specifies the clock rate in Hz. If using an external clock,
-                    you should specifiy the clock rate here so that the correct counts per
-                    second are displayed. If using the internal NI DAQ clock (default behavior),
-                    this value specifies the clock rate to use. Per the NI DAQ manual,
-                    use a suitable clock rate for the device for best performance, which is an integer
-                    multiple downsample of the digital sample clock.''')
-parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 250, type=int,
-                    help='''Number of data points to acquire per DAQ batch request.
-                           Note that only ONE data point is shown in the scope.
-                           After each request to the NI DAQ for data, the mean count
-                           rate from the batch is computed and displayed. Increasing
-                           the "num-data-samples-per-batch" should reduce your noise, but
-                           slow the response of the scope. Increase this value if the
-                           scope appears too noisy.''')
-parser.add_argument('-ct', '--clock-terminal', metavar = 'terminal', default = None, type=str,
-                    help='''Specifies the digital input terminal to the NI DAQ to use for a clock.
-                            If None, which is the default, the internal NI DAQ clock is used.''')
-parser.add_argument('-to', '--rwtimeout', metavar = 'seconds', default = 10, type=int,
-                    help='NI DAQ read/write timeout in seconds.')
-parser.add_argument('-sc', '--signal-counter', metavar = 'ctrN', default = 'ctr2', type=str,
-                    help='NI DAQ interal counter (ctr1, ctr2, ctr3, ctr4)')
-parser.add_argument('--piezo-write-channels', metavar = '<ch0,ch1,ch2>', default = 'ao0,ao1,ao2', type=str,
-                    help='List of analog output channels used to control the piezo position')
-parser.add_argument('--piezo-read-channels', metavar = '<ch0,ch1,ch2>', default = 'ai0,ai1,ai2', type=str,
-                    help='List of analog input channels used to read the piezo position')
-parser.add_argument('-r', '--randomtest', action = 'store_true',
-                    help='When true, program will run showing random numbers. This is for development testing.')
-parser.add_argument('-cmap', metavar = '<MPL color>', default = 'gray',
-                    help='Set the MatplotLib colormap scale')
-parser.add_argument('-pb', '--pulse-blaster', metavar = '<PB board number>', default = 0, type=int,
-                    help='Pulse Blaster board number')
-parser.add_argument('-pmin', '--piezo-min-position', metavar = 'microns', default = 0, type=float,
-                    help='sets min allowed position on piezo controller.')
-parser.add_argument('-pmax', '--piezo-max-position', metavar = 'microns', default = 80, type=float,
-                    help='sets min allowed position on piezo controller.')
-parser.add_argument('-pscale', '--piezo-scale-microns-per-volt', default = 8, type=float,
-                    help='sets micron to volt scale for piezo controller.')
-parser.add_argument('-v', '--verbose', type=int, default=1,
-                    help='verbose = 0 sets to quiet, 1 sets to info, 2 sets to debug".')
+parser = argparse.ArgumentParser(description='QT3Scan', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('-v', '--verbose', type=int, default=1, help='0 = quiet, 1 = info, 2 = debug.')
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
@@ -79,9 +37,29 @@ if args.verbose == 2:
     logger.setLevel(logging.DEBUG)
 
 
+NIDAQ_DAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
+RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Data Generator'
+
+DEFAULT_DAQ_DEVICE_NAME = RANDOM_DATA_DAQ_DEVICE_NAME
+
+CONTROLLER_PATH = 'qt3utils.applications.controllers'
+SUPPORTED_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml',
+                                                 'application_controller_class': QT3ScanConfocalApplicationController},
+                         RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
+                                                       'application_controller_class': QT3ScanConfocalApplicationController},
+                         }
+# Hyper Spectral Imaging would add the following to SUPPORTED_CONTROLLERS
+# PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
+# PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectromter.yaml',
+#                           'application_controller_class': QT3ScanHyperSpectralApplicationController}
+
+CONFIG_FILE_APPLICATION_NAME = 'QT3Scan'
+CONFIG_FILE_POSITION_CONTROLLER = 'PositionController'
+CONFIG_FILE_DAQ_CONTROLLER = 'DAQController'
+
 
 class ScanImage:
-    def __init__(self, mplcolormap = 'gray'):
+    def __init__(self, mplcolormap: str = 'gray'):
         self.fig, self.ax = plt.subplots()
         self.cbar = None
         self.cmap = mplcolormap
@@ -96,7 +74,7 @@ class ScanImage:
 
         if self.log_data:
             data = np.log10(model.scanned_count_rate)
-            data[np.isinf(data)] = 0 #protect against +-inf
+            data[np.isinf(data)] = 0  # protect against +-inf
         else:
             data = model.scanned_count_rate
 
@@ -104,7 +82,7 @@ class ScanImage:
                                                                    model.xmax + model.step_size,
                                                                    model.current_y + model.step_size,
                                                                    model.ymin])
-        
+
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
         else:
@@ -121,6 +99,9 @@ class ScanImage:
 
     def set_onclick_callback(self, f):
         self.onclick_callback = f
+
+    def set_rightclick_callback(self, f):
+        self.rightclick_callback = f
 
     def update_pointer_indicator(self, x_position, y_position):
         """
@@ -141,24 +122,27 @@ class ScanImage:
             self.position_line2d = self.ax.plot(x_position, y_position, 'ro', label='pos')
 
     def onclick(self, event):
-        if event.inaxes is self.ax:
-            self.onclick_callback(event)
-            self.update_pointer_indicator(event.xdata, event.ydata)
-            self.fig.canvas.draw()
+        logger.debug(f"Button {event.button} click at: ({event.xdata} microns, {event.ydata}) microns")
+        if event.button == 3:  # Right click
+            self.rightclick_callback(event)
+        elif event.button == 1:  # Left click
+            if event.inaxes is self.ax:
+                self.onclick_callback(event)
+                self.update_pointer_indicator(event.xdata, event.ydata)
+                self.fig.canvas.draw()
+
 
 class SidePanel():
-    def __init__(self, root, scan_range):
-        frame = tk.Frame(root)
+    def __init__(self, application):
+        frame = tk.Frame(application.root_window)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         row = 0
-        tk.Label(frame, text="Scan Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
+        tk.Label(frame, text="Scan Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
         row += 1
         tk.Label(frame, text="x range (um)").grid(row=row, column=0)
         self.x_min_entry = tk.Entry(frame, width=10)
         self.x_max_entry = tk.Entry(frame, width=10)
-        self.x_min_entry.insert(10, scan_range[0])
-        self.x_max_entry.insert(10, scan_range[1])
         self.x_min_entry.grid(row=row, column=1)
         self.x_max_entry.grid(row=row, column=2)
 
@@ -166,8 +150,6 @@ class SidePanel():
         tk.Label(frame, text="y range (um)").grid(row=row, column=0)
         self.y_min_entry = tk.Entry(frame, width=10)
         self.y_max_entry = tk.Entry(frame, width=10)
-        self.y_min_entry.insert(10, scan_range[0])
-        self.y_max_entry.insert(10, scan_range[1])
         self.y_min_entry.grid(row=row, column=1)
         self.y_max_entry.grid(row=row, column=2)
 
@@ -176,7 +158,6 @@ class SidePanel():
         self.step_size_entry = tk.Entry(frame, width=10)
         self.step_size_entry.insert(10, 1.0)
         self.step_size_entry.grid(row=row, column=1)
-
 
         row += 1
         tk.Label(frame, text="set z (um)").grid(row=row, column=0)
@@ -232,54 +213,75 @@ class SidePanel():
         self.optimize_z_button.grid(row=row, column=2)
 
         row += 1
-        tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0,pady=10)
-        row += 1
-        tk.Label(frame, text="N samples/step").grid(row=row, column=0)
-        self.n_sample_size_value = tk.IntVar()
-        self.n_sample_size_entry = tk.Entry(frame, width=10, textvariable = self.n_sample_size_value)
-        self.n_sample_size_entry.grid(row=row, column=1)
-        self.n_sample_size_value.set(args.num_data_samples_per_batch)
+        tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
 
         row += 1
-        tk.Label(frame, text="Pulse Blaster AOM").grid(row=row, column=0)
-        self.hold_aom_button = tk.Button(frame, text="Hold AOM")
-        self.hold_aom_button.grid(row=row, column=1, pady=(2,15))
-        self.aom_pulse_blaster_channel = tk.Entry(frame, width=10)
-        self.aom_pulse_blaster_channel.insert(10, '0')
-        self.aom_pulse_blaster_channel.grid(row=row, column=2, pady=(2,15))
+        self.controller_option = tk.StringVar(frame)
+        self.controller_option.set(DEFAULT_DAQ_DEVICE_NAME)
+        # todo - TkOptionMenu doesn't have a way, that I know of,
+        # to modify the callback after instantiation. Therefore,
+        # for now, we need to pass the app_controller to this class
+        # so that it can be used in the callback when a hardware option is selected.
+        self.controller_menu = tk.OptionMenu(frame,
+                                             self.controller_option,
+                                             *SUPPORTED_CONTROLLERS.keys(),
+                                             command=application.load_controller_from_config_dict)
+        self.controller_menu.grid(row=row, column=0, columnspan=3)
 
+        row += 1
+        self.daq_config_button = tk.Button(frame, text="Data Acquisition Config")
+        self.daq_config_button.grid(row=row, column=0, columnspan=3)
+
+        row += 1
+        self.position_controller_config_button = tk.Button(frame, text="Position Controller Config")
+        self.position_controller_config_button.grid(row=row, column=0, columnspan=3)
+
+        row += 1
+        self.config_from_yaml_button = tk.Button(frame, text="Load YAML Config")
+        self.config_from_yaml_button.grid(row=row, column=0, columnspan=3)
+
+        # todo -- package view settings into a separate GUI breakout window
         row += 1
         tk.Label(frame, text="View Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
         row += 1
         self.set_color_map_button = tk.Button(frame, text="Set Color")
-        self.set_color_map_button.grid(row=row, column=0, pady=(2,15))
+        self.set_color_map_button.grid(row=row, column=0, pady=(2, 15))
         self.mpl_color_map_entry = tk.Entry(frame, width=10)
-        self.mpl_color_map_entry.insert(10, args.cmap)
-        self.mpl_color_map_entry.grid(row=row, column=1, pady=(2,15))
+        self.mpl_color_map_entry.insert(10, 'gray')
+        self.mpl_color_map_entry.grid(row=row, column=1, pady=(2, 15))
 
         self.log10Button = tk.Button(frame, text="Log10")
-        self.log10Button.grid(row=row, column=2, pady=(2,15))
+        self.log10Button.grid(row=row, column=2, pady=(2, 15))
 
-    def update_go_to_position(self, x = None, y = None, z = None):
+    def update_go_to_position(self,
+                              x: Optional[float] = None,
+                              y: Optional[float] = None,
+                              z: Optional[float] = None):
         if x is not None:
-            self.go_to_x_position_text.set(np.round(x,4))
+            self.go_to_x_position_text.set(np.round(x, 4))
         if y is not None:
-            self.go_to_y_position_text.set(np.round(y,4))
+            self.go_to_y_position_text.set(np.round(y, 4))
         if z is not None:
-            self.z_entry_text.set(np.round(z,4))
+            self.z_entry_text.set(np.round(z, 4))
 
     def mpl_onclick_callback(self, mpl_event):
         if mpl_event.xdata and mpl_event.ydata:
             self.update_go_to_position(mpl_event.xdata, mpl_event.ydata)
 
+    def set_scan_range(self, scan_range):
+        self.x_min_entry.insert(10, scan_range[0])
+        self.x_max_entry.insert(10, scan_range[1])
+        self.y_min_entry.insert(10, scan_range[0])
+        self.y_max_entry.insert(10, scan_range[1])
+
 
 class MainApplicationView():
-    def __init__(self, main_frame, scan_range = [0,80]):
-        frame = tk.Frame(main_frame)
+    def __init__(self, application):
+        frame = tk.Frame(application.root_window)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        self.scan_view = ScanImage(args.cmap)
-        self.sidepanel = SidePanel(main_frame, scan_range)
+        self.scan_view = ScanImage()
+        self.sidepanel = SidePanel(application)
         self.scan_view.set_onclick_callback(self.sidepanel.mpl_onclick_callback)
 
         self.canvas = FigureCanvasTkAgg(self.scan_view.fig, master=frame)
@@ -291,17 +293,56 @@ class MainApplicationView():
 
         self.canvas.draw()
 
-    def show_optimization_plot(self, title, old_opt_value,
-                                     new_opt_value,
-                                     x_vals,
-                                     y_vals, fit_coeff = None):
+    @property
+    def controller_menu(self) -> tk.OptionMenu:
+        return self.sidepanel.controller_menu
+
+    @property
+    def controller_option(self) -> tk.StringVar:
+        return self.sidepanel.controller_option
+
+    @controller_option.setter
+    def controller_option(self, value):
+        self.sidepanel.controller_option.set(value)
+
+    @property
+    def daq_config_button(self) -> tk.Button:
+        return self.sidepanel.daq_config_button
+
+    @property
+    def position_controller_config_button(self) -> tk.Button:
+        return self.sidepanel.position_controller_config_button
+
+    @property
+    def config_from_yaml_button(self) -> tk.Button:
+        return self.sidepanel.config_from_yaml_button
+
+    def set_scan_range(self, scan_range):
+        self.sidepanel.set_scan_range(scan_range)
+
+    def show_optimization_plot(self, title: str,
+                               old_opt_value: float,
+                               new_opt_value: float,
+                               x_vals: np.ndarray,
+                               y_vals: np.ndarray,
+                               fit_coeff: np.ndarray = None):
+        """
+        Consturcts a new window with a plot of the optimization data.
+
+        title: title of the window
+        old_opt_value: the old optimized value
+        new_opt_value: the new optimized value
+        x_vals: the x values of the data
+        y_vals: the measured y values of the data
+        fit_coeff: the fit coefficients of the function qt3utils.datagenerators.piezoscanner.gauss
+        """
         win = tk.Toplevel()
         win.title(title)
         fig, ax = plt.subplots()
         ax.set_xlabel('position (um)')
         ax.set_ylabel('count rate (Hz)')
         ax.plot(x_vals, y_vals, label='data')
-        ax.ticklabel_format(style='sci',scilimits=(0,3))
+        ax.ticklabel_format(style='sci', scilimits=(0, 3))
         ax.axvline(old_opt_value, linestyle='--', color='red', label=f'old position {old_opt_value:.2f}')
         ax.axvline(new_opt_value, linestyle='-', color='blue', label=f'new position {new_opt_value:.2f}')
 
@@ -320,91 +361,188 @@ class MainApplicationView():
 
         canvas.draw()
 
+
 class MainTkApplication():
 
-    def __init__(self, counter_scanner):
-        self.root = tk.Tk()
-        self.counter_scanner = counter_scanner
-        scan_range = [counter_scanner.stage_controller.minimum_allowed_position,
-                      counter_scanner.stage_controller.maximum_allowed_position]
-        self.view = MainApplicationView(self.root, scan_range)
-        self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
-        self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
-        self.view.sidepanel.log10Button.bind("<Button>", self.log_scan_image)
-        self.view.sidepanel.gotoButton.bind("<Button>", self.go_to_position)
-        self.view.sidepanel.go_to_z_button.bind("<Button>", self.go_to_z)
-        self.view.sidepanel.saveScanButton.bind("<Button>", self.save_scan)
-        self.view.sidepanel.popOutScanButton.bind("<Button>", self.pop_out_scan)
+    def __init__(self, application_controller_name: str):
+        self.root_window = tk.Tk()
 
-        self.view.sidepanel.set_color_map_button.bind("<Button>", self.set_color_map)
-        self.view.sidepanel.hold_aom_button.bind("<Button>", self.hold_aom_with_pulse_blaster)
+        self.view = MainApplicationView(self)
+        self.view.controller_option = application_controller_name
+
+        self.view.sidepanel.startButton.bind("<Button>", lambda e: self.start_scan())
+        self.view.sidepanel.stopButton.bind("<Button>", lambda e: self.stop_scan())
+        self.view.sidepanel.log10Button.bind("<Button>", lambda e: self.log_scan_image())
+        self.view.sidepanel.gotoButton.bind("<Button>", lambda e: self.go_to_position())
+        self.view.sidepanel.go_to_z_button.bind("<Button>", lambda e: self.go_to_z())
+        self.view.sidepanel.saveScanButton.bind("<Button>", lambda e: self.save_scan())
+        self.view.sidepanel.popOutScanButton.bind("<Button>", lambda e: self.pop_out_scan())
+
+        self.view.sidepanel.set_color_map_button.bind("<Button>", lambda e: self.set_color_map())
 
         self.view.sidepanel.optimize_x_button.bind("<Button>", lambda e: self.optimize('x'))
         self.view.sidepanel.optimize_y_button.bind("<Button>", lambda e: self.optimize('y'))
         self.view.sidepanel.optimize_z_button.bind("<Button>", lambda e: self.optimize('z'))
+        self.view.config_from_yaml_button.bind("<Button>", lambda e: self.configure_from_yaml())
 
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.load_controller_from_config_dict(application_controller_name)
+
+        scan_range = [self.application_controller.position_controller.minimum_allowed_position,
+                      self.application_controller.position_controller.maximum_allowed_position]
+
+        self.view.set_scan_range(scan_range)
+
+        self.root_window.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.scan_thread = None
 
-        self.optimized_position = {'x':0, 'y':0, 'z':-1}
-        if self.counter_scanner.stage_controller:
-            self.optimized_position['z'] = self.counter_scanner.stage_controller.get_current_position()[2]
-        else:
-            self.optimized_position['z'] = 20
-        self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'],4))
+        self.optimized_position = {'x': 0, 'y': 0, 'z': -1}
+        self.optimized_position['z'] = self.application_controller.position_controller.get_current_position()[2]
+        self.optimized_position['z'] = self.optimized_position['z'] if self.optimized_position['z'] is not None else 0  # protects against None value returned by position controller when it cannot connect to hardware
+        self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'], 4))
 
+    def _open_yaml_config_for_controller(self, controller_name: str) -> dict:
+        with importlib.resources.path(CONTROLLER_PATH, SUPPORTED_CONTROLLERS[controller_name]['yaml']) as yaml_path:
+            logger.info(f"opening config file: {yaml_path}")
+            with open(yaml_path, 'r') as yaml_file:
+                config = yaml.safe_load(yaml_file)
+
+        return config
+
+    def _load_controller_from_dict(self, config: dict, a_protocol: Protocol) -> Any:
+        """
+        Dynamically imports the module and instantiates the class specified in the config dictionary.
+        Class the class configure method if it exists.
+        """
+        # Dynamically import the module
+        module = importlib.import_module(config['import_path'])
+        logger.debug(f"loading {config['import_path']}")
+
+        # Dynamically instantiate the class
+        cls = getattr(module, config['class_name'])
+        logger.debug(f"instantiating {config['class_name']}")
+
+        controller = cls(logger.level)
+
+        logger.debug(f"asserting {config['class_name']} of proper type {a_protocol}")
+        assert isinstance(controller, a_protocol)
+
+        # configure the controller
+        # all controllers *should* have a configure method
+        logger.debug(f"calling {a_protocol} configure method")
+        controller.configure(config['configure'])
+
+        return controller
+
+    def _configure_controller(self, config: dict, controller: Any) -> None:
+        """
+        Checks that the controller object is of the same type as the one found in config dictionary.
+
+        If the controller object is of the same type, then the controller is configured with the
+        configure method
+        """
+        same_class_name = controller.__class__.__name__ == config['class_name']
+        same_module_name = controller.__class__.__module__ == config['import_path']
+        if same_class_name is False or same_module_name is False:
+            msg = f"""\nCurrent controller object is not of type found in YAML
+Found in YAML: {config['import_path']}.{config['class_name']}.
+Current object: {controller.__class__.__module__}.{controller.__class__.__name__}
+Configuration not loaded. Please select approprate controller from the pull-down menu
+or check your YAML file to ensure configuration of supported controller.
+"""
+            logger.warning(msg)
+        else:
+            logger.info("load settings from yaml")
+            logger.info(config['configure'])
+            controller.configure(config['configure'])
+
+    def load_controller_from_config_dict(self, application_controller_name: str) -> None:
+        """
+        Loads the default yaml configuration file for the application controller.
+
+        Should be called during instantiation of this class and should be the callback
+        function for the support controller pull-down menu in the side panel
+        """
+        logger.info(f"loading {application_controller_name}")
+
+        config = self._open_yaml_config_for_controller(application_controller_name)
+        # load the position controller from dict
+        pos_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_POSITION_CONTROLLER]
+        position_controller = self._load_controller_from_dict(pos_config, QT3ScanPositionControllerInterface)
+
+        # load the data acquisition model from dict
+        daq_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_CONTROLLER]
+        daq_controller = self._load_controller_from_dict(daq_config, QT3ScanDAQControllerInterface)
+
+        ControllerClass = SUPPORTED_CONTROLLERS[application_controller_name]['application_controller_class']
+        self.application_controller = ControllerClass(position_controller, daq_controller, logger.level)
+
+        # bind buttons to controllers
+        self.view.scan_view.set_rightclick_callback(self.application_controller.scan_image_rightclick_event)
+        self.view.position_controller_config_button.bind("<Button>", lambda e: self.application_controller.position_controller.configure_view(self.root_window))
+        self.view.daq_config_button.bind("<Button>", lambda e: self.application_controller.daq_controller.configure_view(self.root_window))
+
+    def configure_from_yaml(self) -> None:
+        """
+        This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
+
+        This does not instantiate a new hardware controller class. It only configures the existing one.
+        """
+        filetypes = (
+            ('YAML', '*.yaml'),
+        )
+        afile = tk.filedialog.askopenfile(filetypes=filetypes, defaultextension='.yaml')
+        if afile is None:
+            return  # selection was canceled.
+
+        config = yaml.safe_load(afile)
+        afile.close()
+
+        pos_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_POSITION_CONTROLLER]
+        self._configure_controller(pos_config, self.application_controller.position_controller)
+
+        daq_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_CONTROLLER]
+        self._configure_controller(daq_config, self.application_controller.daq_controller)
 
     def run(self):
-        self.root.title("QT3Scan: Piezo Controlled NIDAQ Digital Count Rate Scanner")
-        self.root.deiconify()
-        self.root.mainloop()
+        self.root_window.title("QT3Scan: Piezo Controlled NIDAQ Digital Count Rate Scanner")
+        self.root_window.deiconify()
+        self.root_window.mainloop()
 
-    def go_to_position(self, event = None):
-        if self.counter_scanner.stage_controller:
-            self.counter_scanner.stage_controller.go_to_position(x = self.view.sidepanel.go_to_x_position_text.get(), y = self.view.sidepanel.go_to_y_position_text.get())
-        else:
-            print(f'stage_controller would have moved to x,y = {self.view.sidepanel.go_to_x_position_text.get():.2f}, {self.view.sidepanel.go_to_y_position_text.get():.2f}')
-        x, y  = self.view.sidepanel.go_to_x_position_text.get(),  self.view.sidepanel.go_to_y_position_text.get()
+    def go_to_position(self):
+
+        x = self.view.sidepanel.go_to_x_position_text.get()
+        y = self.view.sidepanel.go_to_y_position_text.get()
+        self.application_controller.position_controller.go_to_position(x, y)
         self.optimized_position['x'] = x
         self.optimized_position['y'] = y
         self.view.scan_view.update_position_indicator(x, y)
 
-        if len(self.counter_scanner.scanned_count_rate) > 0:
-            self.view.scan_view.update(self.counter_scanner)
+        if len(self.application_controller.scanned_count_rate) > 0:
+            self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
-    def go_to_z(self, event = None):
-        if self.counter_scanner.stage_controller:
-            self.counter_scanner.stage_controller.go_to_position(z = self.view.sidepanel.z_entry_text.get())
-        else:
-            print(f'stage_controller would have moved to z = {self.view.sidepanel.z_entry_text.get():.2f}')
+    def go_to_z(self):
+        self.application_controller.position_controller.go_to_position(z=self.view.sidepanel.z_entry_text.get())
         self.optimized_position['z'] = self.view.sidepanel.z_entry_text.get()
 
-    def set_color_map(self, event = None):
-        #Is there a way for this function to exist entirely in the view code instead of here?
+    def set_color_map(self):
+        # Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.cmap = self.view.sidepanel.mpl_color_map_entry.get()
-        if len(self.counter_scanner.scanned_count_rate) > 0:
-            self.view.scan_view.update(self.counter_scanner)
+        if len(self.application_controller.scanned_count_rate) > 0:
+            self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
-    def log_scan_image(self, event = None):
-        #Is there a way for this function to exist entirely in the view code instead of here?
+    def log_scan_image(self):
+        # Is there a way for this function to exist entirely in the view code instead of here?
         self.view.scan_view.log_data = not self.view.scan_view.log_data
-        if len(self.counter_scanner.scanned_count_rate) > 0:
-            self.view.scan_view.update(self.counter_scanner)
+        if len(self.application_controller.scanned_count_rate) > 0:
+            self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
-    def hold_aom_with_pulse_blaster(self, event = None):
-        aom_channel = int(self.view.sidepanel.aom_pulse_blaster_channel.get())
-        pb = qt3utils.pulsers.pulseblaster.PulseBlasterHoldAOM(args.pulse_blaster, aom_channel)
-        pb.program_pulser_state()
-        pb.start()
+    def stop_scan(self):
+        self.application_controller.stop()
 
-    def stop_scan(self, event = None):
-        self.counter_scanner.stop()
-
-
-    def pop_out_scan(self, event = None):
+    def pop_out_scan(self):
         """
         Creates a new TKinter window with the data from the current scan. This allows researchers
         to retain scan image in a separate window and run subsequent scans.
@@ -414,7 +552,7 @@ class MainTkApplication():
         win.title(f'Scan {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
 
         new_scan_view = ScanImage(self.view.scan_view.cmap)
-        new_scan_view.update(self.counter_scanner)
+        new_scan_view.update(self.application_controller)
 
         canvas = FigureCanvasTkAgg(new_scan_view.fig, master=win)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -425,54 +563,65 @@ class MainTkApplication():
 
         canvas.draw()
 
-    def scan_thread_function(self, xmin, xmax, ymin, ymax, step_size, N):
-
-        self.counter_scanner.set_scan_range(xmin, xmax, ymin, ymax)
-        self.counter_scanner.step_size = step_size
-        self.counter_scanner.set_num_data_samples_per_batch(N)
+    def _scan_thread_function(self, xmin, xmax, ymin, ymax, step_size):
 
         try:
-            self.counter_scanner.reset() #clears the data
-            self.counter_scanner.start() #starts the DAQ
-            self.counter_scanner.set_to_starting_position() #moves the stage to starting position
+            self.application_controller.set_scan_range(xmin, xmax, ymin, ymax)
+            self.application_controller.step_size = step_size
+            self.application_controller.reset()  # clears the data
+            self.application_controller.start()  # starts the DAQ
+            self.application_controller.set_to_starting_position()  # moves the stage to starting position
 
-            while self.counter_scanner.still_scanning():
-                self.counter_scanner.scan_x()
-                self.view.scan_view.update(self.counter_scanner)
+            while self.application_controller.still_scanning():
+                self.application_controller.scan_x()
+                self.view.scan_view.update(self.application_controller)
                 self.view.canvas.draw()
-                self.counter_scanner.move_y()
+                self.application_controller.move_y()
 
-            self.counter_scanner.stop()
+            self.application_controller.stop()
 
         except nidaqmx.errors.DaqError as e:
-            logger.info(e)
-            logger.info('Check for other applications using resources. If not, you may need to restart the application.')
+            logger.warning(e)
+            logger.warning('Check for other applications using resources. If not, you may need to restart the application.')
+        except ValueError as e:
+            logger.warning(e)
+            logger.warning('Check your configurtion! You may have entered a value that is out of range')
 
-        self.view.sidepanel.startButton['state'] = 'normal'
-        self.view.sidepanel.go_to_z_button['state'] = 'normal'
-        self.view.sidepanel.gotoButton['state'] = 'normal'
-        self.view.sidepanel.saveScanButton['state'] = 'normal'
-        self.view.sidepanel.popOutScanButton['state'] = 'normal'
+        self.view.sidepanel.startButton.config(state=tk.NORMAL)
+        self.view.sidepanel.go_to_z_button.config(state=tk.NORMAL)
+        self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
+        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
+        self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
 
-        self.view.sidepanel.optimize_x_button['state'] = 'normal'
-        self.view.sidepanel.optimize_y_button['state'] = 'normal'
-        self.view.sidepanel.optimize_z_button['state'] = 'normal'
+        self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
+        self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
+        self.view.sidepanel.optimize_z_button.config(state=tk.NORMAL)
 
-    def start_scan(self, event = None):
-        self.view.sidepanel.startButton['state'] = 'disabled'
-        self.view.sidepanel.go_to_z_button['state'] = 'disabled'
-        self.view.sidepanel.gotoButton['state'] = 'disabled'
-        self.view.sidepanel.saveScanButton['state'] = 'disabled'
-        self.view.sidepanel.popOutScanButton['state'] = 'disabled'
+        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
+        self.view.sidepanel.daq_config_button.config(state=tk.NORMAL)
+        self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
+        self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
 
-        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
+    def start_scan(self):
+        self.view.sidepanel.startButton.config(state=tk.DISABLED)
+        self.view.sidepanel.go_to_z_button.config(state=tk.DISABLED)
+        self.view.sidepanel.gotoButton.config(state=tk.DISABLED)
+        self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
+        self.view.sidepanel.popOutScanButton.config(state=tk.DISABLED)
 
-        #clear the figure
+        self.view.sidepanel.optimize_x_button.config(state=tk.DISABLED)
+        self.view.sidepanel.optimize_y_button.config(state=tk.DISABLED)
+        self.view.sidepanel.optimize_z_button.config(state=tk.DISABLED)
+
+        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
+        self.view.sidepanel.daq_config_button.config(state=tk.DISABLED)
+        self.view.sidepanel.position_controller_config_button.config(state=tk.DISABLED)
+        self.view.sidepanel.config_from_yaml_button.config(state=tk.DISABLED)
+
+        # clear the figure
         self.view.scan_view.reset()
 
-        #get the scan settings
+        # get the scan settings
         xmin = float(self.view.sidepanel.x_min_entry.get())
         xmax = float(self.view.sidepanel.x_max_entry.get())
         ymin = float(self.view.sidepanel.y_min_entry.get())
@@ -480,73 +629,60 @@ class MainTkApplication():
 
         args = [xmin, xmax, ymin, ymax]
         args.append(float(self.view.sidepanel.step_size_entry.get()))
-        args.append(int(self.view.sidepanel.n_sample_size_value.get()))
 
-        self.scan_thread = Thread(target=self.scan_thread_function,
-                                  args = args)
+        # get this value from the DAQ controller
+        self.scan_thread = Thread(target=self._scan_thread_function,
+                                  args=args)
         self.scan_thread.start()
 
-    def save_scan(self, event = None):
-        myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
-        afile = tk.filedialog.asksaveasfilename(filetypes=myformats, defaultextension='.npz')
-        logger.info(afile)
-        file_type = afile.split('.')[-1]
+    def save_scan(self):
+        afile = tk.filedialog.asksaveasfilename(filetypes=self.application_controller.allowed_file_save_formats(), 
+                                                defaultextension=self.application_controller.default_file_format())
         if afile is None or afile == '':
-            return # selection was canceled.
+            return  # selection was canceled.
 
-        data = dict(
-                    raw_counts=self.counter_scanner.scanned_raw_counts,
-                    count_rate=self.counter_scanner.scanned_count_rate,
-                    scan_range=self.counter_scanner.get_completed_scan_range(),
-                    step_size=self.counter_scanner.step_size,
-                    daq_clock_rate=self.counter_scanner.rate_counter.clock_rate,
-                    )
+        logger.info(f'Saving data to {afile}')
+        self.application_controller.save_scan(afile)
 
-        if file_type == 'npy':
-            np.save(afile, data['count_rate'])
-
-        if file_type == 'npz':
-            np.savez_compressed(afile, **data)
-
-        elif file_type == 'h5':
-            h5file = h5py.File(afile, 'w')
-            for key, value in data.items():
-                h5file.create_dataset(key, data=value)
-            h5file.close()
-
-
-    def optimize_thread_function(self, axis, central, range, step_size):
+    def _optimize_thread_function(self, axis, central, range, step_size):
 
         try:
-            data, axis_vals, opt_pos, coeff = self.counter_scanner.optimize_position(axis,
-                                                                           central,
-                                                                           range,
-                                                                           step_size)
+            data, axis_vals, opt_pos, coeff = self.application_controller.optimize_position(axis,
+                                                                                            central,
+                                                                                            range,
+                                                                                            step_size)
             self.optimized_position[axis] = opt_pos
-            self.counter_scanner.stage_controller.go_to_position(**{axis:opt_pos})
+            self.application_controller.position_controller.go_to_position(**{axis: opt_pos})
             self.view.show_optimization_plot(f'Optimize {axis}',
                                              central,
                                              self.optimized_position[axis],
                                              axis_vals,
                                              data,
                                              coeff)
-            self.view.sidepanel.update_go_to_position(**{axis:self.optimized_position[axis]})
-            
+            self.view.sidepanel.update_go_to_position(**{axis: self.optimized_position[axis]})
+            self.view.scan_view.update_position_indicator(self.optimized_position['x'],
+                                                          self.optimized_position['y'])
+            self.view.canvas.draw()
+
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
 
+        self.view.sidepanel.startButton.config(state=tk.NORMAL)
+        self.view.sidepanel.stopButton.config(state=tk.NORMAL)
+        self.view.sidepanel.go_to_z_button.config(state=tk.NORMAL)
+        self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
+        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
+        self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
 
-        self.view.sidepanel.startButton['state'] = 'normal'
-        self.view.sidepanel.stopButton['state'] = 'normal'
-        self.view.sidepanel.go_to_z_button['state'] = 'normal'
-        self.view.sidepanel.gotoButton['state'] = 'normal'
-        self.view.sidepanel.saveScanButton['state'] = 'normal'
-        self.view.sidepanel.popOutScanButton['state'] = 'normal'
+        self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
+        self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
+        self.view.sidepanel.optimize_z_button.config(state=tk.NORMAL)
 
-        self.view.sidepanel.optimize_x_button['state'] = 'normal'
-        self.view.sidepanel.optimize_y_button['state'] = 'normal'
-        self.view.sidepanel.optimize_z_button['state'] = 'normal'
+        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
+        self.view.sidepanel.daq_config_button.config(state=tk.NORMAL)
+        self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
+        self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
 
     def optimize(self, axis):
 
@@ -554,60 +690,38 @@ class MainTkApplication():
         opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
         old_optimized_value = self.optimized_position[axis]
 
-        self.counter_scanner.set_num_data_samples_per_batch(self.view.sidepanel.n_sample_size_value.get())
+        self.view.sidepanel.startButton.config(state=tk.DISABLED)
+        self.view.sidepanel.stopButton.config(state=tk.DISABLED)
+        self.view.sidepanel.go_to_z_button.config(state=tk.DISABLED)
+        self.view.sidepanel.gotoButton.config(state=tk.DISABLED)
+        self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
+        self.view.sidepanel.popOutScanButton.config(state=tk.DISABLED)
 
-        self.view.sidepanel.startButton['state'] = 'disabled'
-        self.view.sidepanel.stopButton['state'] = 'disabled'
-        self.view.sidepanel.go_to_z_button['state'] = 'disabled'
-        self.view.sidepanel.gotoButton['state'] = 'disabled'
-        self.view.sidepanel.saveScanButton['state'] = 'disabled'
-        self.view.sidepanel.popOutScanButton['state'] = 'disabled'
+        self.view.sidepanel.optimize_x_button.config(state=tk.DISABLED)
+        self.view.sidepanel.optimize_y_button.config(state=tk.DISABLED)
+        self.view.sidepanel.optimize_z_button.config(state=tk.DISABLED)
 
-        self.view.sidepanel.optimize_x_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_y_button['state'] = 'disabled'
-        self.view.sidepanel.optimize_z_button['state'] = 'disabled'
+        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
+        self.view.sidepanel.daq_config_button.config(state=tk.DISABLED)
+        self.view.sidepanel.position_controller_config_button.config(state=tk.DISABLED)
+        self.view.sidepanel.config_from_yaml_button.config(state=tk.DISABLED)
 
-        self.optimize_thread = Thread(target=self.optimize_thread_function,
-                                      args = (axis, old_optimized_value, opt_range, opt_step_size))
+        self.optimize_thread = Thread(target=self._optimize_thread_function,
+                                      args=(axis, old_optimized_value, opt_range, opt_step_size))
         self.optimize_thread.start()
 
     def on_closing(self):
         try:
             self.stop_scan()
-            self.root.quit()
-            self.root.destroy()
         except Exception as e:
             logger.debug(e)
-            pass
-
-def build_data_scanner():
-    if args.randomtest:
-        stage_controller = nipiezojenapy.BaseControl()
-        data_acq = datasources.RandomRateCounter(simulate_single_light_source=True,
-                                                 num_data_samples_per_batch=args.num_data_samples_per_batch)
-    else:
-        stage_controller = nipiezojenapy.PiezoControl(device_name = args.daq_name,
-                                  write_channels = args.piezo_write_channels.split(','),
-                                  read_channels = args.piezo_read_channels.split(','),
-                                  min_position = args.piezo_min_position,
-                                  max_position = args.piezo_max_position,
-                                  scale_microns_per_volt = args.piezo_scale_microns_per_volt)
-
-        data_acq = datasources.NiDaqDigitalInputRateCounter(args.daq_name,
-                                                            args.signal_terminal,
-                                                            args.clock_rate,
-                                                            args.num_data_samples_per_batch,
-                                                            args.clock_terminal,
-                                                            args.rwtimeout,
-                                                            args.signal_counter)
-
-    scanner = datasources.CounterAndScanner(data_acq, stage_controller)
-
-    return scanner
+        finally:
+            self.root_window.quit()
+            self.root_window.destroy()
 
 
 def main():
-    tkapp = MainTkApplication(build_data_scanner())
+    tkapp = MainTkApplication(DEFAULT_DAQ_DEVICE_NAME)
     tkapp.run()
 
 

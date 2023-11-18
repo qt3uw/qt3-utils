@@ -6,6 +6,9 @@ from typing import Tuple, Optional, Protocol, runtime_checkable
 @runtime_checkable
 class QT3ScanPositionControllerInterface(Protocol):
 
+    def __init__(self, logger_level):
+        pass
+
     @property
     def maximum_allowed_position(self):
         """Abstract property: maximum_allowed_position"""
@@ -16,13 +19,16 @@ class QT3ScanPositionControllerInterface(Protocol):
         """Abstract property: minimum_allowed_position"""
         pass
 
-    def go_to_position(self, x: float, y: float, z: float) -> None:
+    def go_to_position(self,
+                       x: Optional[float] = None,
+                       y: Optional[float] = None,
+                       z: Optional[float] = None) -> None:
         """
         This method is used to move the stage or objective to a position.
         """
         pass
 
-    def get_current_position(self) -> Tuple(float, float, float):
+    def get_current_position(self) -> Tuple[float, float, float]:
         pass
 
     def check_allowed_position(self,
@@ -48,15 +54,12 @@ class QT3ScanPositionControllerInterface(Protocol):
         """
         pass
 
-    def print_config(self) -> None:
-        """
-        This method prints the current configuration of the controller to standard out.
-        """
-        pass
-
 
 @runtime_checkable
-class QT3ScanDataControllerInterface(Protocol):
+class QT3ScanDAQControllerInterface(Protocol):
+
+    def __init__(self, logger_level):
+        pass
 
     @property
     def clock_rate(self) -> float:
@@ -98,20 +101,28 @@ class QT3ScanDataControllerInterface(Protocol):
         """
         pass
 
-    def print_config(self) -> None:
-        """
-        This method prints the current configuration of the controller to standard out.
-        """
-        pass
-
 
 @runtime_checkable
-class QT3ScanCountAndScanControllerInterface(Protocol):
+class QT3ScanApplicationControllerInterface(Protocol):
+
+    def __init__(self,
+                 position_controller: QT3ScanPositionControllerInterface,
+                 daq_controller: QT3ScanDAQControllerInterface,
+                 logger_level) -> None:
+        pass
 
     @property
     def step_size(self) -> float:
         pass
 
+    @step_size.setter
+    def step_size(self, value):
+        """Abstract property setter for num_data_samples_per_batch"""
+        pass
+
+    ## TODO -- scanned_count_rate and scanned_raw_counts might not be the best names for these properties
+    # these are the 2D data representation of the scan -- for confocal scans, each pixel is
+    # simply the number of counts. for hyperspectral, the pixel is the counts summed across the spectrum
     @property
     def scanned_count_rate(self) -> np.ndarray:
         pass
@@ -121,11 +132,31 @@ class QT3ScanCountAndScanControllerInterface(Protocol):
         pass
 
     @property
-    def stage_controller(self) -> QT3ScanPositionControllerInterface:
+    def position_controller(self) -> QT3ScanPositionControllerInterface:
         pass
 
     @property
-    def rate_counter(self) -> QT3ScanDataControllerInterface:
+    def daq_controller(self) -> QT3ScanDAQControllerInterface:
+        pass
+
+    @property
+    def xmin(self) -> float:
+        pass
+
+    @property
+    def xmax(self) -> float:
+        pass
+
+    @property
+    def ymin(self) -> float:
+        pass
+
+    @property
+    def ymax(self) -> float:
+        pass
+
+    @property
+    def current_y(self) -> float:
         pass
 
     def start(self) -> None:
@@ -149,7 +180,7 @@ class QT3ScanCountAndScanControllerInterface(Protocol):
     def move_y(self) -> None:
         pass
 
-    def optimize_position(self, axis, central, range, step_size) -> Tuple(np.ndarray, np.ndarray, float, np.ndarray):
+    def optimize_position(self, axis, central, range, step_size) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """
         The returned tuple elements should be:
         0th: np.ndarray of count rates across the axis
@@ -162,26 +193,34 @@ class QT3ScanCountAndScanControllerInterface(Protocol):
     def set_scan_range(self, xmin, xmax, ymin, ymax) -> None:
         pass
 
+    # TODO -- should this be part of daq controler?? I think yes.
     def set_num_data_samples_per_batch(self, N: int) -> None:
         pass
 
-    def get_completed_scan_range(self) -> Tuple(float, float, float, float):
+    # TODO -- investigate if this is necessary. This function is not used in qt3scan.main
+    # but it is used internally in the QT3ScanConfocalApplicationController for saving data
+    # TODO -- check all of the other methods in this interface to see if they are necessary at the interface level
+    def get_completed_scan_range(self) -> Tuple[float, float, float, float]:
         pass
 
-    def configure(self, config_dict: dict):
-        """
-        This method is used to configure the controller.
-        """
+    def save_scan(self) -> None:
         pass
 
-    def configure_view(self, gui_root: Tk.Toplevel) -> None:
-        """
-        This method launches a GUI window to configure the controller.
-        """
+    def allowed_file_save_formats(self) -> list:
+        '''
+        Returns a list of tuples of the allowed file save formats
+            [(description, file_extension), ...]
+        '''
         pass
 
-    def print_config(self) -> None:
+    def default_file_format(self) -> str:
+        '''
+        Returns the default file format
+        '''
+        pass
+
+    def scan_image_rightclick_event(self, event) -> None:
         """
-        This method prints the current configuration of the controller to standard out.
+        This method is called when the user right clicks on the scan image.
         """
         pass
