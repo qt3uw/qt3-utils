@@ -1,41 +1,36 @@
-import time
 import argparse
 import collections
 import tkinter as Tk
 import logging
+from typing import Any
 
 import numpy as np
-from matplotlib.lines import Line2D
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import nidaqmx
-
-import qt3utils.nidaq
-import qt3utils.datagenerators as datasources
+import qt3utils.datagenerators
 
 logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description='NI DAQ (PCIx 6363) digital input terminal count rate meter.',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-parser.add_argument('-d', '--daq-name', default = 'Dev1', type=str, metavar = 'daq_name',
+parser.add_argument('-d', '--daq-name', default='Dev1', type=str, metavar='daq_name',
                     help='NI DAQ Device Name')
-parser.add_argument('-st', '--signal-terminal', metavar = 'terminal', default = 'PFI0', type=str,
+parser.add_argument('-st', '--signal-terminal', metavar='terminal', default='PFI0', type=str,
                     help='NI DAQ terminal connected to input digital TTL signal')
-parser.add_argument('-w', '--scope-width', metavar = 'width', default = 500, type=int,
+parser.add_argument('-w', '--scope-width', metavar='width', default=500, type=int,
                     help='Number of measurements to display in window.')
-parser.add_argument('-c', '--clock-rate', metavar = 'rate (Hz)', default = 100000, type=int,
+parser.add_argument('-c', '--clock-rate', metavar='rate (Hz)', default=100000, type=int,
                     help='''Specifies the clock rate in Hz. If using an external clock,
                     you should specifiy the clock rate here so that the correct counts per
                     second are displayed. If using the internal NI DAQ clock (default behavior),
                     this value specifies the clock rate to use. Per the NI DAQ manual,
                     use a suitable clock rate for the device for best performance, which is an integer
                     multiple downsample of the digital sample clock.''')
-parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default = 1500, type=int,
+parser.add_argument('-n', '--num-data-samples-per-batch', metavar='N', default=1500, type=int,
                     help='''Number of data points to acquire per DAQ batch request.
                            Note that only ONE data point is shown in the scope.
                            After each request to the NI DAQ for data, the mean count
@@ -43,75 +38,299 @@ parser.add_argument('-n', '--num-data-samples-per-batch', metavar = 'N', default
                            the "num-data-samples-per-batch" should reduce your noise, but
                            slow the response of the scope. Increase this value if the
                            scope appears too noisy.''')
-parser.add_argument('-ct', '--clock-terminal', metavar = 'terminal', default = None, type=str,
+parser.add_argument('-ct', '--clock-terminal', metavar='terminal', default=None, type=str,
                     help='''Specifies the digital input terminal to the NI DAQ to use for a clock.
                             If None, which is the default, the internal NI DAQ clock is used.''')
-parser.add_argument('-to', '--rwtimeout', metavar = 'seconds', default = 10, type=int,
+parser.add_argument('-to', '--rwtimeout', metavar='seconds', default=10, type=int,
                     help='NI DAQ read/write timeout in seconds.')
-parser.add_argument('-sc', '--signal-counter', metavar = 'ctrN', default = 'ctr2', type=str,
+parser.add_argument('-sc', '--signal-counter', metavar='ctrN', default='ctr2', type=str,
                     help='NI DAQ interal counter (ctr1, ctr2, ctr3, ctr4)')
-parser.add_argument('-r', '--randomtest', action = 'store_true',
+parser.add_argument('-r', '--randomtest', action='store_true',
                     help='When true, program will run showing random numbers. This is for development testing.')
-parser.add_argument('-aut', '--animation-update-interval', metavar = 'milliseconds', default = 20,
+parser.add_argument('-aut', '--animation-update-interval', metavar='milliseconds', default=20, type=float,
                     help='''Sets the animation update period, t, (in milliseconds).
                     This is the time delay between calls to acquire new data.
                     You should be limited by the data acquisition time = N / clock_rate.''')
+parser.add_argument('-rmw', '--rolling-mean-window', metavar='milliseconds', default=400, type=float,
+                    help='''Sets the displayed rolling mean window size, w, (in milliseconds).
+                    Actual value will set as the ceil(rmw/aut) * aut.''')
+parser.add_argument('-srm', '--show-rolling-mean', action='store_true',
+                    help='''When true, the rolling mean line will be displayed in the figure.''')
+parser.add_argument('-srt', '--show-reading-text', action='store_true',
+                    help='''When True, the current reading value will be displayed as text. 
+                    If rolling mean is enabled, rolling mean, rolling standard
+                    deviation (STD) and expected STD (from Poison distribution) 
+                    text will also be displayed.''')
+parser.add_argument('-rtfs', '--reading-text-font-size', metavar='pixels', default=12, type=float,
+                    help='''Sets the font size of the current reading text.''')
 
-parser.add_argument('--console', action = 'store_true',
+parser.add_argument('--console', action='store_true',
                     help='Run as console app -- just the figure without buttons.')
 args = parser.parse_args()
 
 
+class RollingStatisticsTracker:
+    """
+    A class that keeps track of the latest N values (window size)
+    and calculates the most recent rolling mean and standard deviation.
+    """
+    def __init__(self, window_size: int):
+        """
+        Parameters
+        ----------
+        window_size: int
+            Number of values to keep track of.
+        """
+        self._window_size = window_size
+        self._data = collections.deque(maxlen=window_size)
+        self._cum_sum = 0
+        self._cum_sum_sq = 0
+        self._mean = 0
+        self._std = 0
+
+    @property
+    def mean(self):
+        return self._mean
+
+    @property
+    def std(self):
+        return self._std
+
+    @property
+    def _count(self):
+        return len(self._data)
+
+    def update(self, new_value: Any):
+        """
+        Updates the rolling statistics with a new value.
+
+        Parameters
+        ----------
+        new_value: Any
+            New value to be added to the rolling statistics.
+        """
+
+        old_value = self._data.popleft() if self._count == self._window_size else 0
+        self._data.append(new_value)
+
+        self._cum_sum += new_value - old_value
+        self._cum_sum_sq += (new_value ** 2) - (old_value ** 2)
+
+        self._mean = self._cum_sum / self._count
+        self._std = np.sqrt(max(self._cum_sum_sq / self._count - self._mean ** 2, 0))
+
 
 class ScopeFigure:
 
-    def __init__(self, width=50, fig = None, ax = None):
-        if ax == None:
+    def __init__(self, width: int = 50, rolling_mean_window_size: int = 20,
+                 show_rolling_mean: bool = True, show_reading_text: bool = True,
+                 reading_text_font_size: float = 12,
+                 fig: plt.Figure = None, ax: plt.Axes = None):
+        """
+        Initializes the ScopeFigure.
+
+        Parameters
+        ----------
+        width: int, default 50
+            Number of points to display in the figure.
+        rolling_mean_window_size: int, default 20
+            Size of the rolling mean window.
+        show_rolling_mean: bool, default True
+            Whether to display the rolling mean line in the figure.
+        show_reading_text: bool, default True
+             Whether to display current reading value as text.
+         reading_text_font_size: float, default 12
+            Font size of the displayed current reading text.
+        fig : matplotlib.figure.Figure
+            Figure to plot the data in.
+        ax : matplotlib.axes.Axes
+            Axis to plot the data in.
+        """
+        # Constraining rolling_mean_window_size value
+        if rolling_mean_window_size > width and show_rolling_mean:
+            logger.warning('Rolling mean window size must not exceed scope width.'
+                           'Rolling mean window size was set equal to scope width.')
+            rolling_mean_window_size = width
+
+        # setting up the figure and main axis
+        if ax is None:
             fig, ax = plt.subplots()
             self.fig = fig
             self.ax = ax
         else:
             self.fig = fig
             self.ax = ax
+        self.fig.set_layout_engine('compressed')
 
+        # display settings
+        self.show_rolling_mean = show_rolling_mean
+        self.show_reading_text = show_reading_text
+
+        # setting up primary data plot
         self.ydata = collections.deque(np.zeros(width))
         self.line, = self.ax.plot(self.ydata)
-        self.ax.set_ylabel('counts / sec')
-        self.ax.ticklabel_format(style='sci',scilimits=(-3,4),axis='y')
+        self.line: plt.Line2D
+
+        # Setting up axis preferences
+        # TODO: Put all axis preferences to .mplstyle and load through terminal or gui.
+        self.ax.set_ylabel('Rate (counts / sec)')
+        self.ax.ticklabel_format(style='sci', scilimits=(-3, 4), axis='y')
+        self.ax.set_xlabel('Time bin (arb. units)')
+
+        if self.show_rolling_mean:
+            self._add_rolling_mean(rolling_mean_window_size)
+        if self.show_reading_text:
+            self._add_reading_text(reading_text_font_size)
+
+    def _add_rolling_mean(self, rolling_mean_window_size: int):
+        """ Adds rolling mean line to figure. """
+        self.half_window_size = int(np.ceil(rolling_mean_window_size / 2))
+        self.rolling_mean_window_size = 2 * self.half_window_size
+
+        initial_rolling_mean = np.zeros(len(self.ydata))
+        initial_rolling_mean[:self.half_window_size] = np.nan
+        initial_rolling_mean[-self.half_window_size:] = np.nan
+        self.rolling_mean = collections.deque(initial_rolling_mean)
+
+        self.rolling_mean_statistics_tracker = RollingStatisticsTracker(
+            self.rolling_mean_window_size)
+
+        self.rolling_mean_line, = self.ax.plot(self.rolling_mean)
+        self.rolling_mean_line: plt.Line2D
+
+    def _add_reading_text(self, reading_text_font_size: float):
+        """Adds current reading value as text on figure."""
+        self.reading_text_font_size = reading_text_font_size  # TODO: Add to .mplstyle file
+        fig_width = self.fig.get_size_inches()[0]
+        fig_height = self.fig.get_size_inches()[1]
+
+        if self.show_rolling_mean:
+            self.fig.set_size_inches(fig_width, fig_height * 1.3)
+            displayed_values = 'NaN\nNaN\nNaN (NaN)'
+            displayed_labels = 'Cur. Val.\nMean\nSTD'
+        else:
+            self.fig.set_size_inches(fig_width, fig_height * 1.1)
+            displayed_values = 'NaN'
+            displayed_labels = 'Cur. Val.'
+
+        self.current_value_text: plt.Text = self.ax.text(
+            1, 1.05, displayed_values, fontsize=self.reading_text_font_size,
+            transform=self.ax.transAxes, ha='right')
+        self.ax.text(
+            0, 1.05, displayed_labels, fontsize=self.reading_text_font_size,
+            transform=self.ax.transAxes, ha='left')
 
     def init(self):
+        """ Initializes the figure data. """
         self.line.set_ydata(self.ydata)
+        if self.show_rolling_mean:
+            self.rolling_mean_line.set_ydata(self.rolling_mean)
+        if self.show_reading_text:
+            self.current_value_text.set_text(
+                'NaN\nNaN\nNaN (NaN)' if self.show_rolling_mean else 'NaN')
         return self.line,
 
+    def update(self, y: Any):
+        """Updates the figure data with the given new data point."""
+        self._update_y_data(y)
 
-    def update(self, y):
+        # this doesn't work with blit = True.
+        # there's a workaround if we need blit = true
+        # https://stackoverflow.com/questions/53423868/matplotlib-animation-how-to-dynamically-extend-x-limits
+        # need to sporadically call
+        # fig.canvas.resize_event()
 
+        self._update_rolling_mean()
+        self._update_reading_text()
+        self._update_ax_limits()
+
+        return self.line,
+
+    def _update_y_data(self, new_y: Any):
+        """ Updates the y data. """
         self.ydata.popleft()
-        self.ydata.append(y)
+        self.ydata.append(new_y)
+        self.line.set_ydata(self.ydata)
 
-        #this doesn't work with blit = True.
-        #there's a workaround if we need blit = true
-        #https://stackoverflow.com/questions/53423868/matplotlib-animation-how-to-dynamically-extend-x-limits
-        #need to sporadically call
-        #fig.canvas.resize_event()
-
-        delta = 0.1*np.max(self.ydata)
+    def _update_ax_limits(self):
+        delta = 0.1 * np.max(self.ydata)
         new_min = np.max([0, np.min(self.ydata) - delta])
         new_max = np.max(self.ydata) + delta
         current_min, current_max = self.ax.get_ylim()
-        if (np.abs((new_min - current_min)/(current_min)) > 0.12) or (np.abs((new_max - current_max)/(current_max)) > 0.12):
+
+        if (np.abs((new_min - current_min) / current_min) > 0.12) \
+                or (np.abs((new_max - current_max) / current_max) > 0.12):
             self.ax.set_ylim(np.max([0.01, np.min(self.ydata) - delta]), np.max(self.ydata) + delta)
-        self.line.set_ydata(self.ydata)
-        return self.line,
+
+    def _update_rolling_mean(self):
+        """ Updates internal rolling mean buffer. """
+        if self.show_rolling_mean:
+            new_y = self.ydata[-1] if len(self.ydata) > 0 else 0
+
+            self.rolling_mean_statistics_tracker.update(new_y)  # update tracker first
+            new_mean = self.rolling_mean_statistics_tracker.mean
+            new_std = self.rolling_mean_statistics_tracker.std
+
+            # instead of popleft - append, we rotate and modify in between the np.nans.
+            self.rolling_mean.rotate(-1)  # shifts all data to the left
+            self.rolling_mean[self.half_window_size - 1] = np.nan  # deletes oldest value
+            self.rolling_mean[- self.half_window_size - 1] = new_mean  # adds new value
+
+            self.rolling_mean_line.set_ydata(self.rolling_mean)
+
+            return new_mean, new_std
+
+    def _update_reading_text(self):
+        """ Updates the figure text with the current reading. """
+        if self.show_reading_text:
+            new_y = self.ydata[-1] if len(self.ydata) > 0 else np.nan
+            text = self._get_text_value(new_y)  # default rounding of digits
+
+            if self.show_rolling_mean:
+                new_mean = self.rolling_mean_statistics_tracker.mean
+                new_std = self.rolling_mean_statistics_tracker.std
+                std_poison = np.sqrt(new_mean)
+
+                # rounding to STD's first significant digit
+                text = self._get_text_value(new_y, new_std)
+                text = f'{text}\n {self._get_text_value(new_mean, new_std)}'
+                text = (f'{text}\n {self._get_text_value(new_std)} '
+                        f'({self._get_text_value(std_poison)})')
+
+            self.current_value_text.set_text(text)
+
+    @staticmethod
+    def _get_text_value(value: float, decimal_limiter: float = None):
+        """ Formats number for display in figure text. """
+        if decimal_limiter is None:
+            decimal_limiter = value * 1e-4  # defaults to 4 digits of precision
+
+        # Round the value to the first significant digit of the decimal_limiter
+        rounded_value = round(value, -int(np.floor(np.log10(decimal_limiter))))
+        return f'{rounded_value:e}'
 
 
+class MainApplicationView:
+    """
+    Represents the application view.
 
-class MainApplicationView():
-    def __init__(self, main_frame):
+    Contains a matplotlib figure canvas and a sidebar.
+    """
+
+    def __init__(self, main_frame: Tk.Tk):
         frame = Tk.Frame(main_frame)
         frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
 
-        self.scope_view = ScopeFigure(args.scope_width)
+        rolling_mean_window_size = int(np.ceil(
+            args.rolling_mean_window / args.animation_update_interval))
+
+        self.scope_view = ScopeFigure(
+            args.scope_width,
+            rolling_mean_window_size,
+            args.show_rolling_mean,
+            args.show_reading_text,
+            args.reading_text_font_size,
+        )
         self.sidepanel = SidePanel(main_frame)
 
         self.canvas = FigureCanvasTkAgg(self.scope_view.fig, master=frame)
@@ -124,8 +343,18 @@ class MainApplicationView():
         self.canvas.draw()
 
 
-class SidePanel():
-    def __init__(self, root):
+class SidePanel:
+    def __init__(self, root: Tk.Tk):
+        """
+        Represents the sidebar panel.
+
+        Contains the start and stop buttons.
+
+        Parameters
+        ----------
+        root: tkinter.Tk
+            The main tkinter window.
+        """
         frame = Tk.Frame(root)
         frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
         self.startButton = Tk.Button(frame, text="Start ")
@@ -133,9 +362,18 @@ class SidePanel():
         self.stopButton = Tk.Button(frame, text="Stop")
         self.stopButton.pack(side="top", fill=Tk.BOTH)
 
-class MainTkApplication():
+
+class MainTkApplication:
 
     def __init__(self, data_model):
+        """
+        The main Tkinter application window.
+
+        Parameters
+        ----------
+        data_model: Any
+            The data acquisition model that yields new data points.
+        """
         self.root = Tk.Tk()
         self.model = data_model
         self.view = MainApplicationView(self.root)
@@ -146,28 +384,35 @@ class MainTkApplication():
         self.animation = None
 
     def run(self):
+        """ Starts GUI. """
         self.root.title("QT3Scope: NIDAQ Digital Input Count Rate")
         self.root.deiconify()
         self.root.mainloop()
 
-    def stop_scope(self, event = None):
+    def stop_scope(self, event=None):
+        """ Stops data acquisition and pauses animation. """
         self.model.stop()
         if self.animation is not None:
             self.animation.pause()
 
-    def start_scope(self, event = None):
+    def start_scope(self, event=None):
+        """ Starts data acquisition and animation. """
         if self.animation is None:
             self.view.canvas.draw_idle()
-            self.animation = animation.FuncAnimation(self.view.scope_view.fig,
-                                                     self.view.scope_view.update,
-                                                     self.model.yield_count_rate,
-                                                     init_func = self.view.scope_view.init,
-                                                     interval=args.animation_update_interval,
-                                                     blit=False)
+            self.animation = animation.FuncAnimation(
+                self.view.scope_view.fig,
+                self.view.scope_view.update,
+                self.model.yield_count_rate,
+                init_func=self.view.scope_view.init,
+                interval=args.animation_update_interval,
+                blit=False,
+                cache_frame_data=False,
+            )
         self.model.start()
         self.animation.resume()
 
     def on_closing(self):
+        """ Closes application. """
         try:
             self.stop_scope()
             self.model.close()
@@ -177,39 +422,63 @@ class MainTkApplication():
             logger.debug(e)
             pass
 
+
 def build_data_model():
+    """ Builds the data acquisition model based on arguments. """
     if args.randomtest:
-        data_acquisition_model = datasources.RandomRateCounter()
+        data_acquisition_model = qt3utils.datagenerators.RandomRateCounter()
     else:
-        data_acquisition_model = datasources.NiDaqDigitalInputRateCounter(daq_name = args.daq_name,
-                                                                          signal_terminal = args.signal_terminal,
-                                                                          clock_rate = args.clock_rate,
-                                                                          num_data_samples_per_batch = args.num_data_samples_per_batch,
-                                                                          clock_terminal = args.clock_terminal,
-                                                                          read_write_timeout = args.rwtimeout,
-                                                                          signal_counter = args.signal_counter)
+        data_acquisition_model = qt3utils.datagenerators.NiDaqDigitalInputRateCounter(
+            daq_name=args.daq_name,
+            signal_terminal=args.signal_terminal,
+            clock_rate=args.clock_rate,
+            num_data_samples_per_batch=args.num_data_samples_per_batch,
+            clock_terminal=args.clock_terminal,
+            read_write_timeout=args.rwtimeout,
+            signal_counter=args.signal_counter
+        )
     return data_acquisition_model
 
-def run_console():
 
-    view = ScopeFigure(args.scope_width)
+def run_console():
+    """ Runs only the matplotlib animation, no sidebar. """
+    rolling_mean_window_size = int(
+        np.ceil(args.rolling_mean_window / args.animation_update_interval))
+
+    view = ScopeFigure(
+        args.scope_width,
+        rolling_mean_window_size,
+        args.show_rolling_mean,
+        args.show_reading_text,
+        args.reading_text_font_size,
+    )
     model = build_data_model()
     model.start()
-    ani = animation.FuncAnimation(view.fig, view.update, model.yield_count_rate,
-                                  init_func = view.init,
-                                  interval=args.animation_update_interval, blit=False)
+    ani = animation.FuncAnimation(
+        view.fig,
+        view.update,
+        model.yield_count_rate,
+        init_func=view.init,
+        interval=args.animation_update_interval,
+        blit=False,
+        cache_frame_data=False,
+    )
     plt.show()
     model.close()
 
+
 def run_gui():
+    """ Runs Tkinter GUI version. """
     tkapp = MainTkApplication(build_data_model())
     tkapp.run()
+
 
 def main():
     if args.console:
         run_console()
     else:
         run_gui()
+
 
 if __name__ == '__main__':
     main()
