@@ -12,7 +12,7 @@ import matplotlib.animation as animation
 
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-from qt3utils.applications.qt3scope.interface import QT3ScopeDataControllerInterface
+from qt3utils.applications.qt3scope.interface import QT3ScopeDAQControllerInterface
 
 logger = logging.getLogger(__name__)
 
@@ -315,9 +315,9 @@ or check your YAML file to ensure configuration of supported hardware controller
 
         # Dynamically instantiate the class
         cls = getattr(module, counter_config['class_name'])
-        # cls should be instance of QT3ScopeDataControllerInterface
+        # cls should be instance of QT3ScopeDAQControllerInterface
         self.data_acquisition_model = cls(logger.level)
-        assert isinstance(self.data_acquisition_model, QT3ScopeDataControllerInterface)
+        assert isinstance(self.data_acquisition_model, QT3ScopeDAQControllerInterface)
 
         # configure the data acquisition model
         self.data_acquisition_model.configure(counter_config['configure'])

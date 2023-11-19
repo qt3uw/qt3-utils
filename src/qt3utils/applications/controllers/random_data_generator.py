@@ -7,7 +7,7 @@ import qt3utils.datagenerators.daqsamplers as daqsamplers
 
 class QT3ScopeRandomDataController:
     """
-    Implements the qt3utils.applications.qt3scope.interface.QT3ScopeDataControllerInterface for a random data generator.
+    Implements the qt3utils.applications.qt3scope.interface.QT3ScopeDAQControllerInterface for a random data generator.
     """
 
     def __init__(self, logger_level):

@@ -4,7 +4,7 @@ import tkinter as Tk
 
 
 @runtime_checkable
-class QT3ScopeDataControllerInterface(Protocol):
+class QT3ScopeDAQControllerInterface(Protocol):
 
     def __init__(self, logger_level):
         pass
