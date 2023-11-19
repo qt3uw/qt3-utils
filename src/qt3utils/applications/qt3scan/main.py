@@ -54,8 +54,6 @@ parser.add_argument('--piezo-read-channels', metavar = '<ch0,ch1,ch2>', default 
                     help='List of analog input channels used to read the piezo position')
 parser.add_argument('-r', '--randomtest', action = 'store_true',
                     help='When true, program will run showing random numbers. This is for development testing.')
-parser.add_argument('-q', '--quiet', action = 'store_true',
-                    help='When true,logger level will be set to warning. Otherwise, set to "info".')
 parser.add_argument('-cmap', metavar = '<MPL color>', default = 'gray',
                     help='Set the MatplotLib colormap scale')
 parser.add_argument('-pb', '--pulse-blaster', metavar = '<PB board number>', default = 0, type=int,
@@ -66,14 +64,20 @@ parser.add_argument('-pmax', '--piezo-max-position', metavar = 'microns', defaul
                     help='sets min allowed position on piezo controller.')
 parser.add_argument('-pscale', '--piezo-scale-microns-per-volt', default = 8, type=float,
                     help='sets micron to volt scale for piezo controller.')
-
+parser.add_argument('-v', '--verbose', type=int, default=1,
+                    help='verbose = 0 sets to quiet, 1 sets to info, 2 sets to debug".')
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
 logging.basicConfig()
 
-if args.quiet is False:
+if args.verbose == 0:
+    logger.setLevel(logging.WARNING)
+if args.verbose == 1:
     logger.setLevel(logging.INFO)
+if args.verbose == 2:
+    logger.setLevel(logging.DEBUG)
+
 
 
 class ScanImage:
