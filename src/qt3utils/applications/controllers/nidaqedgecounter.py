@@ -4,7 +4,10 @@ import tkinter as tk
 import logging
 
 import qt3utils.datagenerators.daqsamplers as daqsamplers
+from qt3utils.errors import convert_nidaq_daqnotfounderror
 
+module_logger = logging.getLogger(__name__)
+module_logger.setLevel(logging.ERROR)
 
 class QT3ScopeNIDAQEdgeCounterController:
     """
@@ -33,15 +36,19 @@ class QT3ScopeNIDAQEdgeCounterController:
         self.data_generator.read_write_timeout = config_dict.get('read_write_timeout', self.data_generator.read_write_timeout)
         self.data_generator.signal_counter = config_dict.get('signal_counter', self.data_generator.signal_counter)
 
+    @convert_nidaq_daqnotfounderror(module_logger)
     def start(self) -> Union[dict, type(None)]:
         self.data_generator.start()
 
+    @convert_nidaq_daqnotfounderror(module_logger)
     def stop(self) -> Union[dict, type(None)]:
         self.data_generator.stop()
 
+    @convert_nidaq_daqnotfounderror(module_logger)
     def close(self) -> Union[dict, type(None)]:
         self.data_generator.close()
 
+    @convert_nidaq_daqnotfounderror(module_logger)
     def yield_count_rate(self) -> np.ndarray:
         """
         This method is used to yield data from the data controller.
@@ -150,22 +157,3 @@ class QT3ScanNIDAQEdgeCounterController(QT3ScopeNIDAQEdgeCounterController):
     def num_data_samples_per_batch(self, value):
         """Abstract property setter for num_data_samples_per_batch"""
         self.data_generator.num_data_samples_per_batch = value
-
-    def get_daq_data(self) -> dict:
-        """
-        This method packages the data into a format that can be saved to disk.
-        Data must be serializable.
-        """
-        data = dict(
-                    raw_counts=self.data_generator.scanned_raw_counts,
-                    count_rate=self.data_generator.scanned_count_rate,
-                    step_size=self.data_generator.step_size,
-                    daq_clock_rate=self.data_generator.clock_rate,
-                    )
-        return data
-
-    def scan_image_rightclick_event(self, event) -> None:
-        """
-        This method is called when the user right clicks on the scan image.
-        """
-        self.logger.debug(f"scan_image_rightclick_event. click at {event.x}, {event.y}")

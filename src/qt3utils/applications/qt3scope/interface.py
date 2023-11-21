@@ -27,9 +27,6 @@ class QT3ScopeDAQControllerInterface(Protocol):
     def yield_count_rate(self) -> np.ndarray:
         """
         This method is used to yield data from the data controller.
-
-        todo: alternatively, this method could be used to return an object
-        that yeilds the data.
         """
         pass
 

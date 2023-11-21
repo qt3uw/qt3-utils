@@ -5,6 +5,7 @@ import logging
 import yaml
 import importlib
 import importlib.resources
+from typing import Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,10 +21,10 @@ parser = argparse.ArgumentParser(description='Digital input terminal rate counte
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 # TODO -- eventually move this to adjustable option in GUI
-parser.add_argument('-w', '--scope-width', metavar = 'width', default = 500, type=int,
+parser.add_argument('-w', '--scope-width', metavar='width', default=500, type=int,
                     help='Number of measurements to display in window.')
 # TODO -- eventually move this to adjustable option in GUI
-parser.add_argument('-aut', '--animation-update-interval', metavar = 'milliseconds', default = 20,
+parser.add_argument('-aut', '--animation-update-interval', metavar='milliseconds', default=20,
                     help='''Sets the animation update period, t, (in milliseconds).
                     This is the time delay between calls to acquire new data.
                     You should be limited by the data acquisition time = N / clock_rate.''')
@@ -41,25 +42,30 @@ if args.verbose == 1:
 if args.verbose == 2:
     logger.setLevel(logging.DEBUG)
 
-DEFAULT_HARDWARE = 'NIDAQ Edge Counter'
+NIDAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
+RANDOM_DAQ_DEVICE_NAME = 'Random Data Generator'
+
+DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DEVICE_NAME
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
-SUPPORTED_HARDWARE = {DEFAULT_HARDWARE: 'nidaq_edge_counter.yaml',
-                      'Random Data Generator': 'random_data_generator.yaml',
-                      }
+SUPPORTED_CONTROLLERS = {NIDAQ_DEVICE_NAME: 'nidaq_edge_counter.yaml',
+                         RANDOM_DAQ_DEVICE_NAME: 'random_data_generator.yaml',
+                         }
 CONFIG_FILE_APPLICATION_NAME = 'QT3Scope'
-CONFIG_FILE_DAQ_DEVICE = 'DAQDevice'
+CONFIG_FILE_DAQ_DEVICE = 'DAQController'
 
 
 class ScopeFigure:
 
-    def __init__(self, width=50, fig = None, ax = None):
-        if ax == None:
-            fig, ax = plt.subplots(figsize=(6,4))
-            self.fig = fig
+    def __init__(self, width: int = 50,
+                 fig: Optional[plt.Figure] = None,
+                 ax: Optional[plt.Axes] = None):
+        if ax is None:
+            fig, ax = plt.subplots(figsize=(6, 4))
+            self._fig = fig
             self.ax = ax
         else:
-            self.fig = fig
+            self._fig = fig
             self.ax = ax
 
         self.width = width
@@ -67,27 +73,37 @@ class ScopeFigure:
 
         self.line, = self.ax.plot(self.ydata)
         self.ax.set_ylabel('counts / sec')
-        self.ax.ticklabel_format(style='sci',scilimits=(-3,4),axis='y')
+        self.ax.ticklabel_format(style='sci', scilimits=(-3, 4), axis='y')
 
-    def init(self):
+    def init(self) -> plt.Line2D:
+        """
+        This method is used to initialize the Line2D object.
+        Pass this to the animation.FuncAnimation init_func argument.
+        """
         self.line.set_ydata(self.ydata)
         return self.line,
 
-    def reset(self, width=None):
+    def reset(self, width: Optional[int] = None) -> None:
+        """
+        This method is used to reset the data in ScopeFigure.
+        """
         if width is None:
             width = self.width
         self.ydata = collections.deque(np.zeros(width))
 
-    def update(self, y):
+    def update(self, y: float) -> Tuple[plt.Line2D]:
+        """
+        This method is used to update the data in ScopeFigure.
+        Args:
+            y: float value to append to the data.
 
+        Pass this to the animation.FuncAnimation func argument.
+
+        Returns:
+            Tuple(plt.Line2D)
+        """
         self.ydata.popleft()
         self.ydata.append(y)
-
-        #this doesn't work with blit = True.
-        #there's a workaround if we need blit = true
-        #https://stackoverflow.com/questions/53423868/matplotlib-animation-how-to-dynamically-extend-x-limits
-        #need to sporadically call
-        #fig.canvas.resize_event()
 
         delta = 0.1*np.max(self.ydata)
         new_min = np.max([0, np.min(self.ydata) - delta])
@@ -98,168 +114,200 @@ class ScopeFigure:
         self.line.set_ydata(self.ydata)
         return self.line,
 
+    @property
+    def fig(self):
+        return self._fig
+
 
 class MainApplicationView():
     def __init__(self, app_controller):
-        frame = Tk.Frame(app_controller.root)
-        frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
+        """
+        app_controller must be an instance of MainTkApplication
+        """
 
-        self.scope_view = ScopeFigure(args.scope_width)
-        self.sidepanel = SidePanel(app_controller)
+        # there are two frames in the main window
+        # the scope frame on the left and the side panel on the right
 
-        self.canvas = FigureCanvasTkAgg(self.scope_view.fig, master=frame)
+        # create, configure and place the scope frame
+        scope_frame = Tk.Frame(app_controller.root_window)
+
+        self._scope = ScopeFigure(args.scope_width)
+        self.canvas = FigureCanvasTkAgg(self.scope.fig, master=scope_frame)
         self.canvas.get_tk_widget().pack(side=Tk.TOP, fill=Tk.BOTH, expand=True)
 
-        toolbar = NavigationToolbar2Tk(self.canvas, frame)
+        toolbar = NavigationToolbar2Tk(self.canvas, scope_frame)
         toolbar.update()
         self.canvas._tkcanvas.pack(side=Tk.TOP, fill=Tk.BOTH, expand=True)
-
         self.canvas.draw()
 
-    # todo -- change these to properties / getters
-    def get_start_button(self) -> Tk.Button:
+        scope_frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
+
+        # create and place the side panel
+        self.sidepanel = SidePanel(app_controller)
+        self.sidepanel.frame.pack(side=Tk.RIGHT, fill=Tk.BOTH, expand=True)
+
+    @property
+    def scope(self) -> ScopeFigure:
+        return self._scope
+
+    @property
+    def start_button(self) -> Tk.Button:
         return self.sidepanel.startButton
 
-    def get_stop_button(self) -> Tk.Button:
+    @property
+    def stop_button(self) -> Tk.Button:
         return self.sidepanel.stopButton
 
-    def get_hardware_option(self) -> str:
-        return self.sidepanel.hardware_option.get()
+    @property
+    def controller_option(self) -> str:
+        return self.sidepanel.controller_option.get()
 
-    def set_hardware_option(self, hardware_option: str) -> None:
-        self.sidepanel.hardware_option.set(hardware_option)
+    @controller_option.setter
+    def controller_option(self, value: str) -> None:
+        self.sidepanel.controller_option.set(value)
 
-    def get_hardware_config_button(self) -> Tk.Button:
+    @property
+    def hardware_config_button(self) -> Tk.Button:
         return self.sidepanel.hardware_config_button
 
-    def get_hardware_config_from_yaml_button(self) -> Tk.Button:
+    @property
+    def hardware_config_from_yaml_button(self) -> Tk.Button:
         return self.sidepanel.hardware_config_from_yaml_button
 
-    def get_print_hardware_config_button(self) -> Tk.Button:
-        return self.sidepanel.print_hardware_config
-
-    def get_hardware_menu(self) -> Tk.OptionMenu:
-        return self.sidepanel.hardware_menu
+    @property
+    def controller_menu(self) -> Tk.OptionMenu:
+        return self.sidepanel.controller_menu
 
     def reset_scope(self) -> None:
-        self.scope_view.reset()
+        self.scope.reset()
         self.canvas.draw_idle()
 
 
 class SidePanel():
     def __init__(self, app_controller):
-        frame = Tk.Frame(app_controller.root, width=100)
-        frame.pack(side=Tk.LEFT, fill=Tk.BOTH, expand=True)
+        """
+        app_controller must be an instance of MainTkApplication
+        """
+        self._frame = Tk.Frame(app_controller.root_window, width=100)
 
-        self.startButton = Tk.Button(frame, text="Start ")
+        self.startButton = Tk.Button(self.frame, text="Start ")
         self.startButton.pack(side="top", fill=Tk.BOTH)
 
-        self.stopButton = Tk.Button(frame, text="Stop")
+        self.stopButton = Tk.Button(self.frame, text="Stop")
         self.stopButton.pack(side="top", fill=Tk.BOTH)
 
-        self.hardware_option = Tk.StringVar(frame)
-        self.hardware_option.set(DEFAULT_HARDWARE)  # setting the default value
+        self.controller_option = Tk.StringVar(self.frame)
+        self.controller_option.set(DEFAULT_DAQ_DEVICE_NAME)  # setting the default value
 
         # todo - TkOptionMenu doesn't have a way, that I know of,
         # to modify the callback after instantiation. Therefore,
         # for now, we need to pass the app_controller to this class
         # so that it can be used in the callback when a hardware option is selected.
-        self.hardware_menu = Tk.OptionMenu(frame,
-                                           self.hardware_option,
-                                           *SUPPORTED_HARDWARE.keys(),
-                                           command=app_controller.hardware_option_callback)
+        self.controller_menu = Tk.OptionMenu(self.frame,
+                                             self.controller_option,
+                                             *SUPPORTED_CONTROLLERS.keys(),
+                                             command=app_controller.load_daq_from_config_dict)
 
-        self.hardware_menu.pack(side="top", fill=Tk.BOTH)
+        self.controller_menu.pack(side="top", fill=Tk.BOTH)
 
-        self.hardware_config_button = Tk.Button(frame, text="Configure HW GUI")
+        self.hardware_config_button = Tk.Button(self.frame, text="Configure Hardware")
         self.hardware_config_button.pack(side="top", fill=Tk.BOTH)
 
-        self.hardware_config_from_yaml_button = Tk.Button(frame, text="Configure HW YAML")
+        self.hardware_config_from_yaml_button = Tk.Button(self.frame, text="Load YAML Config")
         self.hardware_config_from_yaml_button.pack(side="top", fill=Tk.BOTH)
 
-        self.print_hardware_config = Tk.Button(frame, text="Print HW Config")
-        self.print_hardware_config.pack(side="top", fill=Tk.BOTH)
+    @property
+    def frame(self) -> Tk.Frame:
+        return self._frame
 
 
 class MainTkApplication():
 
-    def __init__(self, init_hardware_name):
-        # TODO -- change variable names from hardware to "controller", which seems more consistent and conceptually correct.
-        # but this will need changes in the View / SidePanel variable names as well.
-        self.root = Tk.Tk()
+    def __init__(self, controller_name: str):
+        """
+        controller_name must be one of SUPPORTED_CONTROLLERS.keys()
+        """
+
+        self._root_window = Tk.Tk()
         self.view = MainApplicationView(self)
 
-        self.view.set_hardware_option(init_hardware_name)
+        self.view.controller_option = controller_name
 
-        init_config_dict = self.open_config_for_hardware(init_hardware_name)
-        self.load_daq_from_config_dict(init_config_dict)
+        self.load_daq_from_config_dict(controller_name)
 
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.root_window.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-        self.view.get_start_button().bind("<Button>", lambda e: self.start_scope())
-        self.view.get_stop_button().bind("<Button>", lambda e: self.stop_scope())
-        self.view.get_hardware_config_from_yaml_button().bind("<Button>", lambda e: self.configure_from_yaml())
-        self.view.get_print_hardware_config_button().bind("<Button>", lambda e: self.data_acquisition_model.print_config())
+        self.view.start_button.bind("<Button>", lambda e: self.start_scope())
+        self.view.stop_button.bind("<Button>", lambda e: self.stop_scope())
+        self.view.hardware_config_from_yaml_button.bind("<Button>", lambda e: self.configure_from_yaml())
 
         self.animation = None
 
-    def run(self):
-        logger.debug('run')
-        self.root.title("QT3Scope: NIDAQ Digital Input Count Rate")
-        self.root.deiconify()
-        self.root.mainloop()
+    @property
+    def root_window(self) -> Tk.Tk:
+        return self._root_window
 
-    def stop_scope(self):
-        logger.debug('clicked stop')
-        self.data_acquisition_model.stop()
+    def run(self) -> None:
+        """
+        This method is used to run the GUI.
+        """
+        logger.debug('run')
+        self.root_window.title("QT3Scope: NIDAQ Digital Input Count Rate")
+        self.root_window.deiconify()
+        self.root_window.mainloop()
+
+    def stop_scope(self) -> None:
+        logger.debug('stop_scope')
+        try:
+            self.data_acquisition_model.stop()
+        except Exception as e:
+            logger.warning(e)
+
         if self.animation is not None:
             self.animation.pause()
 
-        self.view.get_start_button().config(state=Tk.NORMAL)
-        self.view.get_stop_button().config(state=Tk.NORMAL)
-        self.view.get_hardware_menu().config(state=Tk.NORMAL)
-        self.view.get_hardware_config_button().config(state=Tk.NORMAL)
-        self.view.get_hardware_config_from_yaml_button().config(state=Tk.NORMAL)
-        self.view.get_print_hardware_config_button().config(state=Tk.NORMAL)
+        self.view.start_button.config(state=Tk.NORMAL)
+        self.view.stop_button.config(state=Tk.NORMAL)
+        self.view.controller_menu.config(state=Tk.NORMAL)
+        self.view.hardware_config_button.config(state=Tk.NORMAL)
+        self.view.hardware_config_from_yaml_button.config(state=Tk.NORMAL)
 
-    def start_scope(self):
-        logger.debug('clicked start')
+    def start_scope(self) -> None:
+        logger.debug('start_scope')
         if self.animation is None:
             self.view.canvas.draw_idle()
-            self.animation = animation.FuncAnimation(self.view.scope_view.fig,
-                                                     self.view.scope_view.update,
+            self.animation = animation.FuncAnimation(self.view.scope.fig,
+                                                     self.view.scope.update,
                                                      self.data_acquisition_model.yield_count_rate,
-                                                     init_func = self.view.scope_view.init,
+                                                     init_func=self.view.scope.init,
                                                      interval=args.animation_update_interval,
                                                      blit=False,
                                                      cache_frame_data=False)
-        self.data_acquisition_model.start()
-        self.animation.resume()
+        try:
+            self.data_acquisition_model.start()
+            self.animation.resume()
+            self.view.start_button.config(state=Tk.DISABLED)
+            self.view.stop_button.config(state=Tk.NORMAL)
+            self.view.controller_menu.config(state=Tk.DISABLED)
+            self.view.hardware_config_button.config(state=Tk.DISABLED)
+            self.view.hardware_config_from_yaml_button.config(state=Tk.DISABLED)
 
-        self.view.get_start_button().config(state=Tk.DISABLED)
-        self.view.get_stop_button().config(state=Tk.NORMAL)
-        self.view.get_hardware_menu().config(state=Tk.DISABLED)
-        self.view.get_hardware_config_button().config(state=Tk.DISABLED)
-        self.view.get_hardware_config_from_yaml_button().config(state=Tk.DISABLED)
-        self.view.get_print_hardware_config_button().config(state=Tk.DISABLED)
+        except Exception as e:
+            logger.error(e)
+            self.stop_scope()
 
-    def on_closing(self):
-        logger.debug('closing')
+    def _on_closing(self) -> None:
+        logger.debug('_on_closing')
         try:
             self.stop_scope()
             self.data_acquisition_model.close()
-            self.root.quit()
-            self.root.destroy()
+            self.root_window.quit()
+            self.root_window.destroy()
         except Exception as e:
             logger.warning(e)
             pass
 
-    def hardware_option_callback(self, hardware_option):
-        config = self.open_config_for_hardware(hardware_option)
-        self.load_daq_from_config_dict(config)
-        self.view.reset_scope()
-
-    def configure_from_yaml(self):
+    def configure_from_yaml(self) -> None:
         """
         This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
 
@@ -270,7 +318,7 @@ class MainTkApplication():
         )
         afile = Tk.filedialog.askopenfile(filetypes=filetypes, defaultextension='.yaml')
         if afile is None:
-            return # selection was canceled.
+            return  # selection was canceled.
 
         config = yaml.safe_load(afile)
         afile.close()
@@ -293,15 +341,17 @@ or check your YAML file to ensure configuration of supported hardware controller
             logger.info(counter_config['configure'])
             self.data_acquisition_model.configure(counter_config['configure'])
 
-    def open_config_for_hardware(self, hardware_name):
-        with importlib.resources.path(CONTROLLER_PATH, SUPPORTED_HARDWARE[hardware_name]) as yaml_path:
+    def _open_config_for_hardware(self, hardware_name: str) -> dict:
+        with importlib.resources.path(CONTROLLER_PATH, SUPPORTED_CONTROLLERS[hardware_name]) as yaml_path:
             logger.info(f"opening config file: {yaml_path}")
             with open(yaml_path, 'r') as yaml_file:
                 config = yaml.safe_load(yaml_file)
 
         return config
 
-    def load_daq_from_config_dict(self, config):
+    def load_daq_from_config_dict(self, controller_name: str) -> None:
+
+        config = self._open_config_for_hardware(controller_name)
 
         counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_DEVICE]
 
@@ -319,13 +369,13 @@ or check your YAML file to ensure configuration of supported hardware controller
 
         # configure the data acquisition model
         self.data_acquisition_model.configure(counter_config['configure'])
-        self.view.get_hardware_config_button().bind("<Button>", lambda e: self.data_acquisition_model.configure_view(self.root))
+        self.view.hardware_config_button.bind("<Button>", lambda e: self.data_acquisition_model.configure_view(self.root_window))
         self.animation = None  # reset the animation
 
 
-def main():
+def main() -> None:
 
-    tkapp = MainTkApplication(DEFAULT_HARDWARE)
+    tkapp = MainTkApplication(DEFAULT_DAQ_DEVICE_NAME)
     tkapp.run()
 
 
