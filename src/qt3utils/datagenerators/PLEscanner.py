@@ -9,9 +9,10 @@ class CounterAndScanner:
     def __init__(self, rate_counter, wavelength_controller):
 
         self.running = False
-        self.current_y = 0
-        self.vmin = wavelength_controller.minimum_allowed_position
-        self.vmax = wavelength_controller.maximum_allowed_position
+        self.current_t = 0
+        self.vmin = float(wavelength_controller.minimum_allowed_position)
+        self.vmax = float(wavelength_controller.maximum_allowed_position)
+        self.tmax = 100
         self._step_size = 0.5
         self.raster_line_pause = 0.150  # wait 150ms for the voltage to settle before a line scan
 
@@ -73,7 +74,7 @@ class CounterAndScanner:
         if self.running == False:  # this allows external process to stop scan
             return False
 
-        if self.current_v <= self.vmax:  # stops scan when reaches final position
+        if self.current_t <= self.tmax:  # stops scan when reaches final position
             return True
         else:
             self.running = False
@@ -90,7 +91,7 @@ class CounterAndScanner:
     def go_to_v(self, desired_voltage):
         if self.wavelength_controller and desired_voltage <= self.vmax and desired_voltage >= self.vmin:
             try:
-                self.wavelength_controller.go_to_position(v=self.desired_voltage)
+                self.wavelength_controller.go_to_voltage(v=desired_voltage)
             except ValueError as e:
                 logger.info(f'out of range\n\n{e}')
 
@@ -103,6 +104,7 @@ class CounterAndScanner:
         raw_counts_for_axis = self.scan_axis('v', self.vmin, self.vmax, self._step_size)
         self.scanned_raw_counts.append(raw_counts_for_axis)
         self.scanned_count_rate.append([self.sample_count_rate(raw_counts) for raw_counts in raw_counts_for_axis])
+        self.current_t = self.current_t + 1
 
     def scan_axis(self, axis, min, max, step_size):
         """

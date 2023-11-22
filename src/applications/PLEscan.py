@@ -54,7 +54,7 @@ parser.add_argument('-lmin', '--wavelength-min-position', metavar = 'voltage', d
                     help='sets min allowed voltage on PLE controller.')
 parser.add_argument('-lmax', '--wavelength-max-position', metavar = 'voltage', default = 10, type=float,
                     help='sets min allowed voltage on PLE controller.')
-parser.add_argument('-lscale', '--wavelength-scale-nm-per-volt', default = 8, type=float,
+parser.add_argument('-lscale', '--wavelength-scale-nm-per-volt', default = 1, type=float,
                     help='sets nanometer to volt scale for PLE controller.')
 parser.add_argument('-r', '--randomtest', action = 'store_true',
                     help='When true, program will run showing random numbers. This is for development testing.')
@@ -80,6 +80,35 @@ class ScanImage:
         self.cid = self.fig.canvas.mpl_connect('button_press_event', self.onclick)
         self.ax.set_xlabel('Voltage')
         self.log_data = False
+
+    def update(self, model):
+
+        if self.log_data:
+            data = np.log10(model.scanned_count_rate)
+            data[np.isinf(data)] = 0 #protect against +-inf
+        else:
+            data = model.scanned_count_rate
+
+        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.vmin,
+                                                                   model.vmax + model.step_size,
+                                                                   model.current_t + model.raster_line_pause,
+                                                                   model.rate_counter.num_data_samples_per_batch])
+        if self.cbar is None:
+            self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
+        else:
+            self.cbar.update_normal(self.artist)
+
+        if self.log_data is False:
+            self.cbar.formatter.set_powerlimits((0, 3))
+
+        self.ax.set_xlabel('x position (um)')
+        self.ax.set_ylabel('y position (um)')
+
+    def reset(self):
+        self.ax.cla()
+
+    def set_onclick_callback(self, f):
+        self.onclick_callback = f
 
 
     def onclick(self, event):
@@ -138,8 +167,8 @@ class SidePanel():
         tk.Label(frame, text="Voltage Limits (V)").grid(row=row, column=0)
         self.v_lmin_entry = tk.Entry(frame, width=10)
         self.v_lmax_entry = tk.Entry(frame, width=10)
-        self.v_lmin_entry.insert(10, args.wavelength_min_position)
-        self.v_lmax_entry.insert(10, args.wavelength_max_position)
+        self.v_lmin_entry.insert(10, float(args.wavelength_min_position))
+        self.v_lmax_entry.insert(10, float(args.wavelength_max_position))
         self.v_lmin_entry.grid(row=row, column=1)
         self.v_lmax_entry.grid(row=row, column=2)
 
@@ -175,7 +204,7 @@ class MainTkApplication():
     def go_to_voltage(self, event = None):
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
-        self.counter_scanner.go_to_v(self.view.sidepanel.v_entry.get())
+        self.counter_scanner.go_to_v(float(self.view.sidepanel.v_entry.get()))
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.GotoButton['state'] = 'normal'
 
@@ -188,7 +217,7 @@ class MainTkApplication():
         sweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
         vmin = float(self.view.sidepanel.v_min_entry.get())
         vmax = float(self.view.sidepanel.v_max_entry.get())
-        step_size = int((vmax - vmin) / n_sample_size)
+        step_size = (vmax - vmin) / float(n_sample_size)
         args = [vmin, vmax]
         args.append(step_size)
         args.append(n_sample_size)

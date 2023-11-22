@@ -41,7 +41,7 @@ class VControl(nipiezojenapy.BaseControl):
             self._validate_value(val)
             with nidaqmx.Task() as task:
                 task.ao_channels.add_ao_voltage_chan(self.device_name + '/' + self.write_channel)
-                task.write(self._microns_to_volts(val))
+                task.write(self._nm_to_volts(nm=val))
                 self.last_write_value = val
 
         debug_string = []
@@ -61,7 +61,7 @@ class VControl(nipiezojenapy.BaseControl):
         If no input analog channels were provided when objected was created,
         returns [-1,-1,-1]
         '''
-        output = [-1,-1,-1]
+        output = -1
         if self.read_channel is not None:
             with nidaqmx.Task() as vread, nidaqmx.Task():
 
@@ -71,25 +71,9 @@ class VControl(nipiezojenapy.BaseControl):
 
         return output
 
-    def get_current_voltage(self) -> List[float]:
-        '''
-        Returns the x,y,z position in microns
-
-        If no input analog channels were provided when objected was created,
-        returns the last requested position.
-        '''
-
-        if self.read_channel is None:
-            return self.last_write_value
-
-        else:
-            return [self._volts_to_nm(v) for v in self.get_current_voltage()]
-
-    @staticmethod
     def _nm_to_volts(self, nm: float) -> float:
         return nm / self.scale_nm_per_volt
 
-    @staticmethod
     def _volts_to_nm(self, volts: float) -> float:
         return self.scale_nm_per_volt * volts
     @property
