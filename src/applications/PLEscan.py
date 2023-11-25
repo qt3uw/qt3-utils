@@ -88,11 +88,13 @@ class ScanImage:
             data[np.isinf(data)] = 0 #protect against +-inf
         else:
             data = model.scanned_count_rate
+        data = np.array(data).T.tolist()
 
-        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.vmin,
-                                                                   model.vmax + model.step_size,
-                                                                   model.current_t + model.raster_line_pause,
-                                                                   model.rate_counter.num_data_samples_per_batch])
+        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.current_t + model.raster_line_pause,
+                                                                   0,
+                                                                   model.vmin,
+                                                                   model.vmax + model.step_size
+                                                                   ])
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
         else:
@@ -101,8 +103,9 @@ class ScanImage:
         if self.log_data is False:
             self.cbar.formatter.set_powerlimits((0, 3))
 
-        self.ax.set_xlabel('x position (um)')
-        self.ax.set_ylabel('y position (um)')
+        self.ax.set_xlabel('Pixels')
+        self.ax.set_ylabel('Voltage (V)')
+
 
     def reset(self):
         self.ax.cla()
