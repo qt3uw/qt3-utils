@@ -1,6 +1,6 @@
 import logging
 import tkinter as tk
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 
 import nidaqmx
 import nipiezojenapy
@@ -59,10 +59,12 @@ class QT3ScanNIDAQPositionController:
         except (nidaqmx.errors.DaqError, nidaqmx._lib.DaqNotFoundError) as e:
             self.logger.error(e)
 
-    def split_channels(self, channels: str) -> Tuple[str, str, str]:
+    def split_channels(self, channels: str) -> Union[None, Tuple[str, str, str]]:
         """
         This method splits a comma separated string of channels into a tuple of three channels.
         """
+        if channels is None:
+            return None
         channel_list = channels.split(',')
         if len(channel_list) != 3:
             raise ValueError(f"Expected 3 channels, got {len(channel_list)}")
@@ -72,7 +74,18 @@ class QT3ScanNIDAQPositionController:
         """
         This method converts a tuple of three channels into a comma separated string.
         """
+        if channels is None:
+            return 'None'
         return ','.join(channels)
+
+    def vals_to_str(self, vals: Tuple) -> str:
+        """
+        This method converts a tuple of values into a comma separated string.
+        """
+        if len(set(vals)) == 1:
+            return str(vals[0])
+        else:
+            return ','.join([str(x) for x in vals])
 
     def configure(self, config_dict: dict):
 
@@ -92,6 +105,8 @@ class QT3ScanNIDAQPositionController:
 
         self.position_controller.scale_microns_per_volt = config_dict.get('scale_microns_per_volt',
                                                                           self.position_controller.scale_microns_per_volt)
+        self.position_controller.zero_microns_volt_offset = config_dict.get('zero_microns_volt_offset',
+                                                                          self.position_controller.zero_microns_volt_offset)
         self.position_controller.maximum_allowed_position = config_dict.get('maximum_allowed_position',
                                                                             self.position_controller.maximum_allowed_position)
         self.position_controller.minimum_allowed_position = config_dict.get('minimum_allowed_position',
@@ -124,8 +139,13 @@ class QT3ScanNIDAQPositionController:
 
         row += 1
         tk.Label(config_win, text="Scale Microns per Volt").grid(row=row, column=0)
-        scale_microns_per_volt_var = tk.DoubleVar(value=self.position_controller.scale_microns_per_volt)
+        scale_microns_per_volt_var = tk.StringVar(value=self.vals_to_str(self.position_controller.scale_microns_per_volt))
         tk.Entry(config_win, textvariable=scale_microns_per_volt_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="Zero Micron Voltage").grid(row=row, column=0)
+        zero_microns_volt_offset_var = tk.StringVar(value=self.vals_to_str(self.position_controller.zero_microns_volt_offset))
+        tk.Entry(config_win, textvariable=zero_microns_volt_offset_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Maximum Allowed Position (microns)").grid(row=row, column=0)
@@ -148,13 +168,28 @@ class QT3ScanNIDAQPositionController:
             'write_channels': write_channels_var,
             'read_channels': read_channels_var,
             'scale_microns_per_volt': scale_microns_per_volt_var,
+            'zero_microns_volt_offset': zero_microns_volt_offset_var,
             'maximum_allowed_position': maximum_allowed_position_var,
             'minimum_allowed_position': minimum_allowed_position_var,
             'settling_time_in_seconds': settling_time_in_seconds_var,
         }
 
         def convert_gui_info_and_configure():
-            config_dict = {k:v.get() if v.get() not in ['None', ''] else None for k, v in gui_info.items()}  # special case to handle None values
+            config_dict = {}
+            for k, v in gui_info.items():
+                if k in ['scale_microns_per_volt', 'zero_microns_volt_offset']:
+                    if v.get() in ['None', '']:
+                        raise ValueError(f"{k} must be a float, int, or list of three floats or ints. got {v.get()}")
+                    split_v = v.get().split(',')
+                    if len(split_v) == 1:
+                        config_dict[k] = float(split_v[0])   
+                    else:
+                        config_dict[k] = [float(x) for x in split_v]
+                else:
+                    if v.get() not in ['None', '']:
+                        config_dict[k] = v.get()
+                    else:
+                        config_dict[k] = None
             self.logger.info(config_dict)
             self.configure(config_dict)
 
