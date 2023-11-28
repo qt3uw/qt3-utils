@@ -23,7 +23,7 @@ matplotlib.use('Agg')
 
 
 parser = argparse.ArgumentParser(description='QT3Scan', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('-v', '--verbose', type=int, default=1, help='0 = quiet, 1 = info, 2 = debug.')
+parser.add_argument('-v', '--verbose', type=int, default=2, help='0 = quiet, 1 = info, 2 = debug.')
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
@@ -78,10 +78,12 @@ class ScanImage:
         else:
             data = model.scanned_count_rate
 
-        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.xmin,
-                                                                   model.xmax + model.step_size,
-                                                                   model.current_y + model.step_size,
-                                                                   model.ymin])
+        self.artist = self.ax.imshow(data, origin='lower', 
+                                     cmap=self.cmap, 
+                                     extent=[model.xmin - model.step_size/2.0,
+                                             model.xmax - model.step_size/2.0,
+                                             model.ymin - model.step_size/2.0,
+                                             model.current_y - model.step_size/2.0])
 
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
@@ -96,6 +98,8 @@ class ScanImage:
 
     def reset(self):
         self.ax.cla()
+        self.pointer_line2d = None
+        self.position_line2d = None
 
     def set_onclick_callback(self, f):
         self.onclick_callback = f
@@ -107,7 +111,7 @@ class ScanImage:
         """
         Updates the pointer marker on the scan image to show a proposed new position on the image.
         """
-        if self.pointer_line2d:
+        if self.pointer_line2d is not None:
             self.pointer_line2d[0].set_data([[x_position], [y_position]])
         else:
             self.pointer_line2d = self.ax.plot(x_position, y_position, 'yx', label='pointer')
@@ -116,7 +120,7 @@ class ScanImage:
         """
         Updates the position marker on the scan image to show the current position on the image.
         """
-        if self.position_line2d:
+        if self.position_line2d is not None:
             self.position_line2d[0].set_data([[x_position], [y_position]])
         else:
             self.position_line2d = self.ax.plot(x_position, y_position, 'ro', label='pos')
@@ -574,9 +578,9 @@ or check your YAML file to ensure configuration of supported controller.
 
             while self.application_controller.still_scanning():
                 self.application_controller.scan_x()
+                self.application_controller.move_y()
                 self.view.scan_view.update(self.application_controller)
                 self.view.canvas.draw()
-                self.application_controller.move_y()
 
             self.application_controller.stop()
 

@@ -84,15 +84,15 @@ class CounterAndScanner:
         if self.running == False: #this allows external process to stop scan
             return False
 
-        if self.current_y <= self.ymax: #stops scan when reaches final position
+        if self.current_y < self.ymax: #stops scan when reaches final position
             return True
         else:
             self.running = False
             return False
 
     def move_y(self):
-        self.current_y += self.step_size
-        if self.stage_controller and self.current_y <= self.ymax:
+        if self.stage_controller and self.current_y < self.ymax:
+            self.current_y += self.step_size
             try:
                 self.stage_controller.go_to_position(y=self.current_y)
             except ValueError as e:
