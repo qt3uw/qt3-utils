@@ -51,7 +51,7 @@ dependencies = [
     "qcsapphire>=1.0.1",
     "qt3rfsynthcontrol>=1.0.1",
     "nipiezojenapy>=1.0.1",
-    "pulseblaster>=1.0.1",
+    "pulseblaster==1.0.1",
     "PyYAML>=6.0.1",
 ]
 
