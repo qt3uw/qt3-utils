@@ -43,12 +43,12 @@ RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Data Generator'
 DEFAULT_DAQ_DEVICE_NAME = RANDOM_DATA_DAQ_DEVICE_NAME
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
-SUPPORTED_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml',
+STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml',
                                                  'application_controller_class': QT3ScanConfocalApplicationController},
                          RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
                                                        'application_controller_class': QT3ScanConfocalApplicationController},
                          }
-# Hyper Spectral Imaging would add the following to SUPPORTED_CONTROLLERS
+# Hyper Spectral Imaging would add the following to STANDARD_CONTROLLERS
 # PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
 # PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectromter.yaml',
 #                           'application_controller_class': QT3ScanHyperSpectralApplicationController}
@@ -228,8 +228,8 @@ class SidePanel():
         # so that it can be used in the callback when a hardware option is selected.
         self.controller_menu = tk.OptionMenu(frame,
                                              self.controller_option,
-                                             *SUPPORTED_CONTROLLERS.keys(),
-                                             command=application.load_controller_from_config_dict)
+                                             *STANDARD_CONTROLLERS.keys(),
+                                             command=application.load_controller_from_name)
         self.controller_menu.grid(row=row, column=0, columnspan=3)
 
         row += 1
@@ -389,7 +389,7 @@ class MainTkApplication():
         self.view.sidepanel.optimize_z_button.bind("<Button>", lambda e: self.optimize('z'))
         self.view.config_from_yaml_button.bind("<Button>", lambda e: self.configure_from_yaml())
 
-        self.load_controller_from_config_dict(application_controller_name)
+        self.load_controller_from_name(application_controller_name)
 
         scan_range = [self.application_controller.position_controller.minimum_allowed_position,
                       self.application_controller.position_controller.maximum_allowed_position]
@@ -405,7 +405,7 @@ class MainTkApplication():
         self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'], 4))
 
     def _open_yaml_config_for_controller(self, controller_name: str) -> dict:
-        with importlib.resources.path(CONTROLLER_PATH, SUPPORTED_CONTROLLERS[controller_name]['yaml']) as yaml_path:
+        with importlib.resources.path(CONTROLLER_PATH, STANDARD_CONTROLLERS[controller_name]['yaml']) as yaml_path:
             logger.info(f"opening config file: {yaml_path}")
             with open(yaml_path, 'r') as yaml_file:
                 config = yaml.safe_load(yaml_file)
@@ -437,29 +437,7 @@ class MainTkApplication():
 
         return controller
 
-    def _configure_controller(self, config: dict, controller: Any) -> None:
-        """
-        Checks that the controller object is of the same type as the one found in config dictionary.
-
-        If the controller object is of the same type, then the controller is configured with the
-        configure method
-        """
-        same_class_name = controller.__class__.__name__ == config['class_name']
-        same_module_name = controller.__class__.__module__ == config['import_path']
-        if same_class_name is False or same_module_name is False:
-            msg = f"""\nCurrent controller object is not of type found in YAML
-Found in YAML: {config['import_path']}.{config['class_name']}.
-Current object: {controller.__class__.__module__}.{controller.__class__.__name__}
-Configuration not loaded. Please select approprate controller from the pull-down menu
-or check your YAML file to ensure configuration of supported controller.
-"""
-            logger.warning(msg)
-        else:
-            logger.info("load settings from yaml")
-            logger.info(config['configure'])
-            controller.configure(config['configure'])
-
-    def load_controller_from_config_dict(self, application_controller_name: str) -> None:
+    def load_controller_from_name(self, application_controller_name: str) -> None:
         """
         Loads the default yaml configuration file for the application controller.
 
@@ -467,8 +445,11 @@ or check your YAML file to ensure configuration of supported controller.
         function for the support controller pull-down menu in the side panel
         """
         logger.info(f"loading {application_controller_name}")
-
         config = self._open_yaml_config_for_controller(application_controller_name)
+        self._build_controllers_from_config_dict(config, application_controller_name)
+
+    def _build_controllers_from_config_dict(self, config: dict, controller_name: str) -> None:
+
         # load the position controller from dict
         pos_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_POSITION_CONTROLLER]
         position_controller = self._load_controller_from_dict(pos_config, QT3ScanPositionControllerInterface)
@@ -477,7 +458,7 @@ or check your YAML file to ensure configuration of supported controller.
         daq_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_CONTROLLER]
         daq_controller = self._load_controller_from_dict(daq_config, QT3ScanDAQControllerInterface)
 
-        ControllerClass = SUPPORTED_CONTROLLERS[application_controller_name]['application_controller_class']
+        ControllerClass = STANDARD_CONTROLLERS[controller_name]['application_controller_class']
         self.application_controller = ControllerClass(position_controller, daq_controller, logger.level)
 
         # bind buttons to controllers
@@ -489,7 +470,7 @@ or check your YAML file to ensure configuration of supported controller.
         """
         This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
 
-        This does not instantiate a new hardware controller class. It only configures the existing one.
+        This does instantiate a new hardware controller classes and calls configure.
         """
         filetypes = (
             ('YAML', '*.yaml'),
@@ -501,11 +482,7 @@ or check your YAML file to ensure configuration of supported controller.
         config = yaml.safe_load(afile)
         afile.close()
 
-        pos_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_POSITION_CONTROLLER]
-        self._configure_controller(pos_config, self.application_controller.position_controller)
-
-        daq_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_CONTROLLER]
-        self._configure_controller(daq_config, self.application_controller.daq_controller)
+        self._build_controllers_from_config_dict(config, self.view.controller_option.get())
 
     def run(self):
         self.root_window.title("QT3Scan: Piezo Controlled NIDAQ Digital Count Rate Scanner")
