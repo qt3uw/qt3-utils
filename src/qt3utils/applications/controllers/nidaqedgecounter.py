@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Union, Generator
 import numpy as np
 import tkinter as tk
 import logging
@@ -8,6 +8,7 @@ from qt3utils.errors import convert_nidaq_daqnotfounderror
 
 module_logger = logging.getLogger(__name__)
 module_logger.setLevel(logging.ERROR)
+
 
 class QT3ScopeNIDAQEdgeCounterController:
     """
@@ -49,9 +50,10 @@ class QT3ScopeNIDAQEdgeCounterController:
         self.data_generator.close()
 
     @convert_nidaq_daqnotfounderror(module_logger)
-    def yield_count_rate(self) -> np.ndarray:
+    def yield_count_rate(self) -> Generator[np.floating, None, None]:
         """
         This method is used to yield data from the data controller.
+        Returns the daqsamplers.NiDaqDigitalInputRateCounter.yield_count_rate() generator.
         """
         return self.data_generator.yield_count_rate()
 

@@ -1,6 +1,7 @@
 import time
 import logging
 import abc
+from typing import Generator
 
 import numpy as np
 import nidaqmx
@@ -9,6 +10,7 @@ import qt3utils.nidaq
 
 logger = logging.getLogger(__name__)
 
+
 class RateCounterBase(abc.ABC):
     """
     Subclasses must implement a clock_rate attribute or property.
@@ -16,6 +18,7 @@ class RateCounterBase(abc.ABC):
     def __init__(self):
         self.running = False
         self.clock_rate = 0
+
     def stop(self):
         """
         subclasses may override this for custom behavior
@@ -43,7 +46,7 @@ class RateCounterBase(abc.ABC):
         """
         pass
 
-    def sample_counts(self, n_batches=1, sum_counts=True):
+    def sample_counts(self, n_batches=1, sum_counts=True) -> np.ndarray:
         """
         Performs n_batches of batch reads from _read_samples method.
 
@@ -62,43 +65,37 @@ class RateCounterBase(abc.ABC):
         the actual number of clock samples per batch. This may be useful for the caller if
         they wish to perform their own averaging or other statistical analysis that may be time dependent.
 
-        For example, if `num_data_samples_per_batch` is 5 and n_batches is 3,
-        (typical values are 100 and 10, 100 and 1, 1000 and 1, etc)
-
-        reading counts from the NiDAQ may return
+        For example, if `self.num_data_samples_per_batch` is 5 and n_batches is 3,
+        then reading counts from the NiDAQ may return
 
         #sample 1
-        raw_counts_1 = [3,5,4,6,4]
+        raw_counts_1 = [3,5,4,6,4]  # there are num_data_samples_per_batch=5 requested samples in this batch
         sum_counts_1 = 22
         size_counts_1 = 5
-           (22, 5)
+           summed batch 1: (22, 5)
         #sample 2
         raw_counts_2 = [5,5,7,3,4]
         sum_counts_2 = 24
         size_counts_2 = 5
-           (24, 5)
+           summed batch 2: (24, 5)
         #sample 3
-        raw_counts_3 = [5,3,5,7]
+        raw_counts_3 = [5,3,5,7] # it's possible, thought unlikely, nidaq returns fewer than num_data_samples_per_batch
         sum_counts_3 = 20
         size_counts_2 = 4
-           (20, 4)
+           summed batch 3: (20, 4)
 
-        In this example, the numpy array is of shape (3, 2) and will be
+        The summed batch values are combined into a numpy array of shape (3, 2)
+
         data = [
                 [22, 5],
                 [24, 5],
                 [20, 4]
                ]
+        If sum_counts is False, this numpy array of shape (3,2) will be returned.
 
-        If sum_counts is True, then will the total number of counts and total number of
-        clock samples read will be returned.
-
-        np.sum(data, axis=0, keepdims=True).
-
-        In the example above, this would be [[66, 14]].
-
-        With these data, and knowing the clock_rate, one can easily compute
-        the count rate. See sample_count_rate.
+        If sum_counts is True, data will be summed along axis=0 with keepdim=True,
+        resulting in a numpy array of shape (1, 2).
+        Following the example, the return value would be [[66, 14]].
         """
 
         data = np.zeros((n_batches, 2))
@@ -114,13 +111,15 @@ class RateCounterBase(abc.ABC):
         else:
             return data
 
-    def sample_count_rate(self, data_counts: np.ndarray):
+    def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
         """
-        Converts the output of sample_counts to a count rate. Expects data_counts to be a 2d numpy array
+        Converts the average count rate given the data_counts, using the object's
+        clock_rate value. Expects data_counts to be a 2d numpy array
         of [[counts, clock_samples], [counts, clock_samples], ...] or a 2d array with one row: [[counts, clock_samples]]
-        as is returned by sample_counts.
+        as is returned by the function, sample_counts, in this class.
 
-        Returns the count rate in counts/second = clock_rate * total counts/ total clock_samples)
+        Returns the average count rate in counts/second
+            = self.clock_rate * total counts/ total clock_samples)
 
         If the sum of all clock_samples is 0, will return np.nan.
         """
@@ -130,10 +129,10 @@ class RateCounterBase(abc.ABC):
         else:
             return np.nan
 
-    def yield_count_rate(self):
+    def yield_count_rate(self) -> Generator[np.floating, None, None]:
         while self.running:
-            count_data = self.sample_counts()
-            yield self.sample_count_rate(count_data)
+            count_data = self.sample_counts()  # because n_batches=1 (and sum=True) this returns a 2d array of shape (1, 2)
+            yield self.sample_count_rate(count_data)  # because count_data is 2d, sample count rate returns a float c
 
 
 class RandomRateCounter(RateCounterBase):

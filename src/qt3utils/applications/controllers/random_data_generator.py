@@ -1,4 +1,4 @@
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, Generator
 import tkinter as tk
 import logging
 import numpy as np
@@ -51,7 +51,7 @@ class QT3ScopeRandomDataController:
     def close(self) -> Union[dict, type(None)]:
         self.data_generator.close()
 
-    def yield_count_rate(self) -> np.ndarray:
+    def yield_count_rate(self) -> Generator[np.floating, None, None]:
         """
         This method is used to yield data from the data controller.
         """

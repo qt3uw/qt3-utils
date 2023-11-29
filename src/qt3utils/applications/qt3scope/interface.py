@@ -1,4 +1,4 @@
-from typing import Union, Protocol, runtime_checkable
+from typing import Union, Protocol, runtime_checkable, Generator
 import numpy as np
 import tkinter as Tk
 
@@ -24,9 +24,10 @@ class QT3ScopeDAQControllerInterface(Protocol):
     def close(self) -> Union[dict, type(None)]:
         pass
 
-    def yield_count_rate(self) -> np.ndarray:
+    def yield_count_rate(self) -> Generator[np.floating, None, None]:
         """
         This method is used to yield data from the data controller.
+        This can either return a generator function or is a generator function itself.
         """
         pass
 
