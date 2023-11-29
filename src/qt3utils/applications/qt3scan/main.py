@@ -40,7 +40,7 @@ if args.verbose == 2:
 NIDAQ_DAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
 RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Data Generator'
 
-DEFAULT_DAQ_DEVICE_NAME = RANDOM_DATA_DAQ_DEVICE_NAME
+DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DAQ_DEVICE_NAME
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
 STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml',
