@@ -88,38 +88,37 @@ Help to [automatically generate documentation](https://github.com/qt3uw/qt3-util
 
 The console program `qt3scope` comes with this package. It allows you to run
 a simple program from the command-line that reads the count rate on a particular
-digital input terminal on the NI DAQ.
+digital input terminal on the NI DAQ. Further development may allow it to 
+display count rates from other hardware.
 
-Review the available command line options for the program. Pay special attention
-to the `--signal-terminal` option, ensuring that terminal value matches the current
-hardware setup.
-
-```
-> qt3scope --help
-```
-
-If default settings are correct, then should be able to run without options
+It can be from the command line / terminal
 
 ```
 > qt3scope
 ```
 
-#### Configuration
+After `pip install` one may also find a link to an executible file in the python environment. One
+may be able to create a softlink to that executable to a desktop or task bar icon, allowing
+to launch the program from a mouse click. 
 
-Data Acquisition hardware supported by QT3Scope can be configured via the application in two ways. 
-For each hardware supported, there will be a GUI window that allows the user to enter specific values. 
-Additionally, one can configure the hardware by uploading a YAML file. The YAML file must contain
-a specific structure. All hardware controllers that are built for QT3Scope must supply a default
+Starting in version 1.0.3, graphical dropdown menus and configuration windows
+will allow users to configure the software to run on their hardware. 
+
+
+#### YAML Configuration
+
+Data Acquisition hardware supported by QT3Scope can also be configured by selecting a YAML file.
+The YAML file must contain a specific structure and names as shown below. 
+All hardware controllers that are built for QT3Scope must supply a default
 configuration YAML file, which will be found in 
-[src/qt3utils/applications/qt3scope/controllers](src/qt3utils/applications/qt3scope/controllers).
+[src/qt3utils/applications/controllers](src/qt3utils/applications/controllers).
 
-For convenience, example YAML files for NIDAQ Edge Counter and the Random Data Generator are shown
-below.
+###### Default NIDAQ Edge Counter YAML configuration:
 
 ```yaml
 QT3Scope:
-  Counter:
-    import_path : qt3utils.applications.qt3scope.controllers.nidaqedgecounter
+  DAQController:
+    import_path : qt3utils.applications.controllers.nidaqedgecounter
     class_name  : QT3ScopeNIDAQEdgeCounterController
     configure : 
       daq_name : Dev1  # NI DAQ Device Name
@@ -131,40 +130,93 @@ QT3Scope:
       signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
 ```
 
+###### Default Random Data Generator configuration:
+
 ```yaml
 QT3Scope:
-  Counter:
-    import_path : qt3utils.applications.qt3scope.controllers.random
+  DAQController:
+    import_path : qt3utils.applications.controllers.random_data_generator
     class_name  : QT3ScopeRandomDataController
     configure : 
       simulate_single_light_source : False
       num_data_samples_per_batch : 10
       default_offset: 100
-      signal_noise_amp: 0.2
+      signal_noise_amp: 0.5
 ```
 
-If you create a YAML file on your local machine it must contain the same structure as found above for the 
-hardware you're trying to configure. 
 
 ### QT3 Confocal Scan
 
 The console program `qt3scan` comes with this package.  This program launches
-a GUI applications that will perform a confocal scan using the Jena system
-piezo actuator.
+a GUI applications that will perform a 2D confocal scan using a data acquisition
+controller object and a position controller object. The default controllers use
+an NIDAQ device that counts TTL edges and an NIDAQ device that sets
+analog voltage values on a Jena system piezo actuator.
 
-The run-time options available are very similar to `qt3scope`.
-Review the available command line options for the program. Pay special attention
-to the `--signal-terminal` option, ensuring that terminal value matches the current
-hardware setup.
-
-```
-> qt3scan --help
-```
-
-If default settings are correct, then should be able to run without options
+The run-time options available are very similar to `qt3scope` and is invoked
+on the command line / terminal. 
 
 ```
 > qt3scan
+```
+
+Similar to `qt3scope`, the supported hardware can be configured via GUI or YAML file. 
+
+All hardware controllers that are built for QT3Scope must supply a default
+configuration YAML file, which will be found in 
+[src/qt3utils/applications/controllers](src/qt3utils/applications/controllers).
+
+###### Default NIDAQ Edge Counter YAML configuration:
+
+```yaml
+QT3Scan:
+  DAQController:
+    import_path : qt3utils.applications.controllers.nidaqedgecounter
+    class_name  : QT3ScanNIDAQEdgeCounterController
+    configure : 
+      daq_name : Dev1  # NI DAQ Device Name
+      signal_terminal : PFI0  # NI DAQ terminal connected to input digital TTL signal
+      clock_terminal :    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
+      clock_rate: 100000  # NI DAQ clock rate in Hz
+      num_data_samples_per_batch : 250
+      read_write_timeout : 10  # timeout in seconds for read/write operations
+      signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
+
+  PositionController:
+    import_path : qt3utils.applications.controllers.nidaqpiezocontroller    
+    class_name  : QT3ScanNIDAQPositionController
+    configure : 
+      daq_name : Dev1  # NI DAQ Device Name
+      write_channels : ao0,ao1,ao2  # NI DAQ analog output channels to use for writing position
+      read_channels : ai0,ai1,ai2  # NI DAQ analog input channels to use for reading position
+      scale_microns_per_volt : 8  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5] 
+      zero_microns_volt_offset: 0  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5] 
+      minimum_allowed_position : 0  # microns
+      maximum_allowed_position : 80  # microns
+      settling_time_in_seconds : 0.001
+
+```
+
+###### Default Random Data Generator configuration:
+
+```yaml
+QT3Scan:
+  PositionController:
+    import_path : qt3utils.applications.controllers.random_data_generator    
+    class_name  : QT3ScanDummyPositionController
+    configure : 
+      maximum_allowed_position : 80
+      minimum_allowed_position : 0
+
+  DAQController:
+    import_path : qt3utils.applications.controllers.random_data_generator
+    class_name  : QT3ScanRandomDataController
+    configure : 
+      simulate_single_light_source : True
+      num_data_samples_per_batch : 10
+      default_offset: 100
+      signal_noise_amp: 0.1
+
 ```
 
 ### QT3 Piezo Controller
@@ -175,11 +227,89 @@ The console program `qt3piezo` comes installed via the 'nipiezojenapy' package, 
 > qt3piezo
 ```
 
-Similarly, this applications can be configured via command line options to match the haredware setup.
+This application can only be configured via command line options to match the haredware setup at this time.
+The `nipiezojenapy` python package should probably be moved into `qt3utils`. 
 
-# Development
 
-If you wish you make changes to qt3-utils (and hopefully merge those improvements into this repository), here are some brief instructions to get started. These instructions assume you are a member of the QT3 development team and have permission to push branches to this repo. If you are not, you can instead fork this repo into your own GitHub account, perform development and then issue a pull-request from your forked repo to this repo through GitHub. Alternatively, reach out to a maintainer of this repo to be added as a developer. 
+# QT3Scope / QT3Scan Hardware Development
+
+Follow these instructions in order to add new hardware support to QT3Scope or QT3Scan.
+
+For each application, you'll need to build a Python class that adheres to each application's interfaces.
+
+## QT3Scope
+
+
+
+1. Build a class that adheres to `QT3ScopeDAQControllerInterface` as defined in
+[src/qt3utils/applications/qt3scope/interface.py](src/qt3utils/applications/qt3scope/interface.py). There are a number of methods
+that you must construct. Two examples are [QT3ScopeRandomDataController](src/qt3utils/applications/controllers/random_data_generator.py)
+and [QT3ScopeNIDAQEdgeCounterController](src/qt3utils/applications/controllers/nidaqedgecounter.py#L13). 
+In addition to controlling hardware and returning data, they must also supply a way to configure the object via 
+Python dictionary (`configure` method) and graphically (`configure_view` method).
+2. Create a YAML file with a default configuration, similar to that found in 
+[random_data_generator.yaml](src/qt3utils/applications/controllers/random_data_generator.yaml) or [](src/qt3utils/applications/controllers/nidaq_edge_counter.yaml)
+3. Add your new controller to `SUPPORTED_CONTROLLERS` found in [qt3scope](src/qt3utils/applications/qt3scope/main.py#L51)
+
+## QT3Scan
+
+Similar to `qt3scope` but with a little more work.
+
+There are three controllers that are needed by `qt3scope`:
+* Application Controller -- [QT3ScanApplicationControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L106) 
+* DAQ Controller -- [QT3ScanDAQControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L59) 
+* Position Controller -- [QT3ScanPositionControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L7)
+
+### 1. Application Controller 
+
+Currently there is only [one implementation of the Application Controller](src/qt3utils/applications/qt3scan/controller.py#L14) 
+to support standard 2D scans. It is used for scans using the NIDAQ Edge Counter
+Controller, NIDAQ Position Controller, Random Data Generator and Dummy 
+Position Controller. If you do not need any changes to the save function 
+or special functionality to right-click on the scan image, then you can probably 
+re-use this Application Controller. If you are developing something like the 
+hyper-spectral image where each pixel in the 2D scan is based on a spectrum
+of counts over a range of wavelengths, you'll 
+likely want to build a new Application Controller. A 
+`QT3ScanHyperSpectralApplicationController` class would implement a 
+data view when a user right-clicks on the scan and would implement a function
+to save the full 3-dimensional data set. 
+
+### 2. DAQ Controller
+
+To support new hardware that acquires data, build an implementation of `QT3ScanDAQControllerInterface`.
+Examples are [QT3ScanRandomDataController](src/qt3utils/applications/controllers/random_data_generator.py#L124),
+and [QT3ScanNIDAQEdgeCounterController](src/qt3utils/applications/controllers/nidaqedgecounter.py#L139)
+
+Create a new python module in in src/qt3utils/applications/controllers for your hardware controller.
+
+### 3. Position Controller
+
+To support a new Position Controller build an implementation of `QT3ScanPositionControllerInterface`.
+Examples are [QT3ScanDummyPositionController](src/qt3utils/applications/controllers/random_data_generator.py#L160),
+and [QT3ScanNIDAQPositionController](src/qt3utils/applications/controllers/nidaqpiezocontroller.py#L9)
+
+Create a new python module in in `src/qt3utils/applications/controllers` for your position controller.
+
+### 4. Default YAML file
+
+Create a default YAML file that configures your DAQ and Position Controllers. Place the YAML file in
+`src/qt3utils/applications/controllers`
+
+### 5. Update QT3Scan.main
+
+Add your new controllers to [qt3scan.main.py](src/qt3utils/applications/qt3scan/main.py#L46)
+
+
+# General Python Development
+
+If you wish you make changes to qt3-utils (and hopefully merge those improvements into this repository) here are some brief instructions to get started. These instructions assume you are a 
+member of the QT3 development team and have permission to push branches to this repo. If you are not, you can 
+instead fork this repo into your own GitHub account, perform development and then issue a pull-request from 
+your forked repo to this repo through GitHub. Alternatively, reach out to a maintainer of this repo to be added as a developer. 
+
+These are mostly general guidelines for software development and 
+could be followed for other projects.
 
 ### 1. Create a development environment 
 
