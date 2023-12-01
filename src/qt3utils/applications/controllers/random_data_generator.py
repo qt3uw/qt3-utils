@@ -1,4 +1,4 @@
-from typing import Union, Tuple, Optional, Generator
+from typing import Tuple, Optional, Generator
 import tkinter as tk
 import logging
 import numpy as np
@@ -42,13 +42,13 @@ class QT3ScopeRandomDataController:
                                                                self.data_generator.signal_noise_amp)
         ## NB - I don't like how all of these configuration values are being accessed by string name.
 
-    def start(self) -> Union[dict, type(None)]:
+    def start(self) -> None:
         self.data_generator.start()
 
-    def stop(self) -> Union[dict, type(None)]:
+    def stop(self) -> None:
         self.data_generator.stop()
 
-    def close(self) -> Union[dict, type(None)]:
+    def close(self) -> None:
         self.data_generator.close()
 
     def yield_count_rate(self) -> Generator[np.floating, None, None]:

@@ -1,4 +1,4 @@
-from typing import Union, Generator
+from typing import Generator
 import numpy as np
 import tkinter as tk
 import logging
@@ -22,7 +22,7 @@ class QT3ScopeNIDAQEdgeCounterController:
         self.data_generator = daqsamplers.NiDaqDigitalInputRateCounter()
         self.last_config_dict = {}
 
-    def configure(self, config_dict: dict):
+    def configure(self, config_dict: dict) -> None:
         """
         This method is used to configure the data controller.
         """
@@ -38,15 +38,15 @@ class QT3ScopeNIDAQEdgeCounterController:
         self.data_generator.signal_counter = config_dict.get('signal_counter', self.data_generator.signal_counter)
 
     @convert_nidaq_daqnotfounderror(module_logger)
-    def start(self) -> Union[dict, type(None)]:
+    def start(self) -> None:
         self.data_generator.start()
 
     @convert_nidaq_daqnotfounderror(module_logger)
-    def stop(self) -> Union[dict, type(None)]:
+    def stop(self) -> None:
         self.data_generator.stop()
 
     @convert_nidaq_daqnotfounderror(module_logger)
-    def close(self) -> Union[dict, type(None)]:
+    def close(self) -> None:
         self.data_generator.close()
 
     @convert_nidaq_daqnotfounderror(module_logger)

@@ -1,4 +1,4 @@
-from typing import Union, Protocol, runtime_checkable, Generator
+from typing import Protocol, runtime_checkable, Generator
 import numpy as np
 import tkinter as Tk
 
@@ -9,19 +9,19 @@ class QT3ScopeDAQControllerInterface(Protocol):
     def __init__(self, logger_level):
         pass
 
-    def configure(self, config_dict: dict):
+    def configure(self, config_dict: dict) -> None:
         """
         This method is used to configure the data controller.
         """
         pass
 
-    def start(self) -> Union[dict, type(None)]:
+    def start(self) -> None:
         pass
 
-    def stop(self) -> Union[dict, type(None)]:
+    def stop(self) -> None:
         pass
 
-    def close(self) -> Union[dict, type(None)]:
+    def close(self) -> None:
         pass
 
     def yield_count_rate(self) -> Generator[np.floating, None, None]:

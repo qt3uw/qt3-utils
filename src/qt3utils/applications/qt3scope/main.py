@@ -75,13 +75,13 @@ class ScopeFigure:
         self.ax.set_ylabel('counts / sec')
         self.ax.ticklabel_format(style='sci', scilimits=(-3, 4), axis='y')
 
-    def init(self) -> plt.Line2D:
+    def init(self) -> Tuple[plt.Line2D]:
         """
         This method is used to initialize the Line2D object.
         Pass this to the animation.FuncAnimation init_func argument.
         """
         self.line.set_ydata(self.ydata)
-        return self.line,
+        return (self.line,)
 
     def reset(self, width: Optional[int] = None) -> None:
         """
@@ -112,10 +112,10 @@ class ScopeFigure:
         if (np.abs((new_min - current_min)/(current_min)) > 0.12) or (np.abs((new_max - current_max)/(current_max)) > 0.12):
             self.ax.set_ylim(np.max([0.01, np.min(self.ydata) - delta]), np.max(self.ydata) + delta)
         self.line.set_ydata(self.ydata)
-        return self.line,
+        return (self.line,)
 
     @property
-    def fig(self):
+    def fig(self) -> plt.Figure:
         return self._fig
 
 
@@ -163,7 +163,7 @@ class MainApplicationView():
         return self.sidepanel.controller_option.get()
 
     @controller_option.setter
-    def controller_option(self, value: str) -> None:
+    def controller_option(self, value: str):
         self.sidepanel.controller_option.set(value)
 
     @property
@@ -233,6 +233,9 @@ class MainTkApplication():
 
         self.view.controller_option = controller_name
 
+        # data acquisition model that is used to acquire data
+        self.data_acquisition_model = None
+        # load the data acquisition model
         self.load_daq_from_config_dict(controller_name)
 
         self.root_window.protocol("WM_DELETE_WINDOW", self._on_closing)
