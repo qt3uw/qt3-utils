@@ -156,6 +156,5 @@ class QT3ScanNIDAQEdgeCounterController(QT3ScopeNIDAQEdgeCounterController):
         return self.data_generator.num_data_samples_per_batch
 
     @num_data_samples_per_batch.setter
-    def num_data_samples_per_batch(self, value):
-        """Abstract property setter for num_data_samples_per_batch"""
+    def num_data_samples_per_batch(self, value: int):
         self.data_generator.num_data_samples_per_batch = value

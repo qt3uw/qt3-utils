@@ -2,6 +2,7 @@ import logging
 import numpy as np
 from typing import Tuple
 import h5py
+from matplotlib.backend_bases import MouseEvent
 
 from qt3utils.applications.qt3scan.interface import QT3ScanDAQControllerInterface, QT3ScanPositionControllerInterface
 import qt3utils.datagenerators
@@ -124,7 +125,10 @@ class QT3ScanConfocalApplicationController:
         self.daq_and_scanner.move_y()
 
     @convert_nidaq_daqnotfounderror(module_logger)
-    def optimize_position(self, axis, central, range, step_size) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
+    def optimize_position(self, axis: str,
+                          central: float,
+                          range: float,
+                          step_size: float) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """
         The returned tuple elements should be:
         0th: np.ndarray of count rates across the axis
@@ -134,7 +138,7 @@ class QT3ScanConfocalApplicationController:
         """
         return self.daq_and_scanner.optimize_position(axis, central, range, step_size)
 
-    def set_scan_range(self, xmin, xmax, ymin, ymax) -> None:
+    def set_scan_range(self, xmin: float, xmax: float, ymin: float, ymax: float) -> None:
         self.daq_and_scanner.set_scan_range(xmin, xmax, ymin, ymax)
 
     def set_num_data_samples_per_batch(self, N: int) -> None:
@@ -181,11 +185,11 @@ class QT3ScanConfocalApplicationController:
                 h5file.create_dataset(key, data=value)
             h5file.close()
 
-    def scan_image_rightclick_event(self, event) -> None:
+    def scan_image_rightclick_event(self, event: MouseEvent) -> None:
         """
         This method is called when the user right clicks on the scan image.
         """
-        self.logger.debug(f"scan_image_rightclick_event. click at {event.x}, {event.y}")
+        self.logger.debug(f"scan_image_rightclick_event. click at {event.xdata}, {event.ydata}")
 
 # class QT3ScanHyperSpectralApplicationController:
 #     """

@@ -1,21 +1,22 @@
 import tkinter as Tk
 import numpy as np
 from typing import Tuple, Optional, Protocol, runtime_checkable
+from matplotlib.backend_bases import MouseEvent
 
 
 @runtime_checkable
 class QT3ScanPositionControllerInterface(Protocol):
 
-    def __init__(self, logger_level):
+    def __init__(self, logger_level: int):
         pass
 
     @property
-    def maximum_allowed_position(self):
+    def maximum_allowed_position(self) -> float:
         """Abstract property: maximum_allowed_position"""
         pass
 
     @property
-    def minimum_allowed_position(self):
+    def minimum_allowed_position(self) -> float:
         """Abstract property: minimum_allowed_position"""
         pass
 
@@ -42,7 +43,7 @@ class QT3ScanPositionControllerInterface(Protocol):
         """
         pass
 
-    def configure(self, config_dict: dict):
+    def configure(self, config_dict: dict) -> None:
         """
         This method is used to configure the controller.
         """
@@ -58,7 +59,7 @@ class QT3ScanPositionControllerInterface(Protocol):
 @runtime_checkable
 class QT3ScanDAQControllerInterface(Protocol):
 
-    def __init__(self, logger_level):
+    def __init__(self, logger_level: int):
         pass
 
     @property
@@ -85,11 +86,11 @@ class QT3ScanDAQControllerInterface(Protocol):
         pass
 
     @num_data_samples_per_batch.setter
-    def num_data_samples_per_batch(self, value):
+    def num_data_samples_per_batch(self, value: int):
         """Abstract property setter for num_data_samples_per_batch"""
         pass
 
-    def configure(self, config_dict: dict):
+    def configure(self, config_dict: dict) -> None:
         """
         This method is used to configure the controller.
         """
@@ -111,13 +112,13 @@ class QT3ScanApplicationControllerInterface(Protocol):
                  logger_level) -> None:
         pass
 
+    # TODO -- should step size be a property of the position controller?
     @property
     def step_size(self) -> float:
         pass
 
     @step_size.setter
-    def step_size(self, value):
-        """Abstract property setter for num_data_samples_per_batch"""
+    def step_size(self, value: float):
         pass
 
     ## TODO -- scanned_count_rate and scanned_raw_counts might not be the best names for these properties
@@ -180,8 +181,17 @@ class QT3ScanApplicationControllerInterface(Protocol):
     def move_y(self) -> None:
         pass
 
-    def optimize_position(self, axis, central, range, step_size) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
+    def optimize_position(self, axis: str,
+                          central: float,
+                          range: float,
+                          step_size: float) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """
+        This method is used to optimize the position of the stage or objective.
+        Input axis is a string that is either 'x' or 'y' or 'z'
+        Input central is a float that is the central position to scan around
+        Input range is a float that is the range to scan around the central position
+        Input step_size is a float that is the step size to use for the scan
+
         The returned tuple elements should be:
         0th: np.ndarray of count rates across the axis
         1st: np.ndarray of axix positions (same length as 0, example: 31.5, 32, 32.5, ... 38.5, 39 )
@@ -190,7 +200,10 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         pass
 
-    def set_scan_range(self, xmin, xmax, ymin, ymax) -> None:
+    def set_scan_range(self, xmin: float, xmax: float, ymin: float, ymax: float) -> None:
+        '''
+        This method is used to set the scan range and is called in qt3scan.main
+        '''
         pass
 
     # TODO -- should this be part of daq controler?? I think yes.
@@ -219,7 +232,7 @@ class QT3ScanApplicationControllerInterface(Protocol):
         '''
         pass
 
-    def scan_image_rightclick_event(self, event) -> None:
+    def scan_image_rightclick_event(self, event: MouseEvent) -> None:
         """
         This method is called when the user right clicks on the scan image.
         """

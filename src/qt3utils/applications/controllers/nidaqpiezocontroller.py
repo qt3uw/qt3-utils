@@ -17,13 +17,11 @@ class QT3ScanNIDAQPositionController:
         self.last_config_dict = {}
 
     @property
-    def maximum_allowed_position(self):
-        """Abstract property: maximum_allowed_position"""
+    def maximum_allowed_position(self) -> float:
         return self.position_controller.maximum_allowed_position
 
     @property
-    def minimum_allowed_position(self):
-        """Abstract property: minimum_allowed_position"""
+    def minimum_allowed_position(self) -> float:
         return self.position_controller.minimum_allowed_position
 
     def go_to_position(self,
@@ -59,9 +57,11 @@ class QT3ScanNIDAQPositionController:
         except (nidaqmx.errors.DaqError, nidaqmx._lib.DaqNotFoundError) as e:
             self.logger.error(e)
 
-    def split_channels(self, channels: str) -> Union[None, str, Tuple[str, str, str]]:
+    def _split_channels(self, channels: Optional[str]) -> Union[None, Tuple[str, str, str]]:
         """
         This method splits a comma separated string of channels into a tuple of three channels.
+
+        However, if channels is None or 'None', then returns None
         """
         if channels in [None, 'None']:
             return None
@@ -70,24 +70,23 @@ class QT3ScanNIDAQPositionController:
             raise ValueError(f"Expected 3 channels, got {len(channel_list)}")
         return tuple(channel_list)
 
-    def channels_to_str(self, channels: Union[None, str, Tuple[str, str, str]]) -> str:
+    def _channels_to_str(self, channels: Union[None, str, Tuple[str, str, str]]) -> str:
         """
         This method converts a tuple of three channels into a comma separated string.
+
+        However, if channels is None or 'None', then returns 'None'
         """
         if channels in [None, 'None']:
             return 'None'
         return ','.join(channels)
 
-    def vals_to_str(self, vals: Tuple) -> str:
+    def _vals_to_str(self, vals: Tuple) -> str:
         """
         This method converts a tuple of values into a comma separated string.
         """
-        if len(set(vals)) == 1:
-            return str(vals[0])
-        else:
-            return ','.join([str(x) for x in vals])
+        return ','.join([str(x) for x in vals])
 
-    def configure(self, config_dict: dict):
+    def configure(self, config_dict: dict) -> None:
 
         self.logger.debug("calling configure")
 
@@ -120,10 +119,10 @@ class QT3ScanNIDAQPositionController:
 
         self.position_controller.device_name = protected_config_dict.get('daq_name', self.position_controller.device_name)
         if 'write_channels' in protected_config_dict:
-            self.position_controller.write_channels = self.split_channels(protected_config_dict['write_channels'])
+            self.position_controller.write_channels = self._split_channels(protected_config_dict['write_channels'])
 
         if 'read_channels' in protected_config_dict:
-            self.position_controller.read_channels = self.split_channels(protected_config_dict['read_channels'])
+            self.position_controller.read_channels = self._split_channels(protected_config_dict['read_channels'])
 
         self.position_controller.scale_microns_per_volt = protected_config_dict.get('scale_microns_per_volt',
                                                                           self.position_controller.scale_microns_per_volt)
@@ -151,22 +150,22 @@ class QT3ScanNIDAQPositionController:
 
         row += 1
         tk.Label(config_win, text="Write Channels").grid(row=row, column=0)
-        write_channels_var = tk.StringVar(value=self.channels_to_str(self.position_controller.write_channels))
+        write_channels_var = tk.StringVar(value=self._channels_to_str(self.position_controller.write_channels))
         tk.Entry(config_win, textvariable=write_channels_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Read Channels").grid(row=row, column=0)
-        read_channels_var = tk.StringVar(value=self.channels_to_str(self.position_controller.read_channels))
+        read_channels_var = tk.StringVar(value=self._channels_to_str(self.position_controller.read_channels))
         tk.Entry(config_win, textvariable=read_channels_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Scale Microns per Volt (x,y,z)").grid(row=row, column=0)
-        scale_microns_per_volt_var = tk.StringVar(value=self.vals_to_str(self.position_controller.scale_microns_per_volt))
+        scale_microns_per_volt_var = tk.StringVar(value=self._vals_to_str(self.position_controller.scale_microns_per_volt))
         tk.Entry(config_win, textvariable=scale_microns_per_volt_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Zero Micron Voltage (x,y,z)").grid(row=row, column=0)
-        zero_microns_volt_offset_var = tk.StringVar(value=self.vals_to_str(self.position_controller.zero_microns_volt_offset))
+        zero_microns_volt_offset_var = tk.StringVar(value=self._vals_to_str(self.position_controller.zero_microns_volt_offset))
         tk.Entry(config_win, textvariable=zero_microns_volt_offset_var).grid(row=row, column=1)
 
         row += 1

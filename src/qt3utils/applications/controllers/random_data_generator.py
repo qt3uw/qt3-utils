@@ -144,15 +144,6 @@ class QT3ScanRandomDataController(QT3ScopeRandomDataController):
         """Abstract property setter for num_data_samples_per_batch"""
         self.data_generator.num_data_samples_per_batch = value
 
-    def get_daq_data(self) -> dict:
-        data = dict(
-                    raw_counts=self.data_generator.scanned_raw_counts,
-                    count_rate=self.data_generator.scanned_count_rate,
-                    step_size=self.data_generator.step_size,
-                    daq_clock_rate=self.data_generator.clock_rate,
-                    )
-        return data
-
     def scan_image_rightclick_event(self, event) -> None:
         self.logger.debug(f"scan_image_rightclick_event. click at {event.x}, {event.y}")
 
@@ -169,12 +160,12 @@ class QT3ScanDummyPositionController:
         self.last_config_dict = {}
 
     @property
-    def maximum_allowed_position(self):
+    def maximum_allowed_position(self) -> float:
         """Abstract property: maximum_allowed_position"""
         return self.dummy_position.maximum_allowed_position
 
     @property
-    def minimum_allowed_position(self):
+    def minimum_allowed_position(self) -> float:
         """Abstract property: minimum_allowed_position"""
         return self.dummy_position.minimum_allowed_position
 
@@ -201,7 +192,7 @@ class QT3ScanDummyPositionController:
         """
         self.dummy_position.check_allowed_position(x, y, z)
 
-    def configure(self, config_dict: dict):
+    def configure(self, config_dict: dict) -> None:
 
         # TODO -- modify the nipiezojenapy.BaseController class so that these are properties that can be set rather than
         # accessing the private variables directly.

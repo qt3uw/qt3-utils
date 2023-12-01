@@ -4,11 +4,12 @@ import logging
 import datetime
 from threading import Thread
 import importlib.resources
-from typing import Any, Protocol, Optional
+from typing import Any, Protocol, Optional, Callable, List
 
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backend_bases import MouseEvent
 import matplotlib
 import nidaqmx
 import yaml
@@ -17,6 +18,7 @@ import qt3utils.nidaq
 import qt3utils.pulsers.pulseblaster
 from qt3utils.applications.qt3scan.interface import QT3ScanDAQControllerInterface
 from qt3utils.applications.qt3scan.interface import QT3ScanPositionControllerInterface
+from qt3utils.applications.qt3scan.interface import QT3ScanApplicationControllerInterface
 from qt3utils.applications.qt3scan.controller import QT3ScanConfocalApplicationController
 
 matplotlib.use('Agg')
@@ -70,20 +72,23 @@ class ScanImage:
         self.pointer_line2d = None
         self.position_line2d = None
 
-    def update(self, model):
+    def update(self, app_controller: QT3ScanApplicationControllerInterface) -> None:
 
+        if len(app_controller.scanned_count_rate) == 0:
+            return
+        
         if self.log_data:
-            data = np.log10(model.scanned_count_rate)
+            data = np.log10(app_controller.scanned_count_rate)
             data[np.isinf(data)] = 0  # protect against +-inf
         else:
-            data = model.scanned_count_rate
+            data = app_controller.scanned_count_rate
 
-        self.artist = self.ax.imshow(data, origin='lower', 
-                                     cmap=self.cmap, 
-                                     extent=[model.xmin - model.step_size/2.0,
-                                             model.xmax - model.step_size/2.0,
-                                             model.ymin - model.step_size/2.0,
-                                             model.current_y - model.step_size/2.0])
+        self.artist = self.ax.imshow(data, origin='lower',
+                                     cmap=self.cmap,
+                                     extent=[app_controller.xmin - app_controller.step_size/2.0,
+                                             app_controller.xmax - app_controller.step_size/2.0,
+                                             app_controller.ymin - app_controller.step_size/2.0,
+                                             app_controller.current_y - app_controller.step_size/2.0])
 
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
@@ -96,18 +101,18 @@ class ScanImage:
         self.ax.set_xlabel('x position (um)')
         self.ax.set_ylabel('y position (um)')
 
-    def reset(self):
+    def reset(self) -> None:
         self.ax.cla()
         self.pointer_line2d = None
         self.position_line2d = None
 
-    def set_onclick_callback(self, f):
-        self.onclick_callback = f
+    def set_onclick_callback(self, func: Callable) -> None:
+        self.onclick_callback = func
 
-    def set_rightclick_callback(self, f):
-        self.rightclick_callback = f
+    def set_rightclick_callback(self, func: Callable) -> None:
+        self.rightclick_callback = func
 
-    def update_pointer_indicator(self, x_position, y_position):
+    def update_pointer_indicator(self, x_position: float, y_position: float) -> None:
         """
         Updates the pointer marker on the scan image to show a proposed new position on the image.
         """
@@ -116,7 +121,7 @@ class ScanImage:
         else:
             self.pointer_line2d = self.ax.plot(x_position, y_position, 'yx', label='pointer')
 
-    def update_position_indicator(self, x_position, y_position):
+    def update_position_indicator(self, x_position: float, y_position: float) -> None:
         """
         Updates the position marker on the scan image to show the current position on the image.
         """
@@ -125,7 +130,7 @@ class ScanImage:
         else:
             self.position_line2d = self.ax.plot(x_position, y_position, 'ro', label='pos')
 
-    def onclick(self, event):
+    def onclick(self, event: MouseEvent) -> None:
         logger.debug(f"Button {event.button} click at: ({event.xdata} microns, {event.ydata}) microns")
         if event.button == 3:  # Right click
             self.rightclick_callback(event)
@@ -260,7 +265,7 @@ class SidePanel():
     def update_go_to_position(self,
                               x: Optional[float] = None,
                               y: Optional[float] = None,
-                              z: Optional[float] = None):
+                              z: Optional[float] = None) -> None:
         if x is not None:
             self.go_to_x_position_text.set(np.round(x, 4))
         if y is not None:
@@ -268,11 +273,11 @@ class SidePanel():
         if z is not None:
             self.z_entry_text.set(np.round(z, 4))
 
-    def mpl_onclick_callback(self, mpl_event):
+    def mpl_onclick_callback(self, mpl_event: MouseEvent) -> None:
         if mpl_event.xdata and mpl_event.ydata:
             self.update_go_to_position(mpl_event.xdata, mpl_event.ydata)
 
-    def set_scan_range(self, scan_range):
+    def set_scan_range(self, scan_range: List[float]) -> None:
         self.x_min_entry.insert(10, scan_range[0])
         self.x_max_entry.insert(10, scan_range[1])
         self.y_min_entry.insert(10, scan_range[0])
@@ -321,7 +326,7 @@ class MainApplicationView():
     def config_from_yaml_button(self) -> tk.Button:
         return self.sidepanel.config_from_yaml_button
 
-    def set_scan_range(self, scan_range):
+    def set_scan_range(self, scan_range: List[float]) -> None:
         self.sidepanel.set_scan_range(scan_range)
 
     def show_optimization_plot(self, title: str,
@@ -329,7 +334,7 @@ class MainApplicationView():
                                new_opt_value: float,
                                x_vals: np.ndarray,
                                y_vals: np.ndarray,
-                               fit_coeff: np.ndarray = None):
+                               fit_coeff: np.ndarray = None) -> None:
         """
         Consturcts a new window with a plot of the optimization data.
 
@@ -484,12 +489,12 @@ class MainTkApplication():
 
         self._build_controllers_from_config_dict(config, self.view.controller_option.get())
 
-    def run(self):
+    def run(self) -> None:
         self.root_window.title("QT3Scan: Piezo Controlled NIDAQ Digital Count Rate Scanner")
         self.root_window.deiconify()
         self.root_window.mainloop()
 
-    def go_to_position(self):
+    def go_to_position(self) -> None:
 
         x = self.view.sidepanel.go_to_x_position_text.get()
         y = self.view.sidepanel.go_to_y_position_text.get()
@@ -502,28 +507,31 @@ class MainTkApplication():
             self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
-    def go_to_z(self):
+    def go_to_z(self) -> None:
         self.application_controller.position_controller.go_to_position(z=self.view.sidepanel.z_entry_text.get())
         self.optimized_position['z'] = self.view.sidepanel.z_entry_text.get()
 
-    def set_color_map(self):
-        # Is there a way for this function to exist entirely in the view code instead of here?
-        self.view.scan_view.cmap = self.view.sidepanel.mpl_color_map_entry.get()
-        if len(self.application_controller.scanned_count_rate) > 0:
+    def set_color_map(self) -> None:
+        proposed_cmap = self.view.sidepanel.mpl_color_map_entry.get()
+        if proposed_cmap in plt.colormaps():
+            self.view.scan_view.cmap = proposed_cmap
+        else:
+            logger.error(f"Color map {proposed_cmap} not found in matplotlib colormaps:")
+            logger.error(f'{plt.colormaps()}')
+        if self.application_controller.still_scanning() is False:
             self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
-    def log_scan_image(self):
-        # Is there a way for this function to exist entirely in the view code instead of here?
+    def log_scan_image(self) -> None:
         self.view.scan_view.log_data = not self.view.scan_view.log_data
-        if len(self.application_controller.scanned_count_rate) > 0:
+        if self.application_controller.still_scanning() is False:
             self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
-    def stop_scan(self):
+    def stop_scan(self) -> None:
         self.application_controller.stop()
 
-    def pop_out_scan(self):
+    def pop_out_scan(self) -> None:
         """
         Creates a new TKinter window with the data from the current scan. This allows researchers
         to retain scan image in a separate window and run subsequent scans.
@@ -544,7 +552,7 @@ class MainTkApplication():
 
         canvas.draw()
 
-    def _scan_thread_function(self, xmin, xmax, ymin, ymax, step_size):
+    def _scan_thread_function(self, xmin: float, xmax: float, ymin: float, ymax: float, step_size: float) -> None:
 
         try:
             self.application_controller.set_scan_range(xmin, xmax, ymin, ymax)
@@ -563,27 +571,28 @@ class MainTkApplication():
 
         except nidaqmx.errors.DaqError as e:
             logger.warning(e)
-            logger.warning('Check for other applications using resources. If not, you may need to restart the application.')
+            logger.warning('Check for other applications using resources.')
         except ValueError as e:
             logger.warning(e)
             logger.warning('Check your configurtion! You may have entered a value that is out of range')
 
-        self.view.sidepanel.startButton.config(state=tk.NORMAL)
-        self.view.sidepanel.go_to_z_button.config(state=tk.NORMAL)
-        self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
-        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
-        self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
+        finally:
+            self.view.sidepanel.startButton.config(state=tk.NORMAL)
+            self.view.sidepanel.go_to_z_button.config(state=tk.NORMAL)
+            self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
+            self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
+            self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
 
-        self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
-        self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
-        self.view.sidepanel.optimize_z_button.config(state=tk.NORMAL)
+            self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
+            self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
+            self.view.sidepanel.optimize_z_button.config(state=tk.NORMAL)
 
-        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-        self.view.sidepanel.daq_config_button.config(state=tk.NORMAL)
-        self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
-        self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
+            self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
+            self.view.sidepanel.daq_config_button.config(state=tk.NORMAL)
+            self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
+            self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
 
-    def start_scan(self):
+    def start_scan(self) -> None:
         self.view.sidepanel.startButton.config(state=tk.DISABLED)
         self.view.sidepanel.go_to_z_button.config(state=tk.DISABLED)
         self.view.sidepanel.gotoButton.config(state=tk.DISABLED)
@@ -616,7 +625,7 @@ class MainTkApplication():
                                   args=args)
         self.scan_thread.start()
 
-    def save_scan(self):
+    def save_scan(self) -> None:
         afile = tk.filedialog.asksaveasfilename(filetypes=self.application_controller.allowed_file_save_formats(), 
                                                 defaultextension=self.application_controller.default_file_format())
         if afile is None or afile == '':
@@ -625,7 +634,10 @@ class MainTkApplication():
         logger.info(f'Saving data to {afile}')
         self.application_controller.save_scan(afile)
 
-    def _optimize_thread_function(self, axis, central, range, step_size):
+    def _optimize_thread_function(self, axis: str, central: float, range: float, step_size: float) -> None:
+        '''
+        This function is called by the optimize function. It is not intended to be called directly.
+        '''
 
         try:
             data, axis_vals, opt_pos, coeff = self.application_controller.optimize_position(axis,
@@ -649,23 +661,24 @@ class MainTkApplication():
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
 
-        self.view.sidepanel.startButton.config(state=tk.NORMAL)
-        self.view.sidepanel.stopButton.config(state=tk.NORMAL)
-        self.view.sidepanel.go_to_z_button.config(state=tk.NORMAL)
-        self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
-        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
-        self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
+        finally:
+            self.view.sidepanel.startButton.config(state=tk.NORMAL)
+            self.view.sidepanel.stopButton.config(state=tk.NORMAL)
+            self.view.sidepanel.go_to_z_button.config(state=tk.NORMAL)
+            self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
+            self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
+            self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
 
-        self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
-        self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
-        self.view.sidepanel.optimize_z_button.config(state=tk.NORMAL)
+            self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
+            self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
+            self.view.sidepanel.optimize_z_button.config(state=tk.NORMAL)
 
-        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-        self.view.sidepanel.daq_config_button.config(state=tk.NORMAL)
-        self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
-        self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
+            self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
+            self.view.sidepanel.daq_config_button.config(state=tk.NORMAL)
+            self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
+            self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
 
-    def optimize(self, axis):
+    def optimize(self, axis: str) -> None:
 
         opt_range = float(self.view.sidepanel.optimize_range_entry.get())
         opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
@@ -691,7 +704,7 @@ class MainTkApplication():
                                       args=(axis, old_optimized_value, opt_range, opt_step_size))
         self.optimize_thread.start()
 
-    def on_closing(self):
+    def on_closing(self) -> None:
         try:
             self.stop_scan()
         except Exception as e:
