@@ -203,9 +203,7 @@ class QT3ScanDummyPositionController:
 
     def configure(self, config_dict: dict):
 
-        self.logger.debug("calling configure")
-
-        # TODO -- modify the data generator so that these are properties that can be set rather than
+        # TODO -- modify the nipiezojenapy.BaseController class so that these are properties that can be set rather than
         # accessing the private variables directly.
         self.last_config_dict.update(config_dict)
         self.logger.debug(config_dict)
@@ -244,7 +242,6 @@ class QT3ScanDummyPositionController:
             This method sets the configuration values from the GUI.
             """
             config_dict = {k: v.get() for k, v in gui_info.items()}
-            self.logger.info(config_dict)
             self.configure(config_dict)
 
         # add a button to set the values and close the window

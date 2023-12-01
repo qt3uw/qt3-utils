@@ -59,22 +59,22 @@ class QT3ScanNIDAQPositionController:
         except (nidaqmx.errors.DaqError, nidaqmx._lib.DaqNotFoundError) as e:
             self.logger.error(e)
 
-    def split_channels(self, channels: str) -> Union[None, Tuple[str, str, str]]:
+    def split_channels(self, channels: str) -> Union[None, str, Tuple[str, str, str]]:
         """
         This method splits a comma separated string of channels into a tuple of three channels.
         """
-        if channels is None:
+        if channels in [None, 'None']:
             return None
         channel_list = channels.split(',')
         if len(channel_list) != 3:
             raise ValueError(f"Expected 3 channels, got {len(channel_list)}")
         return tuple(channel_list)
 
-    def channels_to_str(self, channels: Tuple[str, str, str]) -> str:
+    def channels_to_str(self, channels: Union[None, str, Tuple[str, str, str]]) -> str:
         """
         This method converts a tuple of three channels into a comma separated string.
         """
-        if channels is None:
+        if channels in [None, 'None']:
             return 'None'
         return ','.join(channels)
 
@@ -91,27 +91,49 @@ class QT3ScanNIDAQPositionController:
 
         self.logger.debug("calling configure")
 
-        # TODO -- modify the data generator so that these are properties that can be set rather than
+        # TODO -- modify the nipiezojenapy.PiezoControl so that these are properties that can be set rather than
         # accessing the private variables directly.
-        self.last_config_dict.update(config_dict)
-        self.logger.debug(config_dict)
 
-        self.position_controller.device_name = config_dict.get('daq_name', self.position_controller.device_name)
-        if 'write_channels' in config_dict:
-            self.position_controller.write_channels = self.split_channels(config_dict['write_channels'])
+        protected_config_dict = {}
+        for key, val in config_dict.items():
+            if key in ['scale_microns_per_volt', 'zero_microns_volt_offset']:
+                if val in [None, 'None', '']:
+                    raise ValueError(f"{key} must be a float, int, or list of three floats or ints. got {val}")
 
-        if 'read_channels' in config_dict:
-            self.position_controller.read_channels = self.split_channels(config_dict['read_channels'])
+                if isinstance(val, str):
+                    split_v = val.split(',')
+                elif isinstance(val, (int, float)):
+                    split_v = [val]
+                elif isinstance(val, (list, tuple)):
+                    split_v = val
 
-        self.position_controller.scale_microns_per_volt = config_dict.get('scale_microns_per_volt',
+                if len(split_v) == 1:
+                    protected_config_dict[key] = float(split_v[0])
+                else:
+                    protected_config_dict[key] = [float(x) for x in split_v]
+            else:
+                protected_config_dict[key] = val if val not in ['None', ''] else None
+
+        self.logger.debug('protected configuration')
+        self.logger.debug(protected_config_dict)
+        self.last_config_dict.update(protected_config_dict)
+
+        self.position_controller.device_name = protected_config_dict.get('daq_name', self.position_controller.device_name)
+        if 'write_channels' in protected_config_dict:
+            self.position_controller.write_channels = self.split_channels(protected_config_dict['write_channels'])
+
+        if 'read_channels' in protected_config_dict:
+            self.position_controller.read_channels = self.split_channels(protected_config_dict['read_channels'])
+
+        self.position_controller.scale_microns_per_volt = protected_config_dict.get('scale_microns_per_volt',
                                                                           self.position_controller.scale_microns_per_volt)
-        self.position_controller.zero_microns_volt_offset = config_dict.get('zero_microns_volt_offset',
+        self.position_controller.zero_microns_volt_offset = protected_config_dict.get('zero_microns_volt_offset',
                                                                           self.position_controller.zero_microns_volt_offset)
-        self.position_controller.maximum_allowed_position = config_dict.get('maximum_allowed_position',
+        self.position_controller.maximum_allowed_position = protected_config_dict.get('maximum_allowed_position',
                                                                             self.position_controller.maximum_allowed_position)
-        self.position_controller.minimum_allowed_position = config_dict.get('minimum_allowed_position',
+        self.position_controller.minimum_allowed_position = protected_config_dict.get('minimum_allowed_position',
                                                                             self.position_controller.minimum_allowed_position)
-        self.position_controller.settling_time_in_seconds = config_dict.get('settling_time_in_seconds',
+        self.position_controller.settling_time_in_seconds = protected_config_dict.get('settling_time_in_seconds',
                                                                             self.position_controller.settling_time_in_seconds)
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
@@ -138,12 +160,12 @@ class QT3ScanNIDAQPositionController:
         tk.Entry(config_win, textvariable=read_channels_var).grid(row=row, column=1)
 
         row += 1
-        tk.Label(config_win, text="Scale Microns per Volt").grid(row=row, column=0)
+        tk.Label(config_win, text="Scale Microns per Volt (x,y,z)").grid(row=row, column=0)
         scale_microns_per_volt_var = tk.StringVar(value=self.vals_to_str(self.position_controller.scale_microns_per_volt))
         tk.Entry(config_win, textvariable=scale_microns_per_volt_var).grid(row=row, column=1)
 
         row += 1
-        tk.Label(config_win, text="Zero Micron Voltage").grid(row=row, column=0)
+        tk.Label(config_win, text="Zero Micron Voltage (x,y,z)").grid(row=row, column=0)
         zero_microns_volt_offset_var = tk.StringVar(value=self.vals_to_str(self.position_controller.zero_microns_volt_offset))
         tk.Entry(config_win, textvariable=zero_microns_volt_offset_var).grid(row=row, column=1)
 
@@ -175,23 +197,7 @@ class QT3ScanNIDAQPositionController:
         }
 
         def convert_gui_info_and_configure():
-            config_dict = {}
-            for k, v in gui_info.items():
-                if k in ['scale_microns_per_volt', 'zero_microns_volt_offset']:
-                    if v.get() in ['None', '']:
-                        raise ValueError(f"{k} must be a float, int, or list of three floats or ints. got {v.get()}")
-                    split_v = v.get().split(',')
-                    if len(split_v) == 1:
-                        config_dict[k] = float(split_v[0])   
-                    else:
-                        config_dict[k] = [float(x) for x in split_v]
-                else:
-                    if v.get() not in ['None', '']:
-                        config_dict[k] = v.get()
-                    else:
-                        config_dict[k] = None
-            self.logger.info(config_dict)
-            self.configure(config_dict)
+            self.configure({k: v.get() for k, v in gui_info.items()})
 
         # add a button to set the values and close the window
         row += 1
