@@ -34,15 +34,6 @@ SpinCore for the PulseBlaster. These libraries must be installed separately.
 
 Once the prerequisite packages have been installed, qt3utils can be installed from pip.
 
-### Update Tk/Tcl
-
-This is especially helpful for development on Mac OS Sonoma. Upgrading Tcl/Tk 
-via Anaconda overcomes some GUI bugs
-
-```
-conda install 'tk>=8.6.13'
-```
-
 ### Normal Installation
 
 ```
@@ -51,6 +42,14 @@ pip install qt3utils
 
 The `qt3utils` package depends on a handful of other [qt3 packages](https://github.com/qt3uw) and will be installed for you by default.
 Additional information may also be [found here](https://github.com/qt3uw/qt3softwaredocs).
+
+#### Update Tk/Tcl
+
+Upgrading Tcl/Tk via Anaconda overcomes some GUI bugs on Mac OS Sonoma
+
+```
+conda install 'tk>=8.6.13'
+```
 
 
 # Usage
@@ -97,21 +96,19 @@ It can be from the command line / terminal
 > qt3scope
 ```
 
-After `pip install` one may also find a link to an executible file in the python environment. One
-may be able to create a softlink to that executable to a desktop or task bar icon, allowing
-to launch the program from a mouse click. 
+After `pip install`, there will be an executible file in your python environment. You
+should be able to create a softlink to that executable to a desktop or task bar icon, allowing
+to launch the program from a mouse click.
 
 Starting in version 1.0.3, graphical dropdown menus and configuration windows
-will allow users to configure the software to run on their hardware. 
+will allow users to configure various hardware options. 
 
 
 #### YAML Configuration
 
 Data Acquisition hardware supported by QT3Scope can also be configured by selecting a YAML file.
 The YAML file must contain a specific structure and names as shown below. 
-All hardware controllers that are built for QT3Scope must supply a default
-configuration YAML file, which will be found in 
-[src/qt3utils/applications/controllers](src/qt3utils/applications/controllers).
+
 
 ###### Default NIDAQ Edge Counter YAML configuration:
 
@@ -144,17 +141,16 @@ QT3Scope:
       signal_noise_amp: 0.5
 ```
 
+All hardware controllers built for QT3Scope have a default
+configuration YAML file, which are found in 
+[src/qt3utils/applications/controllers](src/qt3utils/applications/controllers).
 
 ### QT3 Confocal Scan
 
-The console program `qt3scan` comes with this package.  This program launches
-a GUI applications that will perform a 2D confocal scan using a data acquisition
+The console program `qt3scan` performs a 2D (x,y) scan using a data acquisition
 controller object and a position controller object. The default controllers use
-an NIDAQ device that counts TTL edges and an NIDAQ device that sets
+an NIDAQ device that counts TTL edges (typically from an SPCM) and sets
 analog voltage values on a Jena system piezo actuator.
-
-The run-time options available are very similar to `qt3scope` and is invoked
-on the command line / terminal. 
 
 ```
 > qt3scan
@@ -162,7 +158,7 @@ on the command line / terminal.
 
 Similar to `qt3scope`, the supported hardware can be configured via GUI or YAML file. 
 
-All hardware controllers that are built for QT3Scope must supply a default
+All hardware controllers that are built for QT3Scope have a default
 configuration YAML file, which will be found in 
 [src/qt3utils/applications/controllers](src/qt3utils/applications/controllers).
 
@@ -227,18 +223,17 @@ The console program `qt3piezo` comes installed via the 'nipiezojenapy' package, 
 > qt3piezo
 ```
 
-This application can only be configured via command line options to match the haredware setup at this time.
+This application can only be configured via command line options at this time.
 The `nipiezojenapy` python package should probably be moved into `qt3utils`. 
 
 
 # QT3Scope / QT3Scan Hardware Development
 
-Follow these instructions in order to add new hardware support to QT3Scope or QT3Scan.
+Follow these instructions in order to add new hardware support to `qt3scope` or `qt3scan`.
 
-For each application, you'll need to build a Python class that adheres to each application's interfaces.
+For each application, you'll need to build a Python classes that adheres to each application's interfaces.
 
 ## QT3Scope
-
 
 
 1. Build a class that adheres to `QT3ScopeDAQControllerInterface` as defined in
@@ -255,7 +250,7 @@ Python dictionary (`configure` method) and graphically (`configure_view` method)
 
 Similar to `qt3scope` but with a little more work.
 
-There are three controllers that are needed by `qt3scope`:
+There are three controllers that are needed by `qt3scan`:
 * Application Controller -- [QT3ScanApplicationControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L106) 
 * DAQ Controller -- [QT3ScanDAQControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L59) 
 * Position Controller -- [QT3ScanPositionControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L7)
@@ -263,11 +258,15 @@ There are three controllers that are needed by `qt3scope`:
 ### 1. Application Controller 
 
 Currently there is only [one implementation of the Application Controller](src/qt3utils/applications/qt3scan/controller.py#L14) 
-to support standard 2D scans. It is used for scans using the NIDAQ Edge Counter
+to support standard 2D (x,y) scans. It is used for scans using the NIDAQ Edge Counter
 Controller, NIDAQ Position Controller, Random Data Generator and Dummy 
-Position Controller. If you do not need any changes to the save function 
+Position Controller. 
+
+If you do not need any changes to the save function 
 or special functionality to right-click on the scan image, then you can probably 
-re-use this Application Controller. If you are developing something like the 
+re-use this Application Controller. 
+
+If you are developing something like the 
 hyper-spectral image where each pixel in the 2D scan is based on a spectrum
 of counts over a range of wavelengths, you'll 
 likely want to build a new Application Controller. A 
@@ -281,7 +280,7 @@ To support new hardware that acquires data, build an implementation of `QT3ScanD
 Examples are [QT3ScanRandomDataController](src/qt3utils/applications/controllers/random_data_generator.py#L124),
 and [QT3ScanNIDAQEdgeCounterController](src/qt3utils/applications/controllers/nidaqedgecounter.py#L139)
 
-Create a new python module in in src/qt3utils/applications/controllers for your hardware controller.
+Create a new python module in in `src/qt3utils/applications/controllers` for your hardware controller.
 
 ### 3. Position Controller
 
