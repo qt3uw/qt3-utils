@@ -65,3 +65,5 @@ dependencies = [
 qt3scope = "qt3utils.applications.qt3scope.main:main"
 qt3scan = "qt3utils.applications.qt3scan.main:main"
 
+[tool.setuptools.package-data]
+"qt3utils.applications.controllers" = ["*.yaml"]
