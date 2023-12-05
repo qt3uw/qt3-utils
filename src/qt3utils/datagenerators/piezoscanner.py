@@ -84,15 +84,15 @@ class CounterAndScanner:
         if self.running == False: #this allows external process to stop scan
             return False
 
-        if self.current_y <= self.ymax: #stops scan when reaches final position
+        if self.current_y < self.ymax: #stops scan when reaches final position
             return True
         else:
             self.running = False
             return False
 
     def move_y(self):
-        self.current_y += self.step_size
-        if self.stage_controller and self.current_y <= self.ymax:
+        if self.stage_controller and self.current_y < self.ymax:
+            self.current_y += self.step_size
             try:
                 self.stage_controller.go_to_position(y=self.current_y)
             except ValueError as e:
@@ -177,7 +177,7 @@ class CounterAndScanner:
         optimal_position = axis_vals[np.argmax(count_rates)]
         coeff = None
         params = [np.max(count_rates), optimal_position, 1.0, np.min(count_rates)]
-        bounds = (len(params)*tuple((0,)), len(params)*tuple((np.inf,)))
+        bounds = ((0, -np.inf, 0, 0), (np.inf, np.inf, np.inf, np.inf))
         try:
             coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, count_rates, p0=params, bounds=bounds)
             optimal_position = coeff[1]

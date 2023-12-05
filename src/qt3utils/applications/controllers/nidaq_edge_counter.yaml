@@ -1,0 +1,53 @@
+QT3Scope:
+  DAQController:
+    import_path : qt3utils.applications.controllers.nidaqedgecounter
+    class_name  : QT3ScopeNIDAQEdgeCounterController
+    configure : 
+      daq_name : Dev1  # NI DAQ Device Name
+      signal_terminal : PFI0  # NI DAQ terminal connected to input digital TTL signal
+      clock_terminal :    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
+      clock_rate: 100000  # NI DAQ clock rate in Hz
+      num_data_samples_per_batch : 1000
+      read_write_timeout : 10  # timeout in seconds for read/write operations
+      signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
+# notes
+
+# clock_rate:
+#   Specifies the clock rate in Hz. If using an external clock,
+#   you should specifiy the clock rate here so that the correct counts per
+#   second are displayed. If using the internal NI DAQ clock (default behavior),
+#   this value specifies the clock rate to use. Per the NI DAQ manual,
+#   use a suitable clock rate for the device for best performance, which is an integer
+#   multiple downsample of the digital sample clock.
+
+# clock_terminal:
+#   Specifies the digital input terminal to the NI DAQ to use for a clock.
+#   If None, the internal NI DAQ clock is used. Otherwise, a string value
+#   specifies the terminal to use for the clock.
+
+
+QT3Scan:
+  DAQController:
+    import_path : qt3utils.applications.controllers.nidaqedgecounter
+    class_name  : QT3ScanNIDAQEdgeCounterController
+    configure : 
+      daq_name : Dev1  # NI DAQ Device Name
+      signal_terminal : PFI0  # NI DAQ terminal connected to input digital TTL signal
+      clock_terminal :    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
+      clock_rate: 100000  # NI DAQ clock rate in Hz
+      num_data_samples_per_batch : 250
+      read_write_timeout : 10  # timeout in seconds for read/write operations
+      signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
+
+  PositionController:
+    import_path : qt3utils.applications.controllers.nidaqpiezocontroller    
+    class_name  : QT3ScanNIDAQPositionController
+    configure : 
+      daq_name : Dev1  # NI DAQ Device Name
+      write_channels : ao0,ao1,ao2  # NI DAQ analog output channels to use for writing position
+      read_channels : ai0,ai1,ai2  # NI DAQ analog input channels to use for reading position
+      scale_microns_per_volt : 8  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5] 
+      zero_microns_volt_offset: 0  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5] 
+      minimum_allowed_position : 0  # microns
+      maximum_allowed_position : 80  # microns
+      settling_time_in_seconds : 0.001

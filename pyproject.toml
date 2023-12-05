@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qt3utils"
-version = "1.0.3.dev0"
+version = "1.0.3.dev1"
 
 description = "A package for performing experiments in the QT3 lab at UW."
 readme = "README.md"
@@ -50,8 +50,9 @@ dependencies = [
     "h5py>=3.3.0",
     "qcsapphire>=1.0.1",
     "qt3rfsynthcontrol>=1.0.1",
-    "nipiezojenapy>=1.0.1",
+    "nipiezojenapy>=1.0.4",
     "pulseblaster>=1.0.1",
+    "PyYAML>=6.0.1",
 ]
 
 [project.urls]
@@ -61,6 +62,8 @@ dependencies = [
 "Changelog" = "https://github.com/qt3uw/qt3utils/releases"
 
 [project.scripts]
-qt3scope = "applications.oscilloscope:main"
-qt3scan = "applications.piezoscan:main"
+qt3scope = "qt3utils.applications.qt3scope.main:main"
+qt3scan = "qt3utils.applications.qt3scan.main:main"
 
+[tool.setuptools.package-data]
+"qt3utils.applications.controllers" = ["*.yaml"]

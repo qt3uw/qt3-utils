@@ -1,0 +1,26 @@
+QT3Scope:
+  DAQController:
+    import_path : qt3utils.applications.controllers.random_data_generator
+    class_name  : QT3ScopeRandomDataController
+    configure : 
+      simulate_single_light_source : False
+      num_data_samples_per_batch : 10
+      default_offset: 100
+      signal_noise_amp: 0.5
+
+QT3Scan:
+  PositionController:
+    import_path : qt3utils.applications.controllers.random_data_generator    
+    class_name  : QT3ScanDummyPositionController
+    configure : 
+      maximum_allowed_position : 80
+      minimum_allowed_position : 0
+
+  DAQController:
+    import_path : qt3utils.applications.controllers.random_data_generator
+    class_name  : QT3ScanRandomDataController
+    configure : 
+      simulate_single_light_source : True
+      num_data_samples_per_batch : 10
+      default_offset: 100
+      signal_noise_amp: 0.1
