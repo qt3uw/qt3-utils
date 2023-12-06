@@ -21,31 +21,40 @@ class QT3ScanConfocalApplicationController:
                  daq_controller: QT3ScanDAQControllerInterface,
                  logger_level) -> None:
 
-        # Relize this looks strange and like a bunch of redundant code. 
-        # This essentially wraps all the calls to a CounterAndScanner object. 
-        # I considered to simply re-use CounterAndScanner object in qt3utils.main. But 
-        # decided to aim toward good engineering practices and define an interface for the GUI application
-        # to support potential future changes. 
-        # Als considered to subclass CounterAndScanner. But CounterAndScanner would need to change
-        # all of its private variables to _private variables. Additionally, the daq_controller
-        # and position_controller objects would need to be redesigned as well.
-
-        # Ideally, two sets of Protocol/Interface classes could be defined. 
-        # One set would define programmatic interface and
-        # the other set would define the GUI application interfaces
-        # The programmatic interface would define a PositionControllerInterface, DAQControllerInterface and 
-        # MicroscopeScannerInterface interface (ConfocalScannerInterface?).
-        # Then would change CounterAndScanner object to
-        # be an implementation of MicroscopeScannerInterface.
-        # Would also then make implemetnations of PositionControllerInterface and
+        # I realize this implementation looks strange since it essentially wraps all the calls
+        # to a CounterAndScanner object, except for a few of the methods.
+        # The reason for this is that the CounterAndScanner object is designed to be used
+        # programatically. It was not designed to be used by a GUI application and I wanted
+        # to implement good engineering practices.
+        # I considered subclassing the CounterAndScanner object here,
+        # but that required work too far outside the scope of the issue where this was developed.
+        # Future work could consider that possiblity.
+        #
+        # However, better organizations of the code are also possible and open to development.
+        #
+        # Here is one such proposal
+        #
+        # The proposal would result in two sets of Protocol/Interface classes.  One set would define
+        # a programmatic interface (to be used by researchers in Jupyter notebooks and
+        # in their own external scripts that depend on qt3utils classes). The second set
+        # would define the GUI application interfaces, which we have already
+        # done in interface.py.
+        #
+        # The programmatic interface would define
+        #   * PositionControllerInterface
+        #   * DAQControllerInterface
+        #   * XYMicroscopeScannerInterface (perhaps ConfocalScannerInterface?).
+        # Then we would change CounterAndScanner object to
+        # be an implementation of XYMicroscopeScannerInterface.
+        # We would also then make implemetnations of PositionControllerInterface and
         # DAQControllerInterface using the nipiezojenapy classes and the classes in
         # daqsamplers.py.
-        # However this would woudl be outside the current scope of this branch/issue
-        # being developed. We are limiting the scope of this branch to just the GUI application
-        # and not the underlying API. So for now, we are just wrapping the CounterAndScanner
-        # Future work on qt3utils may include the above mentioned changes.
-        # Also complicating the issue is that qt3utils relies heavily on nipiezojenapy
-        # It's probably better to move nipiezojenapy into qt3utils.
+        #
+        # From that point, we could then see if the GUI interfaces should subclass the
+        # programmatic interfaces or remain independent.
+        #
+        # Additionally, this proposal alo implies a future programmatic interface for the 
+        # SpectromterController and a GUI interface for the SpectrometerController.
 
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
