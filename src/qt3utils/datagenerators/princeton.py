@@ -217,11 +217,11 @@ class Spectrometer():
 
         if break_down:
             import re
-            for g in GRATINGS:
+            for g in Spectrometer.GRATINGS:
                 match = re.search(r"\[(\d+\.?\d+[nu]m),(\d+)\]\[(\d+)\]\[(\d+)\])", g)
                 blaze, g_per_mm, slot, turret = match.groups()
 
-        return GRATINGS
+        return Spectrometer.GRATINGS
 
     @property
     def num_frames(self):
