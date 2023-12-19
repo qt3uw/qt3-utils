@@ -52,7 +52,7 @@ class LightfieldApp:
     @property
     def experiment(self):
         return self._experiment
-
+    
     def __del__(self):
         """
         Uses Python garbage collection method used to terminate
@@ -147,16 +147,13 @@ class LightfieldApp:
 
 
 class Spectrometer():
-    GRATINGS = ['[500nm,600][0][0]', '[1.2um,300][1][0]',
-                '[500nm,150][2][0]']  # TODO: make it so that it automatically scrapes the grating settings
-
     def initialize(self):
         """
         Sets up LightField and loads an empty experiment called 
         "LF_Control that we use for automation purposes.
         """
         self.light = LightfieldApp(True)
-        self.light.load_experiment('LF_Control')  
+        self.light.load_experiment('LF_Control') 
 
     #TODO:Need to create a setting that automatically deletes all saved scans on pc.
     def finalize(self):
@@ -191,7 +188,7 @@ class Spectrometer():
         # this avoids bug where if step and glue is selected, doesn't allow setting center wavelength
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         return self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
-
+    
     @property
     def grating(self):
         """
@@ -200,28 +197,19 @@ class Spectrometer():
         return self.light.get(lf.AddIns.SpectrometerSettings.GratingSelected)
 
     @grating.setter
-    def grating(self, grating):
+    def grating(self, density):
         """
         Sets the current grating to be the one specified by parameter grating.
         """
-        # TODO: figure out the format for setting this
+        pass
 
-        logger.info('Will still need to figure out the format for this')
-
+    #TODO: Need to find a way to implement this
     @property
     def gratings_options(self):
         """
         Returns a list of all installed gratings.
         """
-        break_down = False
-
-        if break_down:
-            import re
-            for g in Spectrometer.GRATINGS:
-                match = re.search(r"\[(\d+\.?\d+[nu]m),(\d+)\]\[(\d+)\]\[(\d+)\])", g)
-                blaze, g_per_mm, slot, turret = match.groups()
-
-        return Spectrometer.GRATINGS
+        pass
 
     @property
     def num_frames(self):
