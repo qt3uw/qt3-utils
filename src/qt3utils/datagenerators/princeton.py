@@ -209,7 +209,7 @@ class Spectrometer():
         logger.info('Will still need to figure out the format for this')
 
     @property
-    def gratings(self):
+    def gratings_options(self):
         """
         Returns a list of all installed gratings.
         """
