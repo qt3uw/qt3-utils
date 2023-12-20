@@ -29,6 +29,11 @@ args = parser.parse_args()
 write_channels = args.piezo_write_channels.split(',')
 read_channels = args.piezo_read_channels.split(',')
 
+controller = nipiezojenapy.PiezoControl(device_name='Dev1', write_channels=args.piezo_write_channels.split(','), read_channels=args.piezo_read_channels.split(','))
+
+s = Spectrometer()
+s.initialize()
+
 # constants
 MIN_WAVELENGTH_DIFFERENCE = 117
 
@@ -212,6 +217,9 @@ class Application(tk.Frame):
             
             num = int(self.text_fields["Step Size (um)"].get())
 
+            #NOTE: Remove the line below. It was just for a test
+            print(s.grating)
+
             if num <= 0:
                 raise ValueError("Step Size must be a positive integer")
             
@@ -304,20 +312,13 @@ class Application(tk.Frame):
         else:
             messagebox.showerror("Invalid input", "Please fix your file name, do not put a file extension.")
 
-def main():
 
-    # Initialize spectrometer
-    s = Spectrometer()
-    s.initialize()
+# Initializing tkinter app
+root = tk.Tk()
+app = Application(master=root)
+app.mainloop()
 
-    # Initializing tkinter app
-    root = tk.Tk()
-    app = Application(master=root)
-    app.mainloop()
+#Finalizing the spectrometer
+s.finalize()
 
-    #Finalizing the spectrometer
-    s.finalize()
-
-if __name__ == "__main__":
-    main()
 
