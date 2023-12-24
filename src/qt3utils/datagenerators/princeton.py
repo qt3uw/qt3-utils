@@ -192,15 +192,14 @@ class Spectrometer():
         return self.light.get(lf.AddIns.SpectrometerSettings.GratingSelected)
 
     @grating.setter
-    def grating(self, grating_choice):
+    def grating(self, grating_string):
         """
         Sets the current grating to be the one specified by parameter grating.
         """
-        gratings = self.gratings_options
-        if 0 <= grating_choice < len(gratings):
-            self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, gratings[grating_choice]) 
+        if grating_string in self.gratings_options:
+            self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, grating_string)
         else:
-            logger.error(f"Grating choice {grating_choice} is out of range. Available gratings are: {gratings}")
+            logger.error(f"Grating {grating_string} is not an options. The options are: {self.gratings_options}")
 
     @property
     def gratings_options(self):

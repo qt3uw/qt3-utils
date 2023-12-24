@@ -122,6 +122,14 @@ class Application(tk.Frame):
         self.text_fields["Step Size (um)"] = tk.Entry(text_frame, width=10)
         self.text_fields["Step Size (um)"].grid(row=row, column=1, pady=5)
         self.text_fields["Step Size (um)"].insert(0, "5")
+        
+        row += 1
+        tk.Label(text_frame, text="Grating").grid(row=row, column=0, pady=5)
+        self.grating_var = tk.StringVar()  # Variable to hold the selected grating
+        self.grating_options = s.gratings_options  # Get the list of available gratings from the Spectrometer
+        self.grating_menu = tk.OptionMenu(text_frame, self.grating_var, *self.grating_options, command=self.update_grating)
+        self.grating_var.set(self.grating_options[0])  # Set the current grating as default selection
+        self.grating_menu.grid(row=row, column=1, pady=5)
 
         row += 1
         tk.Label(text_frame, text="Select scan color").grid(row=row, column=0, pady=5)
@@ -166,7 +174,6 @@ class Application(tk.Frame):
         Updates the value of the color variable when the user
         selects a different color from the dropdown menu.
         '''
-
         self.color_var.set(value)
     
     def run_scan(self):
@@ -175,7 +182,6 @@ class Application(tk.Frame):
         It disables all input fields to prevent changes during the scan and starts a new thread to run the scan.
         Note: Threading is implemented to help stop the GUI from glitching during the scan and remain responsive.
         """
-
         # Disable all the text fields and buttons
         for widget in self.text_fields.values():
             widget.config(state='disabled')
@@ -195,13 +201,17 @@ class Application(tk.Frame):
         and controls the piezo device and spectrometer to perform the scan.
         Finally, it plots the mean spectrum.
         '''
-        
         try:
             
-            #Note: The # of frames is hard coded to 1 as people most likely never use anything else
+            #Note: The # of frames is hard coded to 1 as people will most likely never use anything else
             #Note: Right now the GUI pulls the current grating thats set in the "LF_Control" file in lightfield
 
+            print(f"Just a reminder that the grating options are: {self.grating_options}")
             s.num_frames = "1"
+            
+            # Set the spectrometer's grating to the selected value from the dropdown menu
+            selected_grating = self.grating_var.get()
+            s.grating = selected_grating
 
             s.exposure_time = float(self.text_fields["Exposure Time (ms)"].get())
             s.temperature_sensor_setpoint = float(self.text_fields["Temperature Sensor Setpoint (°C)"].get())
@@ -217,9 +227,6 @@ class Application(tk.Frame):
             
             num = int(self.text_fields["Step Size (um)"].get())
 
-            #NOTE: Remove the line below. It was just for a test
-            print(s.grating)
-
             if num <= 0:
                 raise ValueError("Step Size must be a positive integer")
             
@@ -229,7 +236,6 @@ class Application(tk.Frame):
             if wave_end - wave_start < MIN_WAVELENGTH_DIFFERENCE:
                 raise ValueError(f"End wavelength must be at least {MIN_WAVELENGTH_DIFFERENCE} units greater than start wavelength.")
             
-
             xs = np.linspace(xs_start, xs_end, num=num)
             ys = np.linspace(ys_start, ys_end, num=num)
             self.hyperspectral_im = None
@@ -262,13 +268,18 @@ class Application(tk.Frame):
 
             """
             self.master.after(500, self._enable_widgets)
-        
+            
+    def update_grating(self, value):
+        """
+        Updates the spectrometer's grating setting based on the user's selection.
+        """
+        s.grating = value
+
     def _enable_widgets(self):
         '''
         This function is called at the end of the scan to re-enable all input fields
         and buttons, allowing the user to perform another scan or save the data.
         '''
-
         for widget in self.text_fields.values():
             widget.config(state='normal')
         self.run.config(state='normal')
@@ -281,7 +292,6 @@ class Application(tk.Frame):
         This function is called when the user clicks the 'Save Data' button.
         It prompts the user for a filename and saves the scan data in pickle format.
         '''
-
         filename = self.text_fields["Save Data"].get()
         if filename:
             default_file_path = f"{filename}.pkl"  # Default filename, adjust as you see fit
@@ -300,7 +310,6 @@ class Application(tk.Frame):
         This function is called when the user clicks the 'Save Image' button.
         It prompts the user for a filename and saves the plot as an image.
         '''
-
         filename = self.text_fields["Save Image"].get()
         if filename:
             default_file_path = f"{filename}.png"  # Default filename, adjust as you see fit
