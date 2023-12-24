@@ -124,7 +124,6 @@ class LightfieldApp:
                 data = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height], order='F')
             else:
                 data = np.array([])
-                
                 for i in range(0, frame_count.Frames):
                     frame = frame_count.GetFrame(0, i)
                     new_frame = np.fromiter(frame.GetData(), 'uint16')
@@ -134,9 +133,7 @@ class LightfieldApp:
         else:
             logger.warning('frame_count.Regions is not valid. Please retry.')
             logger.info('Frame count: %s', frame_count.Frames)
-            
         return np.array([[]])  # Return an empty 2D numpy array by default
-
 
     def close(self):
         """
@@ -144,7 +141,6 @@ class LightfieldApp:
         """
         self.automation.Dispose()
         logger.info('Closed AddInProcess.exe')
-
 
 class Spectrometer():
     def initialize(self):
@@ -177,7 +173,6 @@ class Spectrometer():
         result = np.empty(size)
         for i in range(size):
             result[i] = self.light.experiment.SystemColumnCalibration[i]
-
         return result
 
     @center_wavelength.setter
@@ -197,19 +192,24 @@ class Spectrometer():
         return self.light.get(lf.AddIns.SpectrometerSettings.GratingSelected)
 
     @grating.setter
-    def grating(self, density):
+    def grating(self, grating_choice):
         """
         Sets the current grating to be the one specified by parameter grating.
         """
-        pass
+        gratings = self.gratings_options
+        if 0 <= grating_choice < len(gratings):
+            self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, gratings[grating_choice]) 
+        else:
+            logger.error(f"Grating choice {grating_choice} is out of range. Available gratings are: {gratings}")
 
-    #TODO: Need to find a way to implement this
     @property
     def gratings_options(self):
         """
         Returns a list of all installed gratings.
         """
-        pass
+        #This line below is important. "GetCurrentCapabilities" is able to return the list of possibilities of any Lightfield call in order to provide more information.
+        available_gratings = self.light.experiment.GetCurrentCapabilities(lf.AddIns.SpectrometerSettings.GratingSelected)
+        return [str(a) for a in available_gratings]
 
     @property
     def num_frames(self):
@@ -260,7 +260,6 @@ class Spectrometer():
         This function retrieves image data, with particular attention to the camera's configuration determined by the `temperature_sensor_setpoint`. 
         The `temperature_sensor_setpoint` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition. 
         Depending on the setpoint, the behavior or response of the camera sensor might vary.
-
         """
         return self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
 
@@ -283,17 +282,14 @@ class Spectrometer():
         - spectrum (numpy.ndarray): The average spectrum obtained from the acquisition.
         - wavelength (numpy.ndarray): An array of wavelengths corresponding to the spectrum.
         """
-
         lambda_min = wavelength_range[0]
         lambda_max = wavelength_range[1]
-
         try:
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, True)
         except Exception as e:
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
             print(f'Unable to perform step and glue due to error: {e}')
             return
-
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)
