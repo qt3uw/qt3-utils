@@ -206,7 +206,6 @@ class Application(tk.Frame):
             #Note: The # of frames is hard coded to 1 as people will most likely never use anything else
             #Note: Right now the GUI pulls the current grating thats set in the "LF_Control" file in lightfield
 
-            print(f"Just a reminder that the grating options are: {self.grating_options}")
             s.num_frames = "1"
             
             # Set the spectrometer's grating to the selected value from the dropdown menu
