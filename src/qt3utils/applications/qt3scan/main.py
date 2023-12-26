@@ -41,6 +41,7 @@ if args.verbose == 2:
 
 NIDAQ_DAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
 RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Data Generator'
+PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
 
 DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DAQ_DEVICE_NAME
 
@@ -49,7 +50,10 @@ STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml
                                                  'application_controller_class': QT3ScanConfocalApplicationController},
                          RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
                                                        'application_controller_class': QT3ScanConfocalApplicationController},
+                        PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectromter.yaml',
+                           'application_controller_class': QT3ScanConfocalApplicationController}
                          }
+
 # Hyper Spectral Imaging would add the following to STANDARD_CONTROLLERS
 # PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
 # PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectromter.yaml',
@@ -76,7 +80,7 @@ class ScanImage:
 
         if len(app_controller.scanned_count_rate) == 0:
             return
-        
+
         if self.log_data:
             data = np.log10(app_controller.scanned_count_rate)
             data[np.isinf(data)] = 0  # protect against +-inf
@@ -626,7 +630,7 @@ class MainTkApplication():
         self.scan_thread.start()
 
     def save_scan(self) -> None:
-        afile = tk.filedialog.asksaveasfilename(filetypes=self.application_controller.allowed_file_save_formats(), 
+        afile = tk.filedialog.asksaveasfilename(filetypes=self.application_controller.allowed_file_save_formats(),
                                                 defaultextension=self.application_controller.default_file_format())
         if afile is None or afile == '':
             return  # selection was canceled.
