@@ -10,7 +10,7 @@ import matplotlib
 import nidaqmx
 import nipiezojenapy
 from qt3utils.nidaq.customcontrollers import VControl
-from qt3utils.datagenerators import PLEscanner
+from qt3utils.datagenerators import plescanner
 
 import qt3utils.datagenerators as datasources
 
