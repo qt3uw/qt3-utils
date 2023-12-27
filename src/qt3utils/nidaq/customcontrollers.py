@@ -1,11 +1,9 @@
 import nidaqmx
-import nipiezojenapy
-from typing import List
 import time
 import logging
 
 logger = logging.getLogger(__name__)
-class VControl(nipiezojenapy.BaseControl):
+class VControl():
 
     def __init__(self, device_name: str,
                  write_channel: str = 'ao0',
