@@ -30,21 +30,15 @@ class VControl():
         !//Sets the voltage
         raises ValueError if try to set position out of bounds.
         '''
-
-        def goto(val):
-            self._validate_value(val)
-            with nidaqmx.Task() as task:
-                task.ao_channels.add_ao_voltage_chan(self.device_name + '/' + self.write_channel)
-                task.write(self._nm_to_volts(nm=val))
-                self.last_write_value = val
-
         debug_string = []
         if v is not None:
-            goto(v)
+            self._validate_value(v)
+            with nidaqmx.Task() as task:
+                task.ao_channels.add_ao_voltage_chan(self.device_name + '/' + self.write_channel)
+                task.write(self._nm_to_volts(nm=v))
+                self.last_write_value = v
             debug_string.append(f'v: {v:.2f}')
-
         logger.info(f'go to voltage {" ".join(debug_string)}')
-
         time.sleep(self.settling_time_in_seconds) #wait to ensure piezo actuator has settled into position.
         logger.debug(f'last write: {self.last_write_value}')
 
