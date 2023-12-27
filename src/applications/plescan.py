@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
 import nidaqmx
-import nipiezojenapy
 from qt3utils.nidaq.customcontrollers import VControl
 from qt3utils.datagenerators import plescanner
 
@@ -300,7 +299,7 @@ def build_data_scanner():
                                   max_position = args.wavelength_max_position,
                                   scale_nm_per_volt = args.wavelength_scale_nm_per_volt)
 
-    scanner = PLEscanner.CounterAndScanner(data_acq, voltage_controller)
+    scanner = plescanner.CounterAndScanner(data_acq, voltage_controller)
 
     return scanner
 

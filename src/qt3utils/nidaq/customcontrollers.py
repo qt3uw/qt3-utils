@@ -29,11 +29,7 @@ class VControl(nipiezojenapy.BaseControl):
 
     def go_to_voltage(self, v: float = None) -> None:
         '''
-        !//Sets the x,y,z position in microns.
-
-        //You do not need to specify all three axis values in order
-        to move in one direction. For example, you can call: go_to_position(z = 40)
-
+        !//Sets the voltage
         raises ValueError if try to set position out of bounds.
         '''
 
@@ -49,12 +45,12 @@ class VControl(nipiezojenapy.BaseControl):
             goto(v)
             debug_string.append(f'v: {v:.2f}')
 
-        logger.info(f'go to position {" ".join(debug_string)}')
+        logger.info(f'go to voltage {" ".join(debug_string)}')
 
         time.sleep(self.settling_time_in_seconds) #wait to ensure piezo actuator has settled into position.
         logger.debug(f'last write: {self.last_write_value}')
 
-    def get_current_voltage(self) -> List[float]:
+    def get_current_voltage(self) -> float:
         '''
         Returns the voltage supplied to the three input analog channels.
 
@@ -65,7 +61,7 @@ class VControl(nipiezojenapy.BaseControl):
         if self.read_channel is not None:
             with nidaqmx.Task() as vread, nidaqmx.Task():
 
-                vread.ai_channels.add_ai_voltage_chan(self.device_name + '/' + self.read_channel, min_val = 0, max_val = 10.0)
+                vread.ai_channels.add_ai_voltage_chan(self.device_name + '/' + self.read_channel, min_val=0, max_val=10.0)
 
                 output = vread.read()
 
