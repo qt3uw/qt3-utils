@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 class CounterAndScanner:
-    def __init__(self, rate_counter, wavelength_controller):
+    def __init__(self, rate_counter, wavelength_controller) -> None:
 
         self.running = False
         self.current_t = 0
@@ -23,34 +23,34 @@ class CounterAndScanner:
         self.rate_counter = rate_counter
         self.num_daq_batches = 1  # could change to 10 if want 10x more samples for each position
 
-    def stop(self):
+    def stop(self) -> None:
         self.rate_counter.stop()
         self.running = False
 
-    def start(self):
+    def start(self) -> None:
         self.running = True
         self.rate_counter.start()
 
-    def set_to_starting_position(self):
+    def set_to_starting_position(self) -> None:
         self.current_v = self.vmin
         if self.wavelength_controller:
             self.wavelength_controller.go_to_voltage(v=self.vmin)
 
-    def close(self):
+    def close(self) -> None:
         self.rate_counter.close()
 
-    def set_num_data_samples_per_batch(self, N):
+    def set_num_data_samples_per_batch(self, N) -> None:
         self.rate_counter.num_data_samples_per_batch = N
 
-    def sample_counts(self):
+    def sample_counts(self) -> np.ndarray:
         return self.rate_counter.sample_counts(self.num_daq_batches)
 
-    def sample_count_rate(self, data_counts=None):
+    def sample_count_rate(self, data_counts=None) -> np.floating:
         if data_counts is None:
             data_counts = self.sample_counts()
         return self.rate_counter.sample_count_rate(data_counts)
 
-    def set_scan_range(self, vmin, vmax):
+    def set_scan_range(self, vmin, vmax) -> None:
         if self.wavelength_controller:
             self.wavelength_controller.check_allowed_position(vmin, vmin)
         self.vmin = vmin
@@ -70,7 +70,7 @@ class CounterAndScanner:
         """
         return self.xmin, self.xmax, self.current_v
 
-    def still_scanning(self):
+    def still_scanning(self) -> None:
         if self.running == False:  # this allows external process to stop scan
             return False
 
@@ -80,7 +80,7 @@ class CounterAndScanner:
             self.running = False
             return False
 
-    def move_v(self):
+    def move_v(self) -> None:
         self.current_v += self._step_size
         if self.wavelength_controller and self.current_v <= self.vmax:
             try:
@@ -88,14 +88,14 @@ class CounterAndScanner:
             except ValueError as e:
                 logger.info(f'out of range\n\n{e}')
 
-    def go_to_v(self, desired_voltage):
+    def go_to_v(self, desired_voltage) -> None:
         if self.wavelength_controller and desired_voltage <= self.vmax and desired_voltage >= self.vmin:
             try:
                 self.wavelength_controller.go_to_voltage(v=desired_voltage)
             except ValueError as e:
                 logger.info(f'out of range\n\n{e}')
 
-    def scan_v(self):
+    def scan_v(self) -> None:
         """
         Scans the wavelengths from vmin to vmax in steps of step_size.
 
@@ -106,7 +106,7 @@ class CounterAndScanner:
         self.scanned_count_rate.append([self.sample_count_rate(raw_counts) for raw_counts in raw_counts_for_axis])
         self.current_t = self.current_t + 1
 
-    def scan_axis(self, axis, min, max, step_size):
+    def scan_axis(self, axis, min, max, step_size) -> list:
         """
         Moves the stage along the specified axis from min to max in steps of step_size.
         Returns a list of raw counts from the scan in the shape
@@ -128,7 +128,7 @@ class CounterAndScanner:
 
         return raw_counts
 
-    def reset(self):
+    def reset(self) -> None:
         self.scanned_raw_counts = []
         self.scanned_count_rate = []
 

@@ -72,7 +72,7 @@ if args.quiet is False:
 
 
 class ScanImage:
-    def __init__(self, mplcolormap = 'gray'):
+    def __init__(self, mplcolormap = 'gray') -> None:
         self.fig, self.ax = plt.subplots()
         self.cbar = None
         self.cmap = mplcolormap
@@ -80,7 +80,7 @@ class ScanImage:
         self.ax.set_xlabel('Voltage')
         self.log_data = False
 
-    def update(self, model):
+    def update(self, model) -> None:
 
         if self.log_data:
             data = np.log10(model.scanned_count_rate)
@@ -106,18 +106,18 @@ class ScanImage:
         self.ax.set_ylabel('Voltage (V)')
 
 
-    def reset(self):
+    def reset(self) -> None:
         self.ax.cla()
 
-    def set_onclick_callback(self, f):
+    def set_onclick_callback(self, f) -> None:
         self.onclick_callback = f
 
 
-    def onclick(self, event):
+    def onclick(self, event) -> None:
         pass
 
 class SidePanel():
-    def __init__(self, root, scan_range):
+    def __init__(self, root, scan_range) -> None:
         frame = tk.Frame(root)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -177,7 +177,7 @@ class SidePanel():
 
 
 class MainApplicationView():
-    def __init__(self, main_frame, scan_range = [-3, 5]):
+    def __init__(self, main_frame, scan_range = [-3, 5]) -> None:
         frame = tk.Frame(main_frame)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -195,7 +195,7 @@ class MainApplicationView():
 
 class MainTkApplication():
 
-    def __init__(self, counter_scanner):
+    def __init__(self, counter_scanner) -> None:
         self.counter_scanner = counter_scanner
         self.root = tk.Tk()
         self.view = MainApplicationView(self.root)
@@ -203,7 +203,7 @@ class MainTkApplication():
         self.view.sidepanel.GotoButton.bind("<Button>", self.go_to_voltage)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-    def go_to_voltage(self, event = None):
+    def go_to_voltage(self, event = None) -> None:
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
         self.counter_scanner.go_to_v(float(self.view.sidepanel.v_entry.get()))
@@ -211,7 +211,7 @@ class MainTkApplication():
         self.view.sidepanel.GotoButton['state'] = 'normal'
 
     #TODO: add device/channel name, change functionality to nidaq, add sweep loop and sleep() with settling time
-    def start_scan(self, event = None):
+    def start_scan(self, event = None) -> None:
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
 
@@ -235,15 +235,15 @@ class MainTkApplication():
         #    task.ao_channels.add_ao_voltage_chan("Dev1/ai0")
         #    task.write(xmin)
 
-    def run(self):
+    def run(self) -> None:
         self.root.title("QT3PLE: Run PLE scan")
         self.root.deiconify()
         self.root.mainloop()
 
-    def stop_scan(self, event = None):
+    def stop_scan(self, event = None) -> None:
         self.counter_scanner.stop()
 
-    def on_closing(self):
+    def on_closing(self) -> None:
         try:
             self.stop_scan()
             self.root.quit()
@@ -252,7 +252,7 @@ class MainTkApplication():
             logger.debug(e)
             pass
 
-    def scan_thread_function(self, vmin, vmax, step_size, N):
+    def scan_thread_function(self, vmin, vmax, step_size, N) -> None:
 
         self.counter_scanner.set_scan_range(vmin, vmax)
         self.counter_scanner.step_size = step_size
@@ -278,7 +278,7 @@ class MainTkApplication():
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.GotoButton['state'] = 'normal'
 
-def build_data_scanner():
+def build_data_scanner() -> None:
 
     if args.randomtest:
         data_acq = datasources.RandomRateCounter(simulate_single_light_source=True,
@@ -303,7 +303,7 @@ def build_data_scanner():
 
     return scanner
 
-def main():
+def main() -> None:
     tkapp = MainTkApplication(build_data_scanner())
     tkapp.run()
 
