@@ -53,7 +53,7 @@ class QT3ScanConfocalApplicationController:
         # From that point, we could then see if the GUI interfaces should subclass the
         # programmatic interfaces or remain independent.
         #
-        # Additionally, this proposal alo implies a future programmatic interface for the 
+        # Additionally, this proposal alo implies a future programmatic interface for the
         # SpectromterController and a GUI interface for the SpectrometerController.
 
         self.logger = logging.getLogger(__name__)

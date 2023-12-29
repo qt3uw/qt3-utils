@@ -50,7 +50,7 @@ STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml
                                                  'application_controller_class': QT3ScanConfocalApplicationController},
                          RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
                                                        'application_controller_class': QT3ScanConfocalApplicationController},
-                        PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectromter.yaml',
+                        PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectrometer.yaml',
                            'application_controller_class': QT3ScanConfocalApplicationController}
                          }
 
