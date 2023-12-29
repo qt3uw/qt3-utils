@@ -150,9 +150,6 @@ class QT3ScanConfocalApplicationController:
     def set_scan_range(self, xmin: float, xmax: float, ymin: float, ymax: float) -> None:
         self.daq_and_scanner.set_scan_range(xmin, xmax, ymin, ymax)
 
-    def set_num_data_samples_per_batch(self, N: int) -> None:
-        self.daq_and_scanner.set_num_data_samples_per_batch(N)
-
     def get_completed_scan_range(self) -> Tuple[float, float, float, float]:
         return self.daq_and_scanner.get_completed_scan_range()
 
