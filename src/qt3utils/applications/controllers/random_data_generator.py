@@ -125,9 +125,6 @@ class QT3ScanRandomDataController(QT3ScopeRandomDataController):
     """
     Implements the qt3utils.applications.qt3scan.interface.QT3ScanDAQControllerInterface for a random data generator.
     """
-    @property
-    def clock_rate(self) -> float:
-        return self.data_generator.clock_rate
 
     def sample_counts(self, num_batches: int) -> np.ndarray:
         return self.data_generator.sample_counts(num_batches)

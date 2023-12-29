@@ -62,10 +62,6 @@ class QT3ScanDAQControllerInterface(Protocol):
     def __init__(self, logger_level: int):
         pass
 
-    @property
-    def clock_rate(self) -> float:
-        pass
-
     def start(self) -> None:
         pass
 
@@ -196,12 +192,6 @@ class QT3ScanApplicationControllerInterface(Protocol):
         '''
         This method is used to set the scan range and is called in qt3scan.main
         '''
-        pass
-
-    # TODO -- investigate if this is necessary. This function is not used in qt3scan.main
-    # but it is used internally in the QT3ScanConfocalApplicationController for saving data
-    # TODO -- check all of the other methods in this interface to see if they are necessary at the interface level
-    def get_completed_scan_range(self) -> Tuple[float, float, float, float]:
         pass
 
     def save_scan(self) -> None:
