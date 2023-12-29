@@ -99,25 +99,6 @@ class QT3ScanDAQControllerInterface(Protocol):
         """
         pass
 
-@runtime_checkable
-class QT3ScanCounterDAQControllerInterface(QT3ScanDAQControllerInterface, Protocol):
-    """
-    Extends the base DAQ Controller interface to require two functions
-    to return single measured counts and count rates.
-    """
-
-    def sample_counts(self, num_batches: int) -> np.ndarray:
-        """
-        Implementations should return a new data set on each call to this method.
-
-        Implementations should return a numpy array of shape (1,2)
-
-        The first element of the array should be the total number of counts
-        The second element of the array should be the total number of clock ticks.
-        For example, see daqsamplers.RateCounterBase.sample_counts(), which
-        returns a numpy array of shape (1,2) when sum_counts = True.
-        """
-        pass
 
     def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
         """
@@ -307,6 +288,12 @@ class QT3ScanApplicationControllerInterface(Protocol):
         '''
         This method is used to set the scan range and is called in qt3scan.main
         '''
+        pass
+
+    # TODO -- investigate if this is necessary. This function is not used in qt3scan.main
+    # but it is used internally in the QT3ScanConfocalApplicationController for saving data
+    # TODO -- check all of the other methods in this interface to see if they are necessary at the interface level
+    def get_completed_scan_range(self) -> Tuple[float, float, float, float]:
         pass
 
     def save_scan(self) -> None:
