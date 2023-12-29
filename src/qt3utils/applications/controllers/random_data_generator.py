@@ -135,15 +135,6 @@ class QT3ScanRandomDataController(QT3ScopeRandomDataController):
     def sample_count_rate(self, data_counts: np.ndarray) -> np.ndarray:
         return self.data_generator.sample_count_rate(data_counts)
 
-    @property
-    def num_data_samples_per_batch(self) -> int:
-        return self.data_generator.num_data_samples_per_batch
-
-    @num_data_samples_per_batch.setter
-    def num_data_samples_per_batch(self, value):
-        """Abstract property setter for num_data_samples_per_batch"""
-        self.data_generator.num_data_samples_per_batch = value
-
     def scan_image_rightclick_event(self, event) -> None:
         self.logger.debug(f"scan_image_rightclick_event. click at {event.x}, {event.y}")
 

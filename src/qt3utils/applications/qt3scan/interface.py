@@ -81,14 +81,6 @@ class QT3ScanDAQControllerInterface(Protocol):
     def sample_count_rate(self, data_counts: np.ndarray) -> np.ndarray:
         pass
 
-    @property
-    def num_data_samples_per_batch(self) -> int:
-        pass
-
-    @num_data_samples_per_batch.setter
-    def num_data_samples_per_batch(self, value: int):
-        """Abstract property setter for num_data_samples_per_batch"""
-        pass
 
     def configure(self, config_dict: dict) -> None:
         """
@@ -204,10 +196,6 @@ class QT3ScanApplicationControllerInterface(Protocol):
         '''
         This method is used to set the scan range and is called in qt3scan.main
         '''
-        pass
-
-    # TODO -- should this be part of daq controler?? I think yes.
-    def set_num_data_samples_per_batch(self, N: int) -> None:
         pass
 
     # TODO -- investigate if this is necessary. This function is not used in qt3scan.main
