@@ -30,6 +30,9 @@ class QT3ScanPositionControllerInterface(Protocol):
         pass
 
     def get_current_position(self) -> Tuple[float, float, float]:
+        """
+        This method is used to get the current position of the stage or objective.
+        """
         pass
 
     def check_allowed_position(self,
@@ -51,7 +54,7 @@ class QT3ScanPositionControllerInterface(Protocol):
 
     def configure_view(self, gui_root: Tk.Toplevel) -> None:
         """
-        This method launches a GUI window to configure the controller.
+        This method should launch a GUI window to configure the controller.
         """
         pass
 
@@ -114,10 +117,18 @@ class QT3ScanApplicationControllerInterface(Protocol):
     # simply the number of counts. for hyperspectral, the pixel is the counts summed across the spectrum
     @property
     def scanned_count_rate(self) -> np.ndarray:
+        """
+        This property should return a 2D numpy array of the count rate at each position in the scan.
+        The shape of the array should be (num_y_positions, num_x_positions)
+        """
         pass
 
     @property
     def scanned_raw_counts(self) -> np.ndarray:
+        """
+        This property should return a 2D numpy array of the total number of counts at each position in the scan.
+        The shape of the array should be (num_y_positions, num_x_positions)
+        """
         pass
 
     @property
@@ -130,43 +141,85 @@ class QT3ScanApplicationControllerInterface(Protocol):
 
     @property
     def xmin(self) -> float:
+        """
+        This property should return the minimum x position of the scan
+        """
         pass
 
     @property
     def xmax(self) -> float:
+        """
+        This property should return the maximum x position of the scan
+        """
         pass
 
     @property
     def ymin(self) -> float:
+        """
+        This property should return the minimum y position of the scan
+        """
         pass
 
     @property
     def ymax(self) -> float:
+        """
+        This property should return the maximum y position of the scan
+        """
         pass
 
     @property
     def current_y(self) -> float:
+        """
+        This property should return the current y position of the scan
+        """
         pass
 
     def start(self) -> None:
+        """
+        This method is used to start the scan over the scan range. It should prepare the hardware to
+        begin acquistion of data.
+        """
         pass
 
     def stop(self) -> None:
+        """
+        This method is used to stop the scan. It should stop the hardware from acquiring data.
+        """
         pass
 
     def reset(self) -> None:
+        """
+        This method is used to reset any internal state of the scan,
+        such as the current position, data arrays, hardware conditions, etc.
+        """
         pass
 
     def set_to_starting_position(self) -> None:
+        """
+        This method is used to set the stage or objective to the starting position of the scan.
+        """
         pass
 
     def still_scanning(self) -> bool:
+        """
+        This method is used to determine if the scan is still running.
+        """
         pass
 
     def scan_x(self) -> None:
+        """
+        This method is used to scan along the x axis.
+
+        Scans are performed along the x-axis first at each y position before moving to the next y position.
+        The implmementation of this method should take and store data at each x position in range. The
+        implementation is responsible for moving the stage or objective to each x position in range.
+        """
         pass
 
     def move_y(self) -> None:
+        """
+        This method is used to move the stage or objective along the y axis.
+        """
         pass
 
     def optimize_position(self, axis: str,
@@ -195,6 +248,15 @@ class QT3ScanApplicationControllerInterface(Protocol):
         pass
 
     def save_scan(self) -> None:
+        """
+        This method is used to save the scan data. An implementation could save the
+        data in any way that is seen fit. This method is called by the "save" button.
+        The current expectation is that a GUI window is launched allowing the user
+        to save the data in the supported format of their choice. The implementation
+        of this methdo should also package the data. There are alternatives, of course.
+        For example, the implementation could set up a database connection for
+        data to be saved in a continuous way.
+        """
         pass
 
     def allowed_file_save_formats(self) -> list:
