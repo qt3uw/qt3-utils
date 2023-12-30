@@ -65,6 +65,10 @@ class QT3ScanDAQControllerInterface(Protocol):
     def __init__(self, logger_level: int):
         pass
 
+    @property
+    def clock_rate(self) -> float:
+        pass
+
     def start(self) -> None:
         pass
 
