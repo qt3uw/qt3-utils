@@ -149,9 +149,6 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This property should return a 2D numpy array of the count rate at each position in the scan.
         The shape of the array should be (num_y_positions, num_x_positions)
-
-        It can also return a list or array-like object of length zero (len(scanned_count_tate) == 0)
-        to indicate no data.
         """
         pass
 
@@ -160,9 +157,6 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This property should return a 2D numpy array of the total number of counts at each position in the scan.
         The shape of the array should be (num_y_positions, num_x_positions)
-
-        It can also return a list or array-like object of length zero (len(scanned_count_tate) == 0)
-        to indicate no data.
         """
         pass
 
@@ -213,16 +207,12 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This method is used to start the scan over the scan range. It should prepare the hardware to
         begin acquistion of data.
-
-        TODO: Consider renaming this to 'prepare_for_start'
         """
         pass
 
     def stop(self) -> None:
         """
         This method is used to stop the scan. It should stop the hardware from acquiring data.
-
-        TODO: Consider renaming this to 'stop_and_cleanup'
         """
         pass
 
