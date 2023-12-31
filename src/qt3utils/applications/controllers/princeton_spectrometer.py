@@ -22,7 +22,13 @@ class QT3ScanPrincetonSpectrometerController:
 
     @property
     def clock_rate(self) -> float:
-        return 1.0 / (self.spectrometer.exposure_time / 1000.0)  # convert from ms to s
+        try:
+            _t = self.spectrometer.exposure_time / 1000.0  # converts from milliseconds to seconds.
+        except Exception as e:
+            self.logger.error(e)
+            _t = 2  # TODO: better default behavior. Should this be -1? 1? or should Spectrometer be changed.
+
+        return 1.0 / _t
 
     def start(self) -> None:
         # this function should take data for the current settings of the spectromter.
