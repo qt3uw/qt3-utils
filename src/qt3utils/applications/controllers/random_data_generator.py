@@ -136,39 +136,6 @@ class QT3ScanRandomDataController(QT3ScopeRandomDataController):
     def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
         return self.data_generator.sample_count_rate(data_counts)
 
-    def scan_image_rightclick_event(self, event) -> None:
-        self.logger.debug(f"scan_image_rightclick_event. click at {event.x}, {event.y}")
-
-        row += 1
-        tk.Label(config_win, text="Wavelength End (nm)").grid(row=row, column=0, padx=10)
-        wave_end_var = tk.IntVar(value=str(self.spectrometer.wave_end))
-        tk.Entry(config_win, textvariable=wave_end_var).grid(row=row, column=1)
-
-        gui_info = {
-            'experiment_name': experiment_name_var,
-            'exposure_time': exposure_time_var,
-            'center_wavelength': center_wavelength_var,
-            'temperature_sensor_setpoint': temperature_sensor_setpoint_var,
-            'num_wavelength_bins': num_wavelength_bins_var,
-            'wave_start': wave_start_var,
-            'wave_end': wave_end_var
-        }
-
-        row += 1
-        tk.Button(config_win, text='Set', command=lambda: self._set_from_gui(gui_info)).grid(row=row, column=0)
-        tk.Button(config_win, text='Close', command=config_win.destroy).grid(row=row, column=1)
-
-    def _set_from_gui(self, gui_vars: dict) -> None:
-        """
-        Sets the spectrometer configuration from the GUI.
-        """
-        config_dict = {k:v.get() if v.get() not in ['None', ''] else None for k, v in gui_vars.items()}  # code to handle the edge case where there are "None" value
-        self.logger.info(config_dict)
-        self.configure(config_dict)
-
-    def print_config(self) -> None:
-        print("Princeton Spectrometer config")
-        print(self.last_config_dict)  #NOTE: We dont' use the logger because we want to be sure this is printed to stdout
 
 class QT3ScanDummyPositionController:
     """
