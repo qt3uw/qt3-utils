@@ -52,7 +52,7 @@ class LightfieldApp:
     @property
     def experiment(self):
         return self._experiment
-    
+
     def __del__(self):
         """
         Uses Python garbage collection method used to terminate
@@ -94,10 +94,10 @@ class LightfieldApp:
 
     def acquire(self):
         """
-        This function retrieves image data with special consideration for the unique configuration of the camera, 
+        This function retrieves image data with special consideration for the unique configuration of the camera,
         which possesses a single vertical pixel. The following describes the data handling:
 
-        - **Single Frame**: 
+        - **Single Frame**:
         - Data is returned as a 2D array representing raw counts from each pixel.
         - A vertical section (spanning 400 pixels) represents a range for wavelength averaging.
 
@@ -143,13 +143,15 @@ class LightfieldApp:
         logger.info('Closed AddInProcess.exe')
 
 class Spectrometer():
+    ## question - why not have an __init__ method instead and make these class when
+    # the class is instantiated?
     def initialize(self):
         """
-        Sets up LightField and loads an empty experiment called 
+        Sets up LightField and loads an empty experiment called
         "LF_Control that we use for automation purposes.
         """
         self.light = LightfieldApp(True)
-        self.light.load_experiment('LF_Control') 
+        self.light.load_experiment('LF_Control')
 
     #TODO:Need to create a setting that automatically deletes all saved scans on pc.
     def finalize(self):
@@ -183,7 +185,7 @@ class Spectrometer():
         # this avoids bug where if step and glue is selected, doesn't allow setting center wavelength
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         return self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
-    
+
     @property
     def grating(self):
         """
@@ -256,8 +258,8 @@ class Spectrometer():
     def temperature_sensor_setpoint(self, deg_C):
         """
         Sets the sensor target temperature (in degrees Celsius) to deg_C.
-        This function retrieves image data, with particular attention to the camera's configuration determined by the `temperature_sensor_setpoint`. 
-        The `temperature_sensor_setpoint` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition. 
+        This function retrieves image data, with particular attention to the camera's configuration determined by the `temperature_sensor_setpoint`.
+        The `temperature_sensor_setpoint` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
         Depending on the setpoint, the behavior or response of the camera sensor might vary.
         """
         return self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
@@ -292,10 +294,9 @@ class Spectrometer():
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)
-        
+
         data = self.light.acquire()
         spectrum = np.mean(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
         wavelength = np.linspace(lambda_min, lambda_max, data.shape[0])
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         return spectrum, wavelength
-    

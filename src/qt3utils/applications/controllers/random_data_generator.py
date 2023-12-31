@@ -133,7 +133,7 @@ class QT3ScanRandomDataController(QT3ScopeRandomDataController):
     def sample_counts(self, num_batches: int) -> np.ndarray:
         return self.data_generator.sample_counts(num_batches)
 
-    def sample_count_rate(self, data_counts: np.ndarray) -> np.ndarray:
+    def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
         return self.data_generator.sample_count_rate(data_counts)
 
 
