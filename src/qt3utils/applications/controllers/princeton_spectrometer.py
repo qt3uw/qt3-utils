@@ -22,7 +22,13 @@ class QT3ScanPrincetonSpectrometerController:
 
     @property
     def clock_rate(self) -> float:
-        return 1.0 / (self.spectrometer.exposure_time / 1000.0)  # convert from ms to s
+        return 1.0 / (2000 / 1000.0)
+
+        # TODO -- fix this.
+        # we should return
+        # return 1.0 / (self.spectrometer.exposure_time / 1000.0)  # convert from ms to s
+        # bit this doesn't work -- something is wrong with self.spectrometer.exposure_time. It's return type is  "Any | list"
+        # and not a float, so perhaps that's the problem? Not sure.
 
     def start(self) -> None:
         # this function should take data for the current settings of the spectromter.
