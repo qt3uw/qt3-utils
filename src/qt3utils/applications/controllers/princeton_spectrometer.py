@@ -26,9 +26,9 @@ class QT3ScanPrincetonSpectrometerController:
             _t = self.spectrometer.exposure_time
         except Exception as e:
             self.logger.error(e)
-            _t = 2000
+            _t = 2000  # TODO: better default behavior. Should this be -1? 1000? or should Spectrometer be changed.
 
-        return 1.0 / (_t / 1000.0) # converts from milliseconds to seconds.
+        return 1.0 / (_t / 1000.0)  # converts from milliseconds to seconds.
 
     def start(self) -> None:
         # this function should take data for the current settings of the spectromter.
