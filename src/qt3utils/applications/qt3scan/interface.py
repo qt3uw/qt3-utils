@@ -71,7 +71,7 @@ class QT3ScanDAQControllerInterface(Protocol):
 
     def start(self) -> None:
         """
-        Implenentations should do necessary steps to prepare DAQ hardware to acquire data.
+        Implenentations should do necessary steps to start and acquire data all data.
         """
         pass
 
@@ -86,6 +86,30 @@ class QT3ScanDAQControllerInterface(Protocol):
         Implementations should do necessary steps to close the DAQ
         """
         pass
+
+    def sample_counts(self, num_batches: int) -> np.ndarray:
+        """
+        Implementations should return a numpy array of shape (1,2)
+
+        The first element of the array should be the total number of counts
+        The second element of the array should be the total number of clock ticks.
+        For example, see daqsamplers.RateCounterBase.sample_counts(), which
+        returns a numpy array of shape (1,2) when sum_counts = True.
+        """
+        pass
+
+    def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
+        """
+        Implementations should return a numpy floating point number
+
+        The returned value should be the count rate in counts per second.
+        The input of data_counts should be of shape (1, 2) where the first
+        element is the number of counts, the second element is the number of clock ticks.
+        Using the clock_rate, this method should compute the count rate, which is
+        counts / (clock_ticks / clock_rate).
+        """
+        pass
+
 
     def configure(self, config_dict: dict) -> None:
         """
