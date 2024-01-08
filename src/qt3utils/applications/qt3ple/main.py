@@ -210,7 +210,6 @@ class MainTkApplication():
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.GotoButton['state'] = 'normal'
 
-    #TODO: add device/channel name, change functionality to nidaq, add sweep loop and sleep() with settling time
     def start_scan(self, event = None) -> None:
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
