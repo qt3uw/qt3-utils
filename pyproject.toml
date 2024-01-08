@@ -10,7 +10,7 @@ description = "A package for performing experiments in the QT3 lab at UW."
 readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
-keywords = ["qt3", "confocal scan", "nidaqmx", "piezo", "stage", "control", "electron spin control"]
+keywords = ["qt3", "confocal scan", "nidaqmx", "piezo", "stage", "control", "electron spin control", "ple"]
 
 authors = [
     {name = "G. Adam Cox", email = "gadamc@gmail.com" },
@@ -64,6 +64,7 @@ dependencies = [
 [project.scripts]
 qt3scope = "qt3utils.applications.qt3scope.main:main"
 qt3scan = "qt3utils.applications.qt3scan.main:main"
+qt3ple = "qt3utils.applications.qt3ple.main:main"
 
 [tool.setuptools.package-data]
 "qt3utils.applications.controllers" = ["*.yaml"]
