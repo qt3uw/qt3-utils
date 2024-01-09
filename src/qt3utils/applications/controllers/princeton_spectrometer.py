@@ -19,6 +19,8 @@ class QT3ScanPrincetonSpectrometerController:
         self.last_config_dict = {}
         # self.spectrum = np.array([])
         # self.wavelength_array = np.array([])
+        self.wave_start = None
+        self.wave_end = None
 
     @property
     def clock_rate(self) -> float:
@@ -33,7 +35,7 @@ class QT3ScanPrincetonSpectrometerController:
     def start(self) -> None:
         # this function should take data for the current settings of the spectromter.
         # All data acquistion should occur here.
-        self.measured_spectrum, self.wavelength_array = self.spectrometer.acquire_step_and_glue(self.wave_start, self.wave_end)
+        self.measured_spectrum, self.wavelength_array = self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end])
 
     def stop(self) -> None:
         """
@@ -92,8 +94,8 @@ class QT3ScanPrincetonSpectrometerController:
         self.spectrometer.grating = config_dict.get('grating', self.spectrometer.grating)
 
         #NOTE: These are meant to be passed as parameters into the "acquire_step_and_glue" function. Not sure if I should have them here.
-        self.wave_start = config_dict.get('wave_start', self.spectrometer.wave_start)
-        self.wave_end = config_dict.get('wave_end', self.spectrometer.wave_end)
+        self.wave_start = config_dict.get('wave_start', self.wave_start)
+        self.wave_end = config_dict.get('wave_end', self.wave_end)
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """
