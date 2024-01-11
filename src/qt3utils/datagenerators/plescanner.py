@@ -52,7 +52,8 @@ class CounterAndScanner:
 
     def set_scan_range(self, vmin, vmax) -> None:
         if self.wavelength_controller:
-            self.wavelength_controller.check_allowed_position(vmin, vmin)
+            self.wavelength_controller.check_allowed_position(vmin)
+            self.wavelength_controller.check_allowed_position(vmax)
         self.vmin = vmin
         self.vmax = vmax
 

@@ -59,6 +59,17 @@ class VControl():
 
         return output
 
+    def check_allowed_position(self, v: float = None) -> None:
+        if v is not None: self._validate_value(v)
+
+    def _validate_value(self, voltage: float) -> None:
+        voltage = float(voltage)
+        if type(voltage) not in [type(1.0), type(1)]:
+            raise TypeError(f'value {voltage} is not a valid type.')
+        if voltage < self.minimum_allowed_position:
+            raise ValueError(f'value {voltage} is less than {self.minimum_allowed_position: .3f}.')
+        if voltage > self.maximum_allowed_position:
+            raise ValueError(f'value {voltage} is greater than {self.maximum_allowed_position: .3f}.')
     def _nm_to_volts(self, nm: float) -> float:
         return nm / self.scale_nm_per_volt
 
