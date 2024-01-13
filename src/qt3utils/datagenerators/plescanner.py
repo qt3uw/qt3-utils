@@ -69,7 +69,7 @@ class CounterAndScanner:
         Returns a tuple of the scan range that has been completed
         :return: xmin, xmax, ymin, current_y
         """
-        return self.xmin, self.xmax, self.current_v
+        return self.vmin, self.vmax, self.current_v
 
     def still_scanning(self) -> None:
         if self.running == False:  # this allows external process to stop scan

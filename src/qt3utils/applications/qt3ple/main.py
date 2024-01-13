@@ -7,6 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
+import h5py
 import nidaqmx
 from qt3utils.nidaq.customcontrollers import VControl
 from qt3utils.datagenerators import plescanner
@@ -124,6 +125,10 @@ class SidePanel():
         row += 1
         self.startButton = tk.Button(frame, text="Start Scan")
         self.startButton.grid(row=row, column=0)
+        self.stopButton = tk.Button(frame, text="Stop Scan")
+        self.stopButton.grid(row=row, column=1)
+        self.saveScanButton = tk.Button(frame, text="Save Scan")
+        self.saveScanButton.grid(row=row, column=2)
         row += 1
         tk.Label(frame, text="Voltage Range (V)").grid(row=row, column=0)
         self.v_min_entry = tk.Entry(frame, width=10)
@@ -173,6 +178,8 @@ class SidePanel():
         self.v_lmax_entry.grid(row=row, column=2)
 
 
+
+
 class MainApplicationView():
     def __init__(self, main_frame, scan_range=[-3, 5]) -> None:
         frame = tk.Frame(main_frame)
@@ -198,6 +205,8 @@ class MainTkApplication():
         self.root = tk.Tk()
         self.view = MainApplicationView(self.root)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
+        self.view.sidepanel.saveScanButton.bind("<Button>", self.save_scan)
+        self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
         self.view.sidepanel.GotoButton.bind("<Button>", self.go_to_voltage)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
@@ -273,6 +282,34 @@ class MainTkApplication():
 
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.GotoButton['state'] = 'normal'
+
+    def save_scan(self, event = None):
+        myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
+        afile = tk.filedialog.asksaveasfilename(filetypes=myformats, defaultextension='.npz')
+        logger.info(afile)
+        file_type = afile.split('.')[-1]
+        if afile is None or afile == '':
+            return # selection was canceled.
+
+        data = dict(
+            raw_counts=self.counter_scanner.scanned_raw_counts,
+            count_rate=self.counter_scanner.scanned_count_rate,
+            scan_range=self.counter_scanner.get_completed_scan_range(),
+            step_size=self.counter_scanner.step_size,
+            daq_clock_rate=self.counter_scanner.rate_counter.clock_rate,
+        )
+
+        if file_type == 'npy':
+            np.save(afile, data['count_rate'])
+
+        if file_type == 'npz':
+            np.savez_compressed(afile, **data)
+
+        elif file_type == 'h5':
+            h5file = h5py.File(afile, 'w')
+            for key, value in data.items():
+                h5file.create_dataset(key, data=value)
+            h5file.close()
 
 
 def build_data_scanner() -> None:
