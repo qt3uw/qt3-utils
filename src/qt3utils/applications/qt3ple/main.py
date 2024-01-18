@@ -16,7 +16,6 @@ import nidaqmx
 from qt3utils.nidaq.customcontrollers import VControl
 from qt3utils.datagenerators import plescanner
 from qt3utils.applications.controllers.nidaqedgecounter import QT3ScopeNIDAQEdgeCounterController
-import qt3utils.datagenerators as datasources
 
 matplotlib.use('Agg')
 
@@ -162,10 +161,10 @@ class SidePanel():
         self.controller_option = tk.StringVar(frame)
         self.controller_option.set(DEFAULT_DAQ_DEVICE_NAME)  # setting the default value
 
-        #self.controller_menu = tk.OptionMenu(frame,
-        #                                     self.controller_option,
-        #                                     *STANDARD_CONTROLLERS.keys(),
-        #                                     command=root.load_daq_from_config_dict)
+        self.controller_menu = tk.OptionMenu(frame,
+                                             self.controller_option,
+                                             *STANDARD_CONTROLLERS.keys(),
+                                             command=root.load_daq_from_config_dict)
         self.controller_menu = tk.OptionMenu(frame,
                                              self.controller_option,
                                              *STANDARD_CONTROLLERS.keys(),
@@ -173,12 +172,6 @@ class SidePanel():
 
         self.controller_menu.grid(row=row, column=0, columnspan=3)
 
-        row += 1
-        self.daq_config_button = tk.Button(frame, text="Data Acquisition Config")
-        self.daq_config_button.grid(row=row, column=0, columnspan=3)
-        #row += 1
-        #self.hardware_config_button = tk.Button(frame, text="Configure Hardware")
-        #self.hardware_config_button.grid(row=row, column=0, columnspan=3)
         row += 1
         self.hardware_config_from_yaml_button = tk.Button(frame, text="Load YAML Config")
         self.hardware_config_from_yaml_button.grid(row=row, column=0, columnspan=3)
@@ -227,23 +220,19 @@ class MainTkApplication():
     def go_to_voltage(self, event=None) -> None:
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
-        self.view.controller_menu.config(state=tk.DISABLED)
-        self.view.daq_config_button.config(state=tk.DISABLED)
-        #self.view.hardware_config_button.config(state=tk.DISABLED)
-        #self.view.hardware_config_from_yaml_button.config(state=Tk.DISABLED)
+        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
+        self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
         self.application_controller.go_to_v(float(self.view.sidepanel.v_entry.get()))
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.GotoButton['state'] = 'normal'
-        self.view.controller_menu.config(state=tk.NORMAL)
-        self.view.daq_config_button.config(state=tk.NORMAL)
-        #self.view.hardware_config_button.config(state=tk.NORMAL)
+        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
+        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
 
     def start_scan(self, event=None) -> None:
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
-        self.view.controller_menu.config(state=tk.DISABLED)
-        self.view.daq_config_button.config(state=tk.DISABLED)
-        #self.view.hardware_config_button.config(state=tk.DISABLED)
+        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
+        self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
 
         n_sample_size = int(self.view.sidepanel.num_pixels.get())
         sweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
@@ -260,10 +249,6 @@ class MainTkApplication():
         self.scan_thread = Thread(target=self.scan_thread_function, args=args)
         self.scan_thread.start()
 
-        # with nidaqmx.Task() as task:
-        #    task.ao_channels.add_ao_voltage_chan("Dev1/ai0")
-        #    task.write(xmin)
-
     def run(self) -> None:
         self.root.title("QT3PLE: Run PLE scan")
         self.root.deiconify()
@@ -273,10 +258,8 @@ class MainTkApplication():
         self.application_controller.stop()
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.GotoButton['state'] = 'normal'
-        self.view.controller_menu.config(state=tk.NORMAL)
-        self.view.daq_config_button.config(state=tk.NORMAL)
-        #self.view.hardware_config_button.config(state=tk.NORMAL)
-
+        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
+        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
     def on_closing(self) -> None:
         try:
             self.stop_scan()
@@ -311,9 +294,8 @@ class MainTkApplication():
 
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.GotoButton['state'] = 'normal'
-        self.view.controller_menu.config(state=tk.NORMAL)
-        self.view.daq_config_button.config(state=tk.NORMAL)
-        #self.view.hardware_config_button.config(state=tk.NORMAL)
+        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
+        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
 
     def save_scan(self, event = None):
         myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
@@ -342,6 +324,7 @@ class MainTkApplication():
             for key, value in data.items():
                 h5file.create_dataset(key, data=value)
             h5file.close()
+        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
 
     def configure_from_yaml(self) -> None:
         """
@@ -368,7 +351,7 @@ class MainTkApplication():
             msg = f"""\nCurrent data acquisition object is not of type found in YAML
 Found in YAML: {counter_config['import_path']}.{counter_config['class_name']}.
 Current data acquistion object: {self.data_acquisition_model.__class__.__module__}.{self.data_acquisition_model.__class__.__name__}
-Configuration not loaded. Please select approprate controller from the pull-down menu
+Configuration not loaded. Please select appropriate controller from the pull-down menu
 or check your YAML file to ensure configuration of supported hardware controller.
 """
             logger.warning(msg)
@@ -376,6 +359,7 @@ or check your YAML file to ensure configuration of supported hardware controller
             logger.info("load settings from yaml")
             logger.info(counter_config['configure'])
             self.data_acquisition_model.configure(counter_config['configure'])
+
 
     def _open_config_for_hardware(self, hardware_name: str) -> dict:
         with importlib.resources.path(CONTROLLER_PATH, SUPPORTED_CONTROLLERS[hardware_name]) as yaml_path:
@@ -399,7 +383,7 @@ or check your YAML file to ensure configuration of supported hardware controller
 
         # Dynamically instantiate the class
         cls = getattr(module, counter_config['class_name'])
-        # cls should be instance of QT3ScopeDAQControllerInterface
+        # cls should be instance of QT3ScopeNIDAQEdgeCounterController
         self.data_acquisition_model = cls(logger.level)
         assert isinstance(self.data_acquisition_model, QT3ScopeNIDAQEdgeCounterController)
 
@@ -460,42 +444,15 @@ or check your YAML file to ensure configuration of supported hardware controller
 
         # load the data acquisition model from dict
         daq_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_DEVICE]
-        daq_controller = self._load_controller_from_dict(daq_config, datasources.NiDaqDigitalInputRateCounter)
+        daq_controller = self._load_controller_from_dict(daq_config, QT3ScopeNIDAQEdgeCounterController)
 
         ControllerClass = STANDARD_CONTROLLERS[controller_name]['application_controller_class']
-        self.application_controller = plescanner.CounterAndScanner(daq_controller, voltage_controller, logger.level)
+        self.application_controller = plescanner.CounterAndScanner(daq_controller.data_generator, voltage_controller)
 
         # bind buttons to controllers
-        self.view.scan_view.set_rightclick_callback(self.application_controller.scan_image_rightclick_event)
-        self.view.voltage_controller_config_button.bind("<Button>", lambda e: self.application_controller.voltage_controller.configure_view(self.root))
-        self.view.daq_config_button.bind("<Button>", lambda e: self.application_controller.daq_controller.configure_view(self.root))
-
-
-def build_data_scanner() -> None:
-    if args.randomtest:
-        data_acq = datasources.RandomRateCounter(simulate_single_light_source=True,
-                                                 num_data_samples_per_batch=args.num_data_samples_per_batch)
-    else:
-        data_acq = datasources.NiDaqDigitalInputRateCounter(args.daq_name,
-                                                            args.signal_terminal,
-                                                            args.clock_rate,
-                                                            args.num_data_samples_per_batch,
-                                                            args.clock_terminal,
-                                                            args.rwtimeout,
-                                                            args.signal_counter)
-
-    voltage_controller = VControl(device_name=args.daq_name,
-                                  write_channel=args.wavelength_write_channel,
-                                  read_channel=args.wavelength_read_channel,
-                                  min_position=args.wavelength_min_position,
-                                  max_position=args.wavelength_max_position,
-                                  scale_nm_per_volt=args.wavelength_scale_nm_per_volt)
-
-    scanner = plescanner.CounterAndScanner(data_acq, voltage_controller)
-
-    return scanner
-
-
+        #self.view.scan_view.set_rightclick_callback(self.application_controller.scan_image_rightclick_event)
+        #self.view.voltage_controller_config_button.bind("<Button>", lambda e: self.application_controller.wavelength_controller.configure_view(self.root))
+        #self.view.daq_config_button.bind("<Button>", lambda e: self.application_controller.rate_counter.configure_view(self.root))
 def main() -> None:
     tkapp = MainTkApplication(DEFAULT_DAQ_DEVICE_NAME)
     tkapp.run()

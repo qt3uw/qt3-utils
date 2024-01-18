@@ -59,6 +59,17 @@ class VControl():
 
         return output
 
+    def configure(self, config_dict: dict) -> None:
+        """
+        This method is used to configure the data controller.
+        """
+        self.device_name = config_dict.get('daq_name', self.device_name)
+        self.write_channel = config_dict.get('write_channels', self.write_channel)
+        self.read_channel = config_dict.get('read_channels', self.read_channel)
+        self.scale_nm_per_volt = config_dict.get('scale_nm_per_volt', self.scale_nm_per_volt)
+        self.minimum_allowed_position = config_dict.get('min_position', self.minimum_allowed_position)
+        self.maximum_allowed_position = config_dict.get('max_position', self.maximum_allowed_position)
+
     def check_allowed_position(self, v: float = None) -> None:
         if v is not None: self._validate_value(v)
 
