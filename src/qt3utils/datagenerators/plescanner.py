@@ -1,3 +1,4 @@
+import tkinter as tk
 import numpy as np
 import time
 import logging
@@ -132,6 +133,12 @@ class CounterAndScanner:
     def reset(self) -> None:
         self.scanned_raw_counts = []
         self.scanned_count_rate = []
+
+    def configure_view(self, gui_root: tk.Toplevel) -> None:
+        """
+        This method launches a GUI window to configure the controller.
+        """
+        pass
 
     @property
     def step_size(self):

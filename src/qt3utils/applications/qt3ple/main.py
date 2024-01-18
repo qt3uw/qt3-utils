@@ -45,7 +45,7 @@ CONTROLLER_PATH = 'qt3utils.applications.controllers'
 SUPPORTED_CONTROLLERS = {NIDAQ_DEVICE_NAME: 'nidaq_rate_counter.yaml'
                          }
 STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAME: {'yaml': 'nidaq_rate_counter.yaml',
-                                                'application_controller_class': VControl}
+                                                'application_controller_class': plescanner.CounterAndScanner}
                         }
 CONFIG_FILE_APPLICATION_NAME = 'QT3PLE'
 CONFIG_FILE_DAQ_DEVICE = 'DAQCounter'
@@ -176,9 +176,9 @@ class SidePanel():
         row += 1
         self.daq_config_button = tk.Button(frame, text="Data Acquisition Config")
         self.daq_config_button.grid(row=row, column=0, columnspan=3)
-        row += 1
-        self.hardware_config_button = tk.Button(frame, text="Configure Hardware")
-        self.hardware_config_button.grid(row=row, column=0, columnspan=3)
+        #row += 1
+        #self.hardware_config_button = tk.Button(frame, text="Configure Hardware")
+        #self.hardware_config_button.grid(row=row, column=0, columnspan=3)
         row += 1
         self.hardware_config_from_yaml_button = tk.Button(frame, text="Load YAML Config")
         self.hardware_config_from_yaml_button.grid(row=row, column=0, columnspan=3)
@@ -201,9 +201,9 @@ class MainApplicationView():
 
         self.canvas.draw()
 
-    @property
-    def hardware_config_button(self) -> tk.Button:
-        return self.sidepanel.hardware_config_button
+    #@property
+    #def hardware_config_button(self) -> tk.Button:
+    #    return self.sidepanel.hardware_config_button
 
 
 class MainTkApplication():
@@ -222,28 +222,28 @@ class MainTkApplication():
         self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
         self.view.sidepanel.GotoButton.bind("<Button>", self.go_to_voltage)
         self.view.sidepanel.hardware_config_from_yaml_button.bind("<Button>", lambda e: self.configure_from_yaml())
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.root.protocol("WM_DELETE_WINDOWwait_visibility()", self.on_closing)
 
     def go_to_voltage(self, event=None) -> None:
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
         self.view.controller_menu.config(state=tk.DISABLED)
         self.view.daq_config_button.config(state=tk.DISABLED)
-        self.view.hardware_config_button.config(state=tk.DISABLED)
-        self.view.hardware_config_from_yaml_button.config(state=Tk.DISABLED)
+        #self.view.hardware_config_button.config(state=tk.DISABLED)
+        #self.view.hardware_config_from_yaml_button.config(state=Tk.DISABLED)
         self.application_controller.go_to_v(float(self.view.sidepanel.v_entry.get()))
         self.view.sidepanel.startButton['state'] = 'normal'
         self.view.sidepanel.GotoButton['state'] = 'normal'
         self.view.controller_menu.config(state=tk.NORMAL)
         self.view.daq_config_button.config(state=tk.NORMAL)
-        self.view.hardware_config_button.config(state=tk.NORMAL)
+        #self.view.hardware_config_button.config(state=tk.NORMAL)
 
     def start_scan(self, event=None) -> None:
         self.view.sidepanel.startButton['state'] = 'disabled'
         self.view.sidepanel.GotoButton['state'] = 'disabled'
         self.view.controller_menu.config(state=tk.DISABLED)
         self.view.daq_config_button.config(state=tk.DISABLED)
-        self.view.hardware_config_button.config(state=tk.DISABLED)
+        #self.view.hardware_config_button.config(state=tk.DISABLED)
 
         n_sample_size = int(self.view.sidepanel.num_pixels.get())
         sweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
@@ -275,7 +275,7 @@ class MainTkApplication():
         self.view.sidepanel.GotoButton['state'] = 'normal'
         self.view.controller_menu.config(state=tk.NORMAL)
         self.view.daq_config_button.config(state=tk.NORMAL)
-        self.view.hardware_config_button.config(state=tk.NORMAL)
+        #self.view.hardware_config_button.config(state=tk.NORMAL)
 
     def on_closing(self) -> None:
         try:
@@ -313,7 +313,7 @@ class MainTkApplication():
         self.view.sidepanel.GotoButton['state'] = 'normal'
         self.view.controller_menu.config(state=tk.NORMAL)
         self.view.daq_config_button.config(state=tk.NORMAL)
-        self.view.hardware_config_button.config(state=tk.NORMAL)
+        #self.view.hardware_config_button.config(state=tk.NORMAL)
 
     def save_scan(self, event = None):
         myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
@@ -405,7 +405,7 @@ or check your YAML file to ensure configuration of supported hardware controller
 
         # configure the data acquisition model
         self.data_acquisition_model.configure(counter_config['configure'])
-        self.view.hardware_config_button.bind("<Button>", lambda e: self.data_acquisition_model.configure_view(self.root))
+        #self.view.hardware_config_button.bind("<Button>", lambda e: self.data_acquisition_model.configure_view(self.root))
         self.animation = None  # reset the animation
 
     def _open_yaml_config_for_controller(self, controller_name: str) -> dict:
