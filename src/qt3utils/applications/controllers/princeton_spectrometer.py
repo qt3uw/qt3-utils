@@ -29,7 +29,8 @@ class QT3ScanPrincetonSpectrometerController:
     def start(self) -> None:
         # this function should take data for the current settings of the spectromter.
         # All data acquistion should occur here.
-        self.measured_spectrum, self.wavelength_array = self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end])
+        self.logger.debug('calling QT3ScanPrincetonSpectrometerController start')
+        # nothing to be done
 
     def stop(self) -> None:
         """
@@ -54,7 +55,12 @@ class QT3ScanPrincetonSpectrometerController:
         # it may be desireable to apply some kind of filter to the spectrum before integration
         # one simple filter may be to allow the user to configure a start / stop wavelength
         # that is applied to a narrow region of the full spectrum that was acquired.
-        return np.array([[np.sum(self.measured_spectrum), 1]])  # this should be of shape (1,2)
+
+        self.measured_spectrum, self.wavelength_array = self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end])
+        self.logger.debug(f'acquired spectrum from {self.wavelength_array[0]} to {self.wavelength_array[-1]} nm')
+        sample_counts = np.array([[np.sum(self.measured_spectrum), 1]])
+        self.logger.debug(sample_counts)
+        return sample_counts  # this should be of shape (1,2)
 
     def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
         """
@@ -79,8 +85,8 @@ class QT3ScanPrincetonSpectrometerController:
         """
         self.logger.debug("Calling configure on the Princeton Spectrometer data controller")
         self.last_config_dict.update(config_dict)
-        self.spectrometer.initialize()
 
+        self.spectrometer.experiment_name = config_dict.get('experiment_name', self.spectrometer.experiment_name)
         self.spectrometer.center_wavelength = float(config_dict.get('center_wavelength', self.spectrometer.center_wavelength))
         self.spectrometer.exposure_time = float(config_dict.get('exposure_time', self.spectrometer.exposure_time))
         self.spectrometer.temperature_sensor_setpoint = float(config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint))
@@ -88,8 +94,8 @@ class QT3ScanPrincetonSpectrometerController:
         self.spectrometer.grating = config_dict.get('grating', self.spectrometer.grating)
 
         #NOTE: These are meant to be passed as parameters into the "acquire_step_and_glue" function. Not sure if I should have them here.
-        self.wave_start = config_dict.get('wave_start', self.wave_start)
-        self.wave_end = config_dict.get('wave_end', self.wave_end)
+        self.wave_start = float(config_dict.get('wave_start', self.wave_start))
+        self.wave_end = float(config_dict.get('wave_end', self.wave_end))
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """
@@ -100,7 +106,13 @@ class QT3ScanPrincetonSpectrometerController:
         config_win.grab_set()
         config_win.title('Princeton Spectrometer Settings')
 
+        # TODO: change all of the StringVar to DoubleVar and remove casting above
         row = 0
+        tk.Label(config_win, text="Experiment Name)").grid(row=row, column=0, padx=10)
+        experiment_name_var = tk.StringVar(value=str(self.spectrometer.experiment_name))
+        tk.Entry(config_win, textvariable=experiment_name_var).grid(row=row, column=1)
+
+        row += 1
         tk.Label(config_win, text="Exposure Time (ms)").grid(row=row, column=0, padx=10)
         exposure_time_var = tk.StringVar(value=str(self.spectrometer.exposure_time))
         tk.Entry(config_win, textvariable=exposure_time_var).grid(row=row, column=1)
@@ -132,6 +144,7 @@ class QT3ScanPrincetonSpectrometerController:
 
         # Pack variables into a dictionary to pass to the _set_from_gui method
         gui_info = {
+            'experiment_name': experiment_name_var,
             'exposure_time': exposure_time_var,
             'center_wavelength': center_wavelength_var,
             'temperature_sensor_setpoint': temperature_sensor_setpoint_var,

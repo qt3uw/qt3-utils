@@ -9,6 +9,7 @@ QT3Scan:
       grating : "[500nm,300][2][0]" # Varies based on spectrometer type
       wave_start : 600
       wave_end : 850
+      experiment_name: "Experiment3"
 
   PositionController:
     import_path : qt3utils.applications.controllers.nidaqpiezocontroller
