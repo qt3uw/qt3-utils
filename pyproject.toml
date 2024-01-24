@@ -53,6 +53,7 @@ dependencies = [
     "nipiezojenapy>=1.0.4",
     "pulseblaster>=1.0.1",
     "PyYAML>=6.0.1",
+    "pythonnet>=3.0.3"
 ]
 
 [project.urls]
