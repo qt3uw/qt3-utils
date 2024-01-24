@@ -146,13 +146,9 @@ class LightfieldApp:
 class Spectrometer():
     ## question - why not have an __init__ method instead and make these class when
     # the class is instantiated?
-    def initialize(self):
-        """
-        Sets up LightField and loads an empty experiment called
-        "LF_Control that we use for automation purposes.
-        """
+    def __init__(self, experiment_name = None):
+        self._experiment_name = experiment_name
         self.light = LightfieldApp(True)
-        self.light.load_experiment('LF_Control')
 
     def finalize(self):
         """
@@ -185,6 +181,19 @@ class Spectrometer():
         #NOTE: The line below addresses bug where if step and glue is selected, doesn't allow setting center wavelength
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         return self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
+
+    @property
+    def experiment_name(self):
+        """
+        Returns the experiment name
+        """
+        return self._experiment_name
+
+    @experiment_name.setter
+    def experiment_name(self, a_name):
+        if a_name != self._experiment_name:
+            self._experiment_name = a_name
+            self.light.load_experiment(self._experiment_name)
 
     @property
     def grating(self):

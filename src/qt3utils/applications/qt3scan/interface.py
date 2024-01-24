@@ -71,7 +71,7 @@ class QT3ScanDAQControllerInterface(Protocol):
 
     def start(self) -> None:
         """
-        Implenentations should do necessary steps to start and acquire data all data.
+        Implenentations should do necessary steps to prepare DAQ hardware to acquire data.
         """
         pass
 
@@ -89,6 +89,8 @@ class QT3ScanDAQControllerInterface(Protocol):
 
     def sample_counts(self, num_batches: int) -> np.ndarray:
         """
+        Implementations should return a new data set on each call to this method. 
+
         Implementations should return a numpy array of shape (1,2)
 
         The first element of the array should be the total number of counts
