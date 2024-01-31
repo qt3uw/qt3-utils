@@ -45,8 +45,9 @@ if args.verbose == 2:
 
 
 NIDAQ_DAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
-RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Data Generator'
+RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Counter'
 PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
+RANDOM_SPECTROMETER_DAQ_DEVICE_NAME = 'Random Spectrometer'
 
 DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DAQ_DEVICE_NAME
 
@@ -56,6 +57,8 @@ STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml
                          RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
                                                        'application_controller_class': QT3ScanConfocalApplicationController},
                         PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectrometer.yaml',
+                           'application_controller_class': QT3ScanHyperSpectralApplicationController},
+                        RANDOM_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'random_spectrometer.yaml',
                            'application_controller_class': QT3ScanHyperSpectralApplicationController}
                          }
 
