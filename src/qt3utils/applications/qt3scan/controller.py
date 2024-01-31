@@ -235,8 +235,8 @@ class QT3ScanHyperSpectralApplicationController:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
-        self.daq_controller = daq_controller
-        self.position_controller = position_controller
+        self._daq_controller = daq_controller
+        self._position_controller = position_controller
 
         self.running = False
         self._current_y = 0
@@ -260,7 +260,7 @@ class QT3ScanHyperSpectralApplicationController:
 
     @property
     def scanned_count_rate(self) -> np.ndarray:
-        return self.scanned_raw_counts() * self.daq_controller.clock_rate
+        return self.scanned_raw_counts * self.daq_controller.clock_rate
 
     @property
     def scanned_raw_counts(self) -> np.ndarray:
@@ -271,11 +271,11 @@ class QT3ScanHyperSpectralApplicationController:
 
     @property
     def position_controller(self) -> QT3ScanPositionControllerInterface:
-        return self.position_controller
+        return self._position_controller
 
     @property
     def daq_controller(self) -> QT3ScanDAQControllerInterface:
-        return self.daq_controller
+        return self._daq_controller
 
     @property
     def xmin(self) -> float:
@@ -342,26 +342,38 @@ class QT3ScanHyperSpectralApplicationController:
         raw_counts_for_axis, wavelengths = (
             self.scan_axis('x', self.xmin, self.xmax, self.step_size)
         )
+        # raw_counts_for_axis is of shape (N steps, M spectrum size)
+        # wavelengths is of shape (M spectrum size,)
+        assert len(wavelengths) == raw_counts_for_axis.shape[-1]
+
+        # rehape raw_counts to
+        # (1, N, M)
+        raw_counts_for_axis = raw_counts_for_axis.reshape(1, len(raw_counts_for_axis), -1)
+
         if self.hyper_spectral_raw_data is None:
-            self.hyper_spectral_raw_data = raw_counts_for_axis.reshape(1,len(raw_counts_for_axis),-1)
+            self.hyper_spectral_raw_data = raw_counts_for_axis
+            self.logger.debug(f'Creating new hyperspectral array of shape: {self.hyper_spectral_raw_data}')
         else:
             if self.hyper_spectral_raw_data.shape[-1] != raw_counts_for_axis.shape[-1]:
-                raise QT3Error("Inconsistent spectrum size obtained during scan_x! Check your hardware.")
+                raise QT3Error("Inconsistent spectrum size obtained during scan_x! Check your hardware."
+                               f"expected shape[-1] {self.hyper_spectral_raw_data.shape[-1]}. found {raw_counts_for_axis.shape[-1]}")
 
-            self.hyper_spectral_raw_data = np.vstack(self.hyper_spectral_raw_data, raw_counts_for_axis)
+            self.hyper_spectral_raw_data = np.vstack((self.hyper_spectral_raw_data, raw_counts_for_axis))
 
         if self.hyper_spectral_wavelengths is None:
             self.hyper_spectral_wavelengths = wavelengths
-        else:
-            if np.array_equal(self.hyper_spectral_wavelengths, wavelengths) is False:
-                raise QT3Error("Inconsistent wavelength array obtained during scan_x! Check your hardware.")
+
+        if np.array_equal(self.hyper_spectral_wavelengths, wavelengths) is False:
+            raise QT3Error("Inconsistent wavelength array obtained during scan_x! Check your hardware.")
 
     def scan_axis(self, axis, min, max, step_size) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Moves the micrscope along the specified axis from min to max in steps of step_size.
-        Returns a numpy array of raw spectrum from the scan in the shape
+        Moves the microscope along the specified axis from min to max in steps of step_size.
+        Returns a tuple of two numpy arrays
+        The first numpy array is the raw spectrum from the scan in the shape
         (N, M) where N is the number of positions along the axis and M
         is the size of the spectrum
+        The second numpy array is an array of wavelength values for the spectrum of shape (M,)
         """
         spectrums_in_scan = []
 
@@ -402,7 +414,7 @@ class QT3ScanHyperSpectralApplicationController:
 
     def move_y(self) -> None:
         if self.current_y < self.ymax:
-            self.current_y += self.step_size
+            self._current_y += self.step_size
         try:
             self.position_controller.go_to_position(y=self.current_y)
         except ValueError as e:
