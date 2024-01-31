@@ -2,9 +2,15 @@ import logging
 import numpy as np
 from typing import Tuple
 import h5py
-from matplotlib.backend_bases import MouseEvent
 import pickle
 import time
+import tkinter as tk
+
+import matplotlib
+from matplotlib.backend_bases import MouseEvent
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+import matplotlib.pyplot as plt
+matplotlib.use('Agg')
 
 from qt3utils.applications.qt3scan.interface import (
     QT3ScanDAQControllerInterface,
@@ -439,7 +445,7 @@ class QT3ScanHyperSpectralApplicationController:
         file_type = afile_name.split('.')[-1]
 
         data = dict(
-            #wavelength=self.daq_controller.spectrometer.wavelength_array,
+            wavelengths=self.hyper_spectral_wavelengths,
             hyperspectral_image=self.hyper_spectral_raw_data,
             scan_range=self.get_completed_scan_range(),
             raw_counts=self.scanned_raw_counts,
@@ -492,3 +498,34 @@ class QT3ScanHyperSpectralApplicationController:
         # then create a new window to display the spectrum.
         # see qt3scan.main.show_optimization_plot function for how to build a
         # new window with data
+
+        # NB this is tech debt here. We have GUI (view) code inside a controller
+        # A better solution would be to simply return the data to the caller (qt3scan.main)
+        # and make it responsible to build a GUI
+        # For the sake of expediency we leave this here
+
+        win = tk.Toplevel()
+        win.title(f'Spectrum for location (x,y): {event.xdata}, {event.ydata}')
+        fig, ax = plt.subplots()
+        ax.set_xlabel('Wavelength (nm)')
+        ax.set_ylabel('Counts / bin')
+
+        # Y - number of rows in hyper spectral image
+        # X - number of columns
+        # M - size of spectra
+        Y, X, M = self.hyper_spectral_raw_data.shape
+
+        random_y = np.random.randint(Y)
+        random_x = np.random.randint(X)
+        random_spectrum = self.hyper_spectral_raw_data[random_y, random_x, :]
+
+        ax.plot(self.hyper_spectral_wavelengths, random_spectrum, label='data')
+
+        canvas = FigureCanvasTkAgg(fig, master=win)
+        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        toolbar = NavigationToolbar2Tk(canvas, win)
+        toolbar.update()
+        canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        canvas.draw()
