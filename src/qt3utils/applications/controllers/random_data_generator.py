@@ -198,8 +198,8 @@ class QT3ScanRandomSpectrometerDataController:
         self.last_measured_spectrum, self.last_wavelength_array = (
             self.spectrometer.acquire_step_and_glue()
         )
-        self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]}'
-                          f'to {self.last_wavelength_array[-1]} nm')
+        # self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]}'
+        #                   f'to {self.last_wavelength_array[-1]} nm')
         return self.last_measured_spectrum, self.last_wavelength_array
 
     def configure(self, config_dict: dict) -> None:

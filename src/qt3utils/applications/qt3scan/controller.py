@@ -352,7 +352,7 @@ class QT3ScanHyperSpectralApplicationController:
 
         if self.hyper_spectral_raw_data is None:
             self.hyper_spectral_raw_data = raw_counts_for_axis
-            self.logger.debug(f'Creating new hyperspectral array of shape: {self.hyper_spectral_raw_data}')
+            self.logger.debug(f'Creating new hyperspectral array of shape: {self.hyper_spectral_raw_data.shape}')
         else:
             if self.hyper_spectral_raw_data.shape[-1] != raw_counts_for_axis.shape[-1]:
                 raise QT3Error("Inconsistent spectrum size obtained during scan_x! Check your hardware."
@@ -388,13 +388,10 @@ class QT3ScanHyperSpectralApplicationController:
         self.position_controller.go_to_position(**{axis: min})
         time.sleep(self.raster_line_pause)
         for val in np.arange(min, max, step_size):
-            self.logger.debug(f'go to position {axis}: {val:.2f}')
             self.position_controller.go_to_position(**{axis: val})
 
             measured_spectrum, measured_wavelengths = self.daq_controller.sample_spectrum()
             spectrums_in_scan.append(measured_spectrum)
-
-            self.logger.debug(f'adding spectrum of size {measured_spectrum.shape}')
 
             if initial_spectrum_size is None:
                 initial_spectrum_size = len(measured_spectrum)
@@ -489,5 +486,8 @@ class QT3ScanHyperSpectralApplicationController:
         """
         self.logger.debug(f"Mouse Event {event}")
         # we need to get the x,y position of the Mouse Event,
-        # find the corresponding spectrum in self.hyper_spectral_raw_data
+        # and using the step_size of the position_controller,
+        # find the corresponding spectrum stored in self.hyper_spectral_raw_data array.
         # then create a new window to display the spectrum.
+        # see qt3scan.main.show_optimization_plot function for how to build a
+        # new window with data
