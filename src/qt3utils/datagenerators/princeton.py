@@ -144,11 +144,12 @@ class LightfieldApp:
 
 
 class Spectrometer():
-    ## question - why not have an __init__ method instead and make these class when
-    # the class is instantiated?
-    def __init__(self, experiment_name = None):
+
+    def __init__(self, experiment_name=None):
         self._experiment_name = experiment_name
         self.light = LightfieldApp(True)
+
+    # TODO: Need to implement a setting that automatically deletes all saved scans on PC when you close Lightfield.
 
     def finalize(self):
         """
@@ -185,12 +186,15 @@ class Spectrometer():
     @property
     def experiment_name(self):
         """
-        Returns the experiment name
+        Returns the experiment name.
         """
         return self._experiment_name
 
     @experiment_name.setter
     def experiment_name(self, a_name):
+        """
+        User can set the experiment that they want to load.
+        """
         if a_name != self._experiment_name:
             self._experiment_name = a_name
             self.light.load_experiment(self._experiment_name)

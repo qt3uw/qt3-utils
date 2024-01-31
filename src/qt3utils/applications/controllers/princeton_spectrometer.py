@@ -6,19 +6,21 @@ from typing import Tuple
 import qt3utils.datagenerators.princeton as princeton
 
 
-
 class QT3ScanPrincetonSpectrometerController:
+    """
+    Implements qt3utils.applications.qt3scan.interface.QT3ScanSpectrometerDAQControllerInterface
+    """
     def __init__(self, logger_level: int):
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
         self.spectrometer = princeton.Spectrometer()
-        # self.spectrometer.initialize() # you should probably initialize the spectrometer with an __init__ method instead.
         self.last_config_dict = {}
-        # self.spectrum = np.array([])
-        # self.wavelength_array = np.array([])
+
         self.wave_start = None
         self.wave_end = None
+        self.last_measured_spectrum = None
+        self.last_wavelength_array = None
 
     @property
     def clock_rate(self) -> float:
@@ -41,47 +43,18 @@ class QT3ScanPrincetonSpectrometerController:
         Implementations should do necessary steps to stop acquiring data.
         """
         # if there is a way to interrupt data acquistion, do that here. Otherwise, do nothing
-        pass
+        self.logger.debug('calling QT3ScanPrincetonSpectrometerController stop')
 
     def close(self) -> None:
         self.spectrometer.finalize()
 
-    def sample_counts(self, num_batches: int) -> np.ndarray:
-        """
-        Implementations should return a numpy array of shape (1,2)
-
-        The first element of the array should be the total number of counts
-        The second element of the array should be the total number of clock ticks.
-        For example, see daqsamplers.RateCounterBase.sample_counts(), which
-        returns a numpy array of shape (1,2) when sum_counts = True.
-        """
-        # this is a simple integeration of all of the counts in the spectrum
-        # it may be desireable to apply some kind of filter to the spectrum before integration
-        # one simple filter may be to allow the user to configure a start / stop wavelength
-        # that is applied to a narrow region of the full spectrum that was acquired.
-
-        self.measured_spectrum, self.wavelength_array = self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end])
-        self.logger.debug(f'acquired spectrum from {self.wavelength_array[0]} to {self.wavelength_array[-1]} nm')
-        sample_counts = np.array([[np.sum(self.measured_spectrum), 1]])
-        self.logger.debug(sample_counts)
-        return sample_counts  # this should be of shape (1,2)
-
-    def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
-        """
-        Implementations should return a numpy floating point number
-
-        The returned value should be the count rate in counts per second.
-        The input of data_counts should be of shape (1, 2) where the first
-        element is the number of counts, the second element is the number of clock ticks.
-        Using the clock_rate, this method should compute the count rate, which is
-        counts / (clock_ticks / clock_rate).
-        """
-        # cribbed from daqsamplers.RateCounterBase.sample_count_rate
-        _data = np.sum(data_counts, axis=0)
-        if _data[1] > 0:
-            return self.clock_rate * _data[0]/_data[1]
-        else:
-            return np.nan
+    def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
+        self.last_measured_spectrum, self.last_wavelength_array = (
+            self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end])
+        )
+        self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]}'
+                          'to {self.last_wavelength_array[-1]} nm')
+        return self.last_measured_spectrum, self.last_wavelength_array
 
         self.wave_start = None
         self.wave_end = None

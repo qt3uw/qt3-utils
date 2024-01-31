@@ -87,32 +87,6 @@ class QT3ScanDAQControllerInterface(Protocol):
         """
         pass
 
-    def sample_counts(self, num_batches: int) -> np.ndarray:
-        """
-        Implementations should return a new data set on each call to this method. 
-
-        Implementations should return a numpy array of shape (1,2)
-
-        The first element of the array should be the total number of counts
-        The second element of the array should be the total number of clock ticks.
-        For example, see daqsamplers.RateCounterBase.sample_counts(), which
-        returns a numpy array of shape (1,2) when sum_counts = True.
-        """
-        pass
-
-    def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
-        """
-        Implementations should return a numpy floating point number
-
-        The returned value should be the count rate in counts per second.
-        The input of data_counts should be of shape (1, 2) where the first
-        element is the number of counts, the second element is the number of clock ticks.
-        Using the clock_rate, this method should compute the count rate, which is
-        counts / (clock_ticks / clock_rate).
-        """
-        pass
-
-
     def configure(self, config_dict: dict) -> None:
         """
         This method is used to configure the controller.
@@ -125,6 +99,25 @@ class QT3ScanDAQControllerInterface(Protocol):
         """
         pass
 
+@runtime_checkable
+class QT3ScanCounterDAQControllerInterface(QT3ScanDAQControllerInterface, Protocol):
+    """
+    Extends the base DAQ Controller interface to require two functions
+    to return single measured counts and count rates.
+    """
+
+    def sample_counts(self, num_batches: int) -> np.ndarray:
+        """
+        Implementations should return a new data set on each call to this method.
+
+        Implementations should return a numpy array of shape (1,2)
+
+        The first element of the array should be the total number of counts
+        The second element of the array should be the total number of clock ticks.
+        For example, see daqsamplers.RateCounterBase.sample_counts(), which
+        returns a numpy array of shape (1,2) when sum_counts = True.
+        """
+        pass
 
     def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
         """
@@ -179,6 +172,9 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This property should return a 2D numpy array of the count rate at each position in the scan.
         The shape of the array should be (num_y_positions, num_x_positions)
+
+        It can also return a list or array-like object of length zero (len(scanned_count_tate) == 0)
+        to indicate no data.
         """
         pass
 
@@ -187,6 +183,9 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This property should return a 2D numpy array of the total number of counts at each position in the scan.
         The shape of the array should be (num_y_positions, num_x_positions)
+
+        It can also return a list or array-like object of length zero (len(scanned_count_tate) == 0)
+        to indicate no data.
         """
         pass
 
@@ -237,12 +236,16 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This method is used to start the scan over the scan range. It should prepare the hardware to
         begin acquistion of data.
+
+        TODO: Consider renaming this to 'prepare_for_start'
         """
         pass
 
     def stop(self) -> None:
         """
         This method is used to stop the scan. It should stop the hardware from acquiring data.
+
+        TODO: Consider renaming this to 'stop_and_cleanup'
         """
         pass
 
