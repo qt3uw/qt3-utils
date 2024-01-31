@@ -16,10 +16,15 @@ import yaml
 
 import qt3utils.nidaq
 import qt3utils.pulsers.pulseblaster
-from qt3utils.applications.qt3scan.interface import QT3ScanDAQControllerInterface
-from qt3utils.applications.qt3scan.interface import QT3ScanPositionControllerInterface
-from qt3utils.applications.qt3scan.interface import QT3ScanApplicationControllerInterface
-from qt3utils.applications.qt3scan.controller import QT3ScanConfocalApplicationController
+from qt3utils.applications.qt3scan.interface import (
+    QT3ScanDAQControllerInterface,
+    QT3ScanPositionControllerInterface,
+    QT3ScanApplicationControllerInterface,
+)
+from qt3utils.applications.qt3scan.controller import (
+    QT3ScanConfocalApplicationController,
+    QT3ScanHyperSpectralApplicationController
+)
 
 matplotlib.use('Agg')
 
@@ -51,7 +56,7 @@ STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml
                          RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
                                                        'application_controller_class': QT3ScanConfocalApplicationController},
                         PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectrometer.yaml',
-                           'application_controller_class': QT3ScanConfocalApplicationController}
+                           'application_controller_class': QT3ScanHyperSpectralApplicationController}
                          }
 
 # Hyper Spectral Imaging would add the following to STANDARD_CONTROLLERS
@@ -666,6 +671,9 @@ class MainTkApplication():
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
+
+        except NotImplementedError as e:
+            logger.info(e)
 
         finally:
             self.view.sidepanel.startButton.config(state=tk.NORMAL)

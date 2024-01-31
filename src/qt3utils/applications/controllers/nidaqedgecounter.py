@@ -137,6 +137,9 @@ class QT3ScopeNIDAQEdgeCounterController:
 
 
 class QT3ScanNIDAQEdgeCounterController(QT3ScopeNIDAQEdgeCounterController):
+    """
+    Implements the qt3utils.applications.qt3scan.interface.QT3ScanCounterDAQControllerInterface for a NIDAQ edge counter.
+    """
 
     def __init__(self, logger_level):
         super().__init__(logger_level)

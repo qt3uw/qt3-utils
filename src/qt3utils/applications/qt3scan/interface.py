@@ -87,9 +87,28 @@ class QT3ScanDAQControllerInterface(Protocol):
         """
         pass
 
+    def configure(self, config_dict: dict) -> None:
+        """
+        This method is used to configure the controller.
+        """
+        pass
+
+    def configure_view(self, gui_root: Tk.Toplevel) -> None:
+        """
+        This method launches a GUI window to configure the controller.
+        """
+        pass
+
+@runtime_checkable
+class QT3ScanCounterDAQControllerInterface(QT3ScanDAQControllerInterface, Protocol):
+    """
+    Extends the base DAQ Controller interface to require two functions
+    to return single measured counts and count rates.
+    """
+
     def sample_counts(self, num_batches: int) -> np.ndarray:
         """
-        Implementations should return a new data set on each call to this method. 
+        Implementations should return a new data set on each call to this method.
 
         Implementations should return a numpy array of shape (1,2)
 
@@ -113,18 +132,19 @@ class QT3ScanDAQControllerInterface(Protocol):
         pass
 
 
-    def configure(self, config_dict: dict) -> None:
+@runtime_checkable
+class QT3ScanSpectrometerDAQControllerInterface(QT3ScanDAQControllerInterface, Protocol):
+    """
+    Extends the base DAQ Controller interface to require a functions to return a measured spectrum.
+    """
+
+    def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
         """
-        This method is used to configure the controller.
+        Returns a list of two numpy arrays. The first array contains
+        the photon counts for each wavelength bin in the spectrum.
+        The second array contains the list of wavelength bin center values.
         """
         pass
-
-    def configure_view(self, gui_root: Tk.Toplevel) -> None:
-        """
-        This method launches a GUI window to configure the controller.
-        """
-        pass
-
 
 @runtime_checkable
 class QT3ScanApplicationControllerInterface(Protocol):
@@ -152,6 +172,9 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This property should return a 2D numpy array of the count rate at each position in the scan.
         The shape of the array should be (num_y_positions, num_x_positions)
+
+        It can also return a list or array-like object of length zero (len(scanned_count_tate) == 0)
+        to indicate no data.
         """
         pass
 
@@ -160,6 +183,9 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This property should return a 2D numpy array of the total number of counts at each position in the scan.
         The shape of the array should be (num_y_positions, num_x_positions)
+
+        It can also return a list or array-like object of length zero (len(scanned_count_tate) == 0)
+        to indicate no data.
         """
         pass
 
@@ -210,12 +236,16 @@ class QT3ScanApplicationControllerInterface(Protocol):
         """
         This method is used to start the scan over the scan range. It should prepare the hardware to
         begin acquistion of data.
+
+        TODO: Consider renaming this to 'prepare_for_start'
         """
         pass
 
     def stop(self) -> None:
         """
         This method is used to stop the scan. It should stop the hardware from acquiring data.
+
+        TODO: Consider renaming this to 'stop_and_cleanup'
         """
         pass
 
