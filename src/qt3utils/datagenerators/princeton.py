@@ -149,8 +149,6 @@ class Spectrometer():
         self._experiment_name = experiment_name
         self.light = LightfieldApp(True)
 
-    # TODO: Need to implement a setting that automatically deletes all saved scans on PC when you close Lightfield.
-
     def finalize(self):
         """
         Closes the Lightfield application without saving the settings.
@@ -179,7 +177,7 @@ class Spectrometer():
         """
         Sets the spectrometer center wavelength to nanometers.
         """
-        # this avoids bug where if step and glue is selected, doesn't allow setting center wavelength
+        #NOTE: The line below addresses bug where if step and glue is selected, doesn't allow setting center wavelength
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         return self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
 
@@ -221,7 +219,7 @@ class Spectrometer():
         """
         Returns a list of all installed gratings.
         """
-        #This line below is important. "GetCurrentCapabilities" is able to return the list of possibilities of any Lightfield call in order to provide more information.
+        #NOTE: This line below is important. "GetCurrentCapabilities" is able to return the list of possibilities of any Lightfield call in order to provide more information.
         available_gratings = self.light.experiment.GetCurrentCapabilities(lf.AddIns.SpectrometerSettings.GratingSelected)
         return [str(a) for a in available_gratings]
 
