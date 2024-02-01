@@ -25,35 +25,31 @@ class QT3ScanPrincetonSpectrometerController:
     @property
     def clock_rate(self) -> float:
         try:
-            _t = self.spectrometer.exposure_time / 1000.0  # converts from milliseconds to seconds.
+            _t = self.spectrometer.exposure_time / 1000.0  # Converting from milliseconds to seconds.
         except Exception as e:
             self.logger.error(e)
             _t = 2  # TODO: better default behavior. Should this be -1? 1? or should Spectrometer be changed.
-
         return 1.0 / _t
 
     def start(self) -> None:
-        # this function should take data for the current settings of the spectromter.
-        # All data acquistion should occur here.
+        """
+        Nothing to be done in this method. All acquisition is happening in the "sample_spectrum" method.
+        """
         self.logger.debug('calling QT3ScanPrincetonSpectrometerController start')
-        # nothing to be done
 
     def stop(self) -> None:
         """
         Implementations should do necessary steps to stop acquiring data.
         """
-        # if there is a way to interrupt data acquistion, do that here. Otherwise, do nothing
+        #TODO: Need to implement a feature to pause scan here. If there is a way to interrupt data acquistion, do that here. Otherwise, do nothing
         self.logger.debug('calling QT3ScanPrincetonSpectrometerController stop')
 
     def close(self) -> None:
         self.spectrometer.finalize()
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
-        self.last_measured_spectrum, self.last_wavelength_array = (
-            self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end])
-        )
-        self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]}'
-                          'to {self.last_wavelength_array[-1]} nm')
+        self.last_measured_spectrum, self.last_wavelength_array = (self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end]))
+        self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
         return self.last_measured_spectrum, self.last_wavelength_array
 
         self.wave_start = None
@@ -104,8 +100,6 @@ class QT3ScanPrincetonSpectrometerController:
         self.spectrometer.temperature_sensor_setpoint = float(config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint))
         self.spectrometer.num_frames = float(config_dict.get('num_frames', self.spectrometer.num_frames))
         self.spectrometer.grating = config_dict.get('grating', self.spectrometer.grating)
-
-        #NOTE: These are meant to be passed as parameters into the "acquire_step_and_glue" function. Not sure if I should have them here.
         self.wave_start = float(config_dict.get('wave_start', self.wave_start))
         self.wave_end = float(config_dict.get('wave_end', self.wave_end))
 
@@ -117,7 +111,6 @@ class QT3ScanPrincetonSpectrometerController:
         config_win.grab_set()
         config_win.title('Princeton Spectrometer Settings')
 
-        # TODO: change all of the StringVar to DoubleVar and remove casting above
         row = 0
         tk.Label(config_win, text="Experiment Name)").grid(row=row, column=0, padx=10)
         experiment_name_var = tk.StringVar(value=str(self.spectrometer.experiment_name))
@@ -178,4 +171,4 @@ class QT3ScanPrincetonSpectrometerController:
 
     def print_config(self) -> None:
         print("Princeton Spectrometer config")
-        print(self.last_config_dict)  # we dont' use the logger because we want to be sure this is printed to stdout
+        print(self.last_config_dict)  #NOTE: We dont' use the logger because we want to be sure this is printed to stdout

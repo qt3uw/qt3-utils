@@ -155,7 +155,7 @@ class QT3ScanRandomSpectrometerDataController:
     class RandomSpectometer:
         def __init__(self):
             self.exposure_time = 500 # milliseconds
-            self.experiment_name = "Experiment3"
+            self.experiment_name = "LF_Control"
             self.num_wavelength_bins = 250
             self.wave_start = 600
             self.wave_end = 850
@@ -171,18 +171,17 @@ class QT3ScanRandomSpectrometerDataController:
     @property
     def clock_rate(self) -> float:
         try:
-            _t = self.spectrometer.exposure_time / 1000.0  # converts from milliseconds to seconds.
+            _t = self.spectrometer.exposure_time / 1000.0  #Convert from milliseconds to seconds.
         except Exception as e:
             self.logger.error(e)
-            _t = 2  # TODO: better default behavior. Should this be -1? 1? or should Spectrometer be changed.
-
+            _t = 2  #TODO: better default behavior. Should this be -1? 1? or should Spectrometer be changed.
         return 1.0 / _t
 
     def start(self) -> None:
-        # this function should take data for the current settings of the spectromter.
-        # All data acquistion should occur here.
+        """
+        Nothing to be done in this method. All acquisition is happening in the "sample_spectrum" method.
+        """
         self.logger.debug('calling QT3ScanRandomSpectrometerDataController start')
-        # nothing to be done
 
     def stop(self) -> None:
         """
@@ -215,20 +214,17 @@ class QT3ScanRandomSpectrometerDataController:
         self.spectrometer.temperature_sensor_setpoint = config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint)
         self.spectrometer.num_frames = config_dict.get('num_frames', self.spectrometer.num_frames)
         self.spectrometer.num_wavelength_bins = config_dict.get('num_wavelength_bins', self.spectrometer.num_wavelength_bins)
-
-        self.spectrometer.wave_start = config_dict.get('wave_start', self.spectrometer.wave_start)
-        self.spectrometer.wave_end = config_dict.get('wave_end', self.spectrometer.wave_end)
+        self.wave_start = config_dict.get('wave_start', self.wave_start)
+        self.wave_end = config_dict.get('wave_end', self.wave_end)
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """
         This method launches a GUI window to configure the data controller.
         """
-
         config_win = tk.Toplevel(gui_root)
         config_win.grab_set()
         config_win.title('Princeton Spectrometer Settings')
 
-        # TODO: change all of the StringVar to DoubleVar and remove casting above
         row = 0
         tk.Label(config_win, text="Experiment Name)").grid(row=row, column=0, padx=10)
         experiment_name_var = tk.StringVar(value=str(self.spectrometer.experiment_name))
@@ -264,7 +260,6 @@ class QT3ScanRandomSpectrometerDataController:
         wave_end_var = tk.IntVar(value=str(self.spectrometer.wave_end))
         tk.Entry(config_win, textvariable=wave_end_var).grid(row=row, column=1)
 
-        # Pack variables into a dictionary to pass to the _set_from_gui method
         gui_info = {
             'experiment_name': experiment_name_var,
             'exposure_time': exposure_time_var,
@@ -289,8 +284,7 @@ class QT3ScanRandomSpectrometerDataController:
 
     def print_config(self) -> None:
         print("Princeton Spectrometer config")
-        print(self.last_config_dict)  # we dont' use the logger because we want to be sure this is printed to stdout
-
+        print(self.last_config_dict)  #NOTE: We dont' use the logger because we want to be sure this is printed to stdout
 
 class QT3ScanDummyPositionController:
     """

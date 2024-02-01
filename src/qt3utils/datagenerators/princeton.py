@@ -149,8 +149,6 @@ class Spectrometer():
         self._experiment_name = experiment_name
         self.light = LightfieldApp(True)
 
-    # TODO: Need to implement a setting that automatically deletes all saved scans on PC when you close Lightfield.
-
     def finalize(self):
         """
         Closes the Lightfield application without saving the settings.

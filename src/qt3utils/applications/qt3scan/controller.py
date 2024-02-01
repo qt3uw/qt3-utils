@@ -439,6 +439,13 @@ class QT3ScanHyperSpectralApplicationController:
         self._xmin = xmin
         self._xmax = xmax
 
+    def get_completed_scan_range(self) -> Tuple[float, float, float, float]:
+        """
+        Returns a tuple of the scan range that has been completed
+        :return: _xmin, _xmax, _ymin, current_y
+        """
+        return self._xmin, self._xmax, self._ymin, self.current_y
+    
     def save_scan(self, afile_name) -> None:
         file_type = afile_name.split('.')[-1]
 
