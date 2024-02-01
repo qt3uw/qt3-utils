@@ -214,8 +214,8 @@ class QT3ScanRandomSpectrometerDataController:
         self.spectrometer.temperature_sensor_setpoint = config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint)
         self.spectrometer.num_frames = config_dict.get('num_frames', self.spectrometer.num_frames)
         self.spectrometer.num_wavelength_bins = config_dict.get('num_wavelength_bins', self.spectrometer.num_wavelength_bins)
-        self.wave_start = config_dict.get('wave_start', self.wave_start)
-        self.wave_end = config_dict.get('wave_end', self.wave_end)
+        self.spectrometer.wave_start = config_dict.get('wave_start', self.spectrometer.wave_start)
+        self.spectrometer.wave_end = config_dict.get('wave_end', self.spectrometer.wave_end)
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """
