@@ -521,6 +521,7 @@ class QT3ScanHyperSpectralApplicationController:
         random_spectrum = self.hyper_spectral_raw_data[random_y, random_x, :]
 
         ax.plot(self.hyper_spectral_wavelengths, random_spectrum, label='data')
+        ax.grid(True)
 
         canvas = FigureCanvasTkAgg(fig, master=win)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
