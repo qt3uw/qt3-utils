@@ -333,7 +333,7 @@ class QT3ScanApplicationControllerInterface(Protocol):
         '''
         pass
 
-    def scan_image_rightclick_event(self, event: MouseEvent) -> None:
+    def scan_image_rightclick_event(self, event: MouseEvent, index_x: int, index_y: int) -> None:
         """
         This method is called when the user right clicks on the scan image.
         """
