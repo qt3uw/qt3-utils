@@ -155,7 +155,7 @@ class QT3ScanRandomSpectrometerDataController:
     class RandomSpectometer:
         def __init__(self):
             self.exposure_time = 500 # milliseconds
-            self.experiment_name = "LF_Control"
+            self.experiment_name = ""
             self.num_wavelength_bins = 250
             self.wave_start = 600
             self.wave_end = 850
@@ -163,9 +163,22 @@ class QT3ScanRandomSpectrometerDataController:
             self.center_wavelength = 700  # nm
             self.temperature_sensor_setpoint = -70  # grad
 
+            self.nv_probability = 0.01
+            self.background_counts = int(1e5)
+            self.nv_brightness = int(1e6)
+
         def acquire_step_and_glue(self) -> Tuple[np.ndarray, np.ndarray]:
             wavelengths = np.linspace(self.wave_start, self.wave_end, self.num_wavelength_bins)
-            spectrum = np.random.random(self.num_wavelength_bins)
+            if np.random.random() > self.nv_probability:
+                spectrum = self.background_counts * np.random.random(self.num_wavelength_bins) / self.num_wavelength_bins
+            else:
+                redux = 10
+                num_samples = int(self.nv_brightness / redux) # a little hack to make the sampling faster
+                sample_sideband = np.random.normal(690, 40, size=99 * num_samples // 100)
+                hist_sideband, _ = np.histogram(sample_sideband, bins=range(self.wave_start, self.wave_end + 1))
+                zpl_sample = np.random.normal(637, 2, size=1 * num_samples // 100)
+                zpl, _ = np.histogram(zpl_sample, bins=range(self.wave_start, self.wave_end + 1))
+                spectrum = (zpl + hist_sideband) * redux
             return spectrum, wavelengths
 
     @property
@@ -216,6 +229,7 @@ class QT3ScanRandomSpectrometerDataController:
         self.spectrometer.num_wavelength_bins = config_dict.get('num_wavelength_bins', self.spectrometer.num_wavelength_bins)
         self.spectrometer.wave_start = config_dict.get('wave_start', self.spectrometer.wave_start)
         self.spectrometer.wave_end = config_dict.get('wave_end', self.spectrometer.wave_end)
+        self.spectrometer.nv_probability = config_dict.get('nv_probability', self.spectrometer.nv_probability)
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """
@@ -260,6 +274,11 @@ class QT3ScanRandomSpectrometerDataController:
         wave_end_var = tk.IntVar(value=str(self.spectrometer.wave_end))
         tk.Entry(config_win, textvariable=wave_end_var).grid(row=row, column=1)
 
+        row += 1
+        tk.Label(config_win, text="NV Probability").grid(row=row, column=0, padx=10)
+        nv_probability_var = tk.DoubleVar(value=str(self.spectrometer.nv_probability))
+        tk.Entry(config_win, textvariable=nv_probability_var).grid(row=row, column=1)
+
         gui_info = {
             'experiment_name': experiment_name_var,
             'exposure_time': exposure_time_var,
@@ -267,7 +286,8 @@ class QT3ScanRandomSpectrometerDataController:
             'temperature_sensor_setpoint': temperature_sensor_setpoint_var,
             'num_wavelength_bins': num_wavelength_bins_var,
             'wave_start': wave_start_var,
-            'wave_end': wave_end_var
+            'wave_end': wave_end_var,
+            'nv_probability': nv_probability_var,
         }
 
         row += 1
