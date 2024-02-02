@@ -170,7 +170,7 @@ class QT3ScanConfocalApplicationController:
                 h5file.create_dataset(key, data=value)
             h5file.close()
 
-    def scan_image_rightclick_event(self, event: MouseEvent) -> None:
+    def scan_image_rightclick_event(self, event: MouseEvent, index_x: int, index_y: int) -> None:
         """
         This method is called when the user right clicks on the scan image.
         """
@@ -447,22 +447,14 @@ class QT3ScanHyperSpectralApplicationController:
         '''
         return '.npz'
 
-    def scan_image_rightclick_event(self, event: MouseEvent) -> None:
+    def scan_image_rightclick_event(self, event: MouseEvent, index_x: int, index_y: int) -> None:
         """
         This method is called when the user right clicks on the scan image.
         """
         self.logger.debug(f"Mouse Event {event}")
-        # we need to get the x,y position of the Mouse Event,
-        # and using the step_size of the position_controller,
-        # find the corresponding spectrum stored in self.hyper_spectral_raw_data array.
-        # then create a new window to display the spectrum.
-        # see qt3scan.main.show_optimization_plot function for how to build a
-        # new window with data
 
-        # NB this is tech debt here. We have GUI (view) code inside a controller
-        # A better solution would be to simply return the data to the caller (qt3scan.main)
-        # and make it responsible to build a GUI
-        # For the sake of expediency we leave this here
+        if event.xdata is None or event.ydata is None:
+            return
 
         win = tk.Toplevel()
         win.title(f'Spectrum for location (x,y): {event.xdata}, {event.ydata}')
@@ -470,16 +462,10 @@ class QT3ScanHyperSpectralApplicationController:
         ax.set_xlabel('Wavelength (nm)')
         ax.set_ylabel('Counts / bin')
 
-        # Y - number of rows in hyper spectral image
-        # X - number of columns
-        # M - size of spectra
-        Y, X, M = self.hyper_spectral_raw_data.shape
+        self.logger.debug(f'Selecting {index_y}, {index_x} from hyper spectral array of shape {self.hyper_spectral_raw_data.shape}')
+        selected_spectrum = self.hyper_spectral_raw_data[index_y, index_x, :]
 
-        random_y = np.random.randint(Y)
-        random_x = np.random.randint(X)
-        random_spectrum = self.hyper_spectral_raw_data[random_y, random_x, :]
-
-        ax.plot(self.hyper_spectral_wavelengths, random_spectrum, label='data')
+        ax.plot(self.hyper_spectral_wavelengths, selected_spectrum, label='data')
         ax.grid(True)
 
         canvas = FigureCanvasTkAgg(fig, master=win)

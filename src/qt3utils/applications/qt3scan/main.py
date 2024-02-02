@@ -83,6 +83,7 @@ class ScanImage:
         self.log_data = False
         self.pointer_line2d = None
         self.position_line2d = None
+        self.app_controller_step_size = 0
 
     def update(self, app_controller: QT3ScanApplicationControllerInterface) -> None:
 
@@ -95,12 +96,19 @@ class ScanImage:
         else:
             data = app_controller.scanned_count_rate
 
+        # we must retain these values for callback functions (feels a bit hacky)
+        self.app_controller_step_size = app_controller.step_size
+        self.xmin = app_controller.xmin
+        self.ymin = app_controller.ymin
+
+        # shift the extent so that position centers are directly aligned with data
+        # rather than aligned on bin edges
         self.artist = self.ax.imshow(data, origin='lower',
                                      cmap=self.cmap,
-                                     extent=[app_controller.xmin - app_controller.step_size/2.0,
-                                             app_controller.xmax - app_controller.step_size/2.0,
-                                             app_controller.ymin - app_controller.step_size/2.0,
-                                             app_controller.current_y - app_controller.step_size/2.0])
+                                     extent=[app_controller.xmin - app_controller.step_size / 2.0,
+                                             app_controller.xmax - app_controller.step_size / 2.0,
+                                             app_controller.ymin - app_controller.step_size / 2.0,
+                                             app_controller.current_y - app_controller.step_size / 2.0])
 
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
@@ -119,9 +127,27 @@ class ScanImage:
         self.position_line2d = None
 
     def set_onclick_callback(self, func: Callable) -> None:
+        """
+        The callback function should expect three arguments
+            * matplotlib.backend_bases.MouseEvent
+            * pixel_x
+            * pixel_y
+
+            where pixel_x and pixel_y correspond to the pixel
+            index of the data
+        """
         self.onclick_callback = func
 
     def set_rightclick_callback(self, func: Callable) -> None:
+        """
+        The callback function should expect three arguments
+            * matplotlib.backend_bases.MouseEvent
+            * pixel_x
+            * pixel_y
+
+            where pixel_x and pixel_y correspond to the pixel
+            index of the data
+        """
         self.rightclick_callback = func
 
     def update_pointer_indicator(self, x_position: float, y_position: float) -> None:
@@ -144,11 +170,19 @@ class ScanImage:
 
     def onclick(self, event: MouseEvent) -> None:
         logger.debug(f"Button {event.button} click at: ({event.xdata} microns, {event.ydata}) microns")
+
+        dist_x = event.xdata + self.app_controller_step_size / 2 - self.xmin  # we have to subtract step_size / 2 because the GUI shifts the view.
+        dist_y = event.ydata + self.app_controller_step_size / 2 - self.ymin
+        logger.debug(f'Selected position at distance from lower left (x, y): {dist_x, dist_y}')
+        index_x = int(dist_x / self.app_controller_step_size)
+        index_y = int(dist_y / self.app_controller_step_size)
+
         if event.button == 3:  # Right click
-            self.rightclick_callback(event)
+            if event.inaxes is self.ax:
+                self.rightclick_callback(event, index_x, index_y)
         elif event.button == 1:  # Left click
             if event.inaxes is self.ax:
-                self.onclick_callback(event)
+                self.onclick_callback(event, index_x, index_y)
                 self.update_pointer_indicator(event.xdata, event.ydata)
                 self.fig.canvas.draw()
 
@@ -285,7 +319,7 @@ class SidePanel():
         if z is not None:
             self.z_entry_text.set(np.round(z, 4))
 
-    def mpl_onclick_callback(self, mpl_event: MouseEvent) -> None:
+    def mpl_onclick_callback(self, mpl_event: MouseEvent, index_x: int, index_y: int) -> None:
         if mpl_event.xdata and mpl_event.ydata:
             self.update_go_to_position(mpl_event.xdata, mpl_event.ydata)
 
@@ -446,7 +480,7 @@ class MainTkApplication():
 
         logger.debug(f"asserting {config['class_name']} of proper type {a_protocol}")
         assert isinstance(controller, a_protocol)
-        
+
         # configure the controller
         # all controllers *should* have a configure method
         logger.debug(f"calling {a_protocol} configure method")
