@@ -145,7 +145,8 @@ class ScanImage:
     def onclick(self, event: MouseEvent) -> None:
         logger.debug(f"Button {event.button} click at: ({event.xdata} microns, {event.ydata}) microns")
         if event.button == 3:  # Right click
-            self.rightclick_callback(event)
+            if event.inaxes is self.ax:
+                self.rightclick_callback(event)
         elif event.button == 1:  # Left click
             if event.inaxes is self.ax:
                 self.onclick_callback(event)

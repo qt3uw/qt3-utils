@@ -445,7 +445,7 @@ class QT3ScanHyperSpectralApplicationController:
         :return: _xmin, _xmax, _ymin, current_y
         """
         return self._xmin, self._xmax, self._ymin, self.current_y
-    
+
     def save_scan(self, afile_name) -> None:
         file_type = afile_name.split('.')[-1]
 
@@ -509,22 +509,24 @@ class QT3ScanHyperSpectralApplicationController:
         # and make it responsible to build a GUI
         # For the sake of expediency we leave this here
 
+        if event.xdata is None or event.ydata is None:
+            return
+
         win = tk.Toplevel()
         win.title(f'Spectrum for location (x,y): {event.xdata}, {event.ydata}')
         fig, ax = plt.subplots()
         ax.set_xlabel('Wavelength (nm)')
         ax.set_ylabel('Counts / bin')
 
-        # Y - number of rows in hyper spectral image
-        # X - number of columns
-        # M - size of spectra
-        Y, X, M = self.hyper_spectral_raw_data.shape
+        dist_x = event.xdata + self.step_size/2 - self.xmin  # we have to subtract step_size / 2 because the GUI shifts the view. This isn't good. We should fix this in the GUI
+        dist_y = event.ydata + self.step_size/2 - self.ymin
+        self.logger.debug(f'Selected position at distance from lower left (x, y): {dist_x, dist_y}')
+        index_x = int(dist_x / self.step_size)
+        index_y = int(dist_y / self.step_size)
+        self.logger.debug(f'Selecting {index_y}, {index_x} from hyper spectral array of shape {self.hyper_spectral_raw_data.shape}')
+        selected_spectrum = self.hyper_spectral_raw_data[index_y, index_x, :]
 
-        random_y = np.random.randint(Y)
-        random_x = np.random.randint(X)
-        random_spectrum = self.hyper_spectral_raw_data[random_y, random_x, :]
-
-        ax.plot(self.hyper_spectral_wavelengths, random_spectrum, label='data')
+        ax.plot(self.hyper_spectral_wavelengths, selected_spectrum, label='data')
         ax.grid(True)
 
         canvas = FigureCanvasTkAgg(fig, master=win)
