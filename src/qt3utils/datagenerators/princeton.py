@@ -26,6 +26,7 @@ try:
     from System import String
     from System.IO import FileAccess
 except Exception as e:
+    logger.error(f"Exception occurred during import: {type(e)}")
     logger.error(f"Exception occurred during import: {e}")
 
 
