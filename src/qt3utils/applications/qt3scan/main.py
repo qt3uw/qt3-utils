@@ -445,10 +445,8 @@ class MainTkApplication():
         controller = cls(logger.level)
 
         logger.debug(f"asserting {config['class_name']} of proper type {a_protocol}")
-        if isinstance(controller, a_protocol) is False:
-            logger.warning(f"\n\n{config['class_name']} does not pass isinstance check of {a_protocol}!")
-            logger.warning(f"Proceed with caution. It's likely that qt3scan will fail when trying to call methods of {a_protocol}\n")
-
+        assert isinstance(controller, a_protocol)
+        
         # configure the controller
         # all controllers *should* have a configure method
         logger.debug(f"calling {a_protocol} configure method")
