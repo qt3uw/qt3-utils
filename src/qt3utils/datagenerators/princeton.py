@@ -26,9 +26,10 @@ try:
     from System.Collections.Generic import List
     from System import String
     from System.IO import FileAccess
-except Exception as e:
-    logger.error(f"Exception occurred during import: {type(e)}")
-    logger.error(f"Exception occurred during import: {e}")
+except KeyError as e:
+    logger.error(f"KeyError {e} during import")
+except ImportError as e:
+    logger.error(f"Unable to import packages: {e}")
 
 
 class LightfieldApp:
@@ -110,30 +111,30 @@ class LightfieldApp:
         acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) #to allow the camera to capture the desired amount of data during the specified exposure time.
         num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
         self.experiment.Acquire()
-
+        
         sleep(0.001 * acquisition_time * num_frames)  #sleep delay that waits for the exposure duration of the camera
 
         while self.experiment.IsRunning:
             sleep(0.1)  #loop that repeatedly checks whether the experiment is still running so it decided when to move to next block of code
 
         last_file = self.application.FileManager.GetRecentlyAcquiredFileNames().get_Item(0)
-        frame_count = self.application.FileManager.OpenFile(last_file, FileAccess.Read)
+        curr_image = self.application.FileManager.OpenFile(last_file, FileAccess.Read)
 
-        if frame_count.Regions.Length == 1:
-            if frame_count.Frames == 1:
-                frame = frame_count.GetFrame(0, 0)
+        if curr_image.Regions.Length == 1:
+            if curr_image.Frames == 1:
+                frame = curr_image.GetFrame(0, 0)
                 data = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height], order='F')
             else:
                 data = np.array([])
-                for i in range(0, frame_count.Frames):
-                    frame = frame_count.GetFrame(0, i)
+                for i in range(0, curr_image.Frames):
+                    frame = curr_image.GetFrame(0, i)
                     new_frame = np.fromiter(frame.GetData(), 'uint16')
                     new_frame = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height],order='F')
                     data = np.dstack((data, new_frame)) if data.size else new_frame
             return data
         else:
-            logger.warning('frame_count.Regions is not valid. Please retry.')
-            logger.info('Frame count: %s', frame_count.Frames)
+            logger.warning('curr_image.Regions is not valid. Please retry.')
+            logger.info('Frame count: %s', curr_image.Frames)
         return np.array([[]])  # Return an empty 2D numpy array by default
 
     def close(self):
