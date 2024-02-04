@@ -218,15 +218,7 @@ class QT3ScanHyperSpectralApplicationController:
      For HyperSpectral imaging, the daq_controller object will be a spectrometer that
      acquires a spectrum at each position in the scan.
 
-     Note that the DAQ controller here must implement QT3ScanCounterDAQControllerInterface
-
-
-     The following methods are required for a daq_controller object that
-     are not currently in the QT3ScanDAQControllerInterface.
-     We should find a way to declare these methods for any spectrometer
-     that is used for hyperspectral imaging. This could be another interface,
-     or perhaps using the concept of Python MixIns. To be discussed....
-
+     Note that the DAQ controller here must implement QT3ScanSpectrometerDAQControllerInterface
     """
     def __init__(self,
                  position_controller: QT3ScanPositionControllerInterface,
@@ -390,9 +382,7 @@ class QT3ScanHyperSpectralApplicationController:
         time.sleep(self.raster_line_pause)
         for val in np.arange(min, max, step_size):
             self.position_controller.go_to_position(**{axis: val})
-
             measured_spectrum, measured_wavelengths = self.daq_controller.sample_spectrum()
-            spectrums_in_scan.append(measured_spectrum)
 
             if initial_spectrum_size is None:
                 initial_spectrum_size = len(measured_spectrum)
@@ -407,6 +397,8 @@ class QT3ScanHyperSpectralApplicationController:
                 raise QT3Error("Inconsistent wavelength array and spectrum size obtained during scan! Check your hardware.")
             if np.array_equal(wavelength_array, measured_wavelengths) is False:
                 raise QT3Error("Inconsistent wavelength array obtained during scan! Check your hardware.")
+            
+            spectrums_in_scan.append(measured_spectrum)
 
         return np.array(spectrums_in_scan), wavelength_array
 
@@ -442,9 +434,9 @@ class QT3ScanHyperSpectralApplicationController:
     def get_completed_scan_range(self) -> Tuple[float, float, float, float]:
         """
         Returns a tuple of the scan range that has been completed
-        :return: _xmin, _xmax, _ymin, current_y
+        :return: xmin, xmax, ymin, current_y
         """
-        return self._xmin, self._xmax, self._ymin, self.current_y
+        return self.xmin, self.xmax, self.ymin, self.current_y
     
     def save_scan(self, afile_name) -> None:
         file_type = afile_name.split('.')[-1]

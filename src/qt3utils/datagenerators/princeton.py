@@ -2,6 +2,7 @@ import os
 import logging
 import numpy as np
 from time import sleep
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -9,14 +10,14 @@ logger = logging.getLogger(__name__)
 try:
     import clr
 
-    lf_root = os.environ['LIGHTFIELD_ROOT']
-    automation_path = lf_root + '\PrincetonInstruments.LightField.AutomationV4.dll'
-    addin_path = lf_root + '\AddInViews\PrincetonInstruments.LightFieldViewV4.dll'
-    support_path = lf_root + '\PrincetonInstruments.LightFieldAddInSupportServices.dll'
+    lf_root = Path(os.environ['LIGHTFIELD_ROOT'])
+    automation_path = lf_root / 'PrincetonInstruments.LightField.AutomationV4.dll'
+    addin_path = lf_root / 'AddInViews' / 'PrincetonInstruments.LightFieldViewV4.dll'
+    support_path = lf_root / 'PrincetonInstruments.LightFieldAddInSupportServices.dll'
 
-    addin_class = clr.AddReference(addin_path)
-    automation_class = clr.AddReference(automation_path)
-    support_class = clr.AddReference(support_path)
+    addin_class = clr.AddReference(str(addin_path))
+    automation_class = clr.AddReference(str(automation_path))
+    support_class = clr.AddReference(str(support_path))
 
     import PrincetonInstruments.LightField as lf
 
@@ -32,7 +33,6 @@ except Exception as e:
 
 class LightfieldApp:
     def __init__(self, visible):
-
         self._addinbase = lf.AddIns.AddInBase()
         self._automation = lf.Automation.Automation(visible, List[String]())
         self._application = self._automation.LightFieldApplication
@@ -108,7 +108,7 @@ class LightfieldApp:
         """
 
         acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) #to allow the camera to capture the desired amount of data during the specified exposure time.
-        num_frames = self.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore)
+        num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
         self.experiment.Acquire()
 
         sleep(0.001 * acquisition_time * num_frames)  #sleep delay that waits for the exposure duration of the camera
@@ -229,14 +229,14 @@ class Spectrometer():
         """
         Returns the number of frames taken during the acquisition.
         """
-        return self.light.get(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore)
+        return self.light.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
 
     @num_frames.setter
     def num_frames(self, num_frames):
         """
         Sets the number of frames to be taken during acquisition to number.
         """
-        return self.light.set(lf.AddIns.ExperimentSettings.FrameSettingsFramesToStore, num_frames)
+        return self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, num_frames)
 
     @property
     def exposure_time(self):
