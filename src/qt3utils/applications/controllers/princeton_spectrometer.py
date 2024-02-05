@@ -69,10 +69,6 @@ class QT3ScanPrincetonSpectrometerController:
             self.spectrometer.grating = str(config_dict.get('grating', self.spectrometer.grating))
             self.wave_start = float(config_dict.get('wave_start', self.wave_start))
             self.wave_end = float(config_dict.get('wave_end', self.wave_end))
-            
-            if self.wave_end - self.wave_start  < self.MIN_WAVELENGTH_DIFFERENCE:
-                raise ValueError(f"End wavelength must be atleast {self.MIN_WAVELENGTH_DIFFERENCE} units greater than the start wavelength.") 
-
         except Exception as e:
             self.logger.error({str(e)})
 
