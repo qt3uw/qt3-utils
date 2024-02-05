@@ -164,6 +164,7 @@ class Spectrometer():
     def __init__(self, experiment_name=None):
         self._experiment_name = experiment_name
         self.light = LightfieldApp(True)
+        self.MIN_WAVELENGTH_DIFFERENCE = 117
 
     def finalize(self):
         """
@@ -324,6 +325,9 @@ class Spectrometer():
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)
+        
+        if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
+            raise ValueError(f"End wavelength must be atleast {self.MIN_WAVELENGTH_DIFFERENCE} units greater than the start wavelength.") 
 
         data = self.light.acquire()
         spectrum = np.mean(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
