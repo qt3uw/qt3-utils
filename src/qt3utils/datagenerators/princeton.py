@@ -94,6 +94,20 @@ class LightfieldApp:
     def load_experiment(self, value):
         self.experiment.Load(value)
 
+    #TODO: Need to actually implement the three methods below so that you can:
+    #      - save a new experiment
+    #      - save what you are currently working on
+    #      - stop the scan 
+        
+    def save_current_experiment(self):
+        self.experiment.Save()
+    
+    def save_new_experient(self, value):
+        self.experiment.SaveAs(value)
+
+    def stop_scan(self):
+        self.experiment.Stop()
+
     def acquire(self):
         """
         This function retrieves image data with special consideration for the unique configuration of the camera,
@@ -157,13 +171,6 @@ class Spectrometer():
         """
         self.light.close()
 
-    @property
-    def center_wavelength(self):
-        """
-        Returns the center wavelength in nanometers.
-        """
-        return self.light.get(lf.AddIns.SpectrometerSettings.GratingCenterWavelength)
-
     def get_wavelengths(self):
         """
         Returns the wavelength calibration for a single frame.
@@ -174,6 +181,13 @@ class Spectrometer():
             result[i] = self.light.experiment.SystemColumnCalibration[i]
         return result
 
+    @property
+    def center_wavelength(self):
+        """
+        Returns the center wavelength in nanometers.
+        """
+        return self.light.get(lf.AddIns.SpectrometerSettings.GratingCenterWavelength)
+
     @center_wavelength.setter
     def center_wavelength(self, nanometers):
         """
@@ -181,7 +195,7 @@ class Spectrometer():
         """
         #NOTE: The line below addresses bug where if step and glue is selected, doesn't allow setting center wavelength
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-        return self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
+        self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
 
     @property
     def experiment_name(self):
@@ -196,8 +210,11 @@ class Spectrometer():
         User can set the experiment that they want to load.
         """
         if a_name != self._experiment_name:
-            self._experiment_name = a_name
-            self.light.load_experiment(self._experiment_name)
+            if a_name in self.light.experiment.GetSavedExperiments():   #Added this to check prevent errors with incorrect file name
+                self._experiment_name = a_name
+                self.light.load_experiment(self._experiment_name)
+            else:
+                logger.error(f"An experiment with that file name does not exist.")
 
     @property
     def grating(self):
@@ -237,7 +254,7 @@ class Spectrometer():
         """
         Sets the number of frames to be taken during acquisition to number.
         """
-        return self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, num_frames)
+        self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, num_frames)
 
     @property
     def exposure_time(self):
@@ -251,19 +268,19 @@ class Spectrometer():
         """
         Sets the single frame exposure time to be ms (in ms).
         """
-        return self.light.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, ms)
+        self.light.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, ms)
 
     @property
     def sensor_temperature(self):
         """
-        Returns the current sensor temperature (in celcius).
+        Returns the current sensor temperature (in Celsius).
         """
-        return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureReading)
+        self.light.get(lf.AddIns.CameraSettings.SensorTemperatureReading)
 
     @property
     def temperature_sensor_setpoint(self):
         """
-        Returns the sensor setpoint temperature (celcius).
+        Returns the sensor setpoint temperature (Celsius).
         """
         return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureSetPoint)
 
@@ -275,7 +292,7 @@ class Spectrometer():
         The `temperature_sensor_setpoint` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
         Depending on the setpoint, the behavior or response of the camera sensor might vary.
         """
-        return self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
+        self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
 
     def acquire_frame(self):
         """
@@ -283,7 +300,7 @@ class Spectrometer():
         corresponding wavelength data.
         """
         return self.light.acquire(), self.get_wavelengths()
-
+    
     def acquire_step_and_glue(self, wavelength_range):
         """
         Acquires a step and glue (wavelength sweep) over the specified range.
@@ -310,6 +327,6 @@ class Spectrometer():
 
         data = self.light.acquire()
         spectrum = np.mean(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
-        wavelength = np.linspace(lambda_min, lambda_max, data.shape[0])
-        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
+        wavelength = np.linspace(self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength), self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength), data.shape[0])
         return spectrum, wavelength
+    

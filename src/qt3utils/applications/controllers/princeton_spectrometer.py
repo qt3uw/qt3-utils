@@ -21,6 +21,7 @@ class QT3ScanPrincetonSpectrometerController:
         self.wave_end = None
         self.last_measured_spectrum = None
         self.last_wavelength_array = None
+        self.MIN_WAVELENGTH_DIFFERENCE = 117
 
     @property
     def clock_rate(self) -> float:
@@ -94,14 +95,21 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger.debug("Calling configure on the Princeton Spectrometer data controller")
         self.last_config_dict.update(config_dict)
 
-        #NOTE: If you dont type cast these then you will get serialization errors
-        self.spectrometer.experiment_name = str(config_dict.get('experiment_name', self.spectrometer.experiment_name))
-        self.spectrometer.exposure_time = float(config_dict.get('exposure_time', self.spectrometer.exposure_time))
-        self.spectrometer.center_wavelength = float(config_dict.get('center_wavelength', self.spectrometer.center_wavelength))
-        self.spectrometer.temperature_sensor_setpoint = float(config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint))
-        self.spectrometer.grating = str(config_dict.get('grating', self.spectrometer.grating))
-        self.wave_start = float(config_dict.get('wave_start', self.wave_start))
-        self.wave_end = float(config_dict.get('wave_end', self.wave_end))
+        try:
+            #NOTE: If you dont type cast these then you will get serialization errors
+            self.spectrometer.experiment_name = str(config_dict.get('experiment_name', self.spectrometer.experiment_name))
+            self.spectrometer.exposure_time = float(config_dict.get('exposure_time', self.spectrometer.exposure_time))
+            self.spectrometer.center_wavelength = float(config_dict.get('center_wavelength', self.spectrometer.center_wavelength))
+            self.spectrometer.temperature_sensor_setpoint = float(config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint))
+            self.spectrometer.grating = str(config_dict.get('grating', self.spectrometer.grating))
+            self.wave_start = float(config_dict.get('wave_start', self.wave_start))
+            self.wave_end = float(config_dict.get('wave_end', self.wave_end))
+            
+            if self.wave_end - self.wave_start  < self.MIN_WAVELENGTH_DIFFERENCE:
+                raise ValueError(f"End wavelength must be atleast {self.MIN_WAVELENGTH_DIFFERENCE} units greater than the start wavelength.") 
+
+        except Exception as e:
+            self.logger.error({str(e)})
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """
