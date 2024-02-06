@@ -135,15 +135,16 @@ class LightfieldApp:
         curr_image = self.application.FileManager.OpenFile(last_file, FileAccess.Read)
 
         if curr_image.Regions.Length == 1:
+            #Single Frame
             if curr_image.Frames == 1:
                 frame = curr_image.GetFrame(0, 0)
-                data = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height], order='F')
+                data = np.reshape(np.fromiter(frame.GetData(), dtype='uint16'), [frame.Width, frame.Height],order='F')
+            #Multiple Frames
             else:
                 data = np.array([])
                 for i in range(0, curr_image.Frames):
                     frame = curr_image.GetFrame(0, i)
-                    new_frame = np.fromiter(frame.GetData(), 'uint16')
-                    new_frame = np.reshape(np.fromiter(frame.GetData(), 'uint16'), [frame.Width, frame.Height],order='F')
+                    new_frame = np.reshape(np.fromiter(frame.GetData(), dtype='uint16'), [frame.Width, frame.Height],order='F')
                     data = np.dstack((data, new_frame)) if data.size else new_frame
             return data
         else:
@@ -161,10 +162,11 @@ class LightfieldApp:
 
 class Spectrometer():
 
+    MIN_WAVELENGTH_DIFFERENCE = 117
+
     def __init__(self, experiment_name=None):
         self._experiment_name = experiment_name
         self.light = LightfieldApp(True)
-        self.MIN_WAVELENGTH_DIFFERENCE = 117
 
     def finalize(self):
         """
@@ -194,7 +196,7 @@ class Spectrometer():
         """
         Sets the spectrometer center wavelength to nanometers.
         """
-        #NOTE: The line below addresses bug where if step and glue is selected, doesn't allow setting center wavelength
+        #NOTE: The line below addresses bug where if step and glue is enabled it wont allow you to set the center wavelength.
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
 
@@ -320,7 +322,7 @@ class Spectrometer():
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, True)
         except Exception as e:
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-            print(f'Unable to perform step and glue due to error: {e}')
+            logger.error(f'Unable to perform step and glue due to error: {e}')
             return
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
