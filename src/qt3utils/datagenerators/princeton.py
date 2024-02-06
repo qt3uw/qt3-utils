@@ -32,7 +32,7 @@ except ImportError as e:
     logger.error(f"Unable to import packages: {e}")
 
 
-class LightfieldApp:
+class LightfieldApplicationManager:
     def __init__(self, visible):
         self._addinbase = lf.AddIns.AddInBase()
         self._automation = lf.Automation.Automation(visible, List[String]())
@@ -159,14 +159,13 @@ class LightfieldApp:
         self.automation.Dispose()
         logger.info('Closed AddInProcess.exe')
 
-
-class Spectrometer():
+class SpectrometerConfig():
 
     MIN_WAVELENGTH_DIFFERENCE = 117
 
     def __init__(self, experiment_name=None):
         self._experiment_name = experiment_name
-        self.light = LightfieldApp(True)
+        self.light = LightfieldApplicationManager(True)
 
     def finalize(self):
         """
@@ -213,7 +212,8 @@ class Spectrometer():
         User can set the experiment that they want to load.
         """
         if a_name != self._experiment_name:
-            if a_name in self.light.experiment.GetSavedExperiments():   #Added this to check prevent errors with incorrect file name
+            #Added this to prevent errors with incorrect file name
+            if a_name in self.light.experiment.GetSavedExperiments(): 
                 self._experiment_name = a_name
                 self.light.load_experiment(self._experiment_name)
             else:
@@ -297,6 +297,7 @@ class Spectrometer():
         """
         self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
 
+class SpectrometerDataAcquisition(SpectrometerConfig):
     def acquire_frame(self):
         """
         Acquires a frame (or series of frames) from the spectrometer, and the
@@ -323,7 +324,6 @@ class Spectrometer():
         except Exception as e:
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
             logger.error(f'Unable to perform step and glue due to error: {e}')
-            return
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)

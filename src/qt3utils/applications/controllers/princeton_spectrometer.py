@@ -14,14 +14,14 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
-        self.spectrometer = princeton.Spectrometer()
+        #self.spectrometerconfig = princeton.SpectrometerConfig()
+        self.spectrometer = princeton.SpectrometerDataAcquisition()
         self.last_config_dict = {}
 
         self.wave_start = None
         self.wave_end = None
         self.last_measured_spectrum = None
         self.last_wavelength_array = None
-        self.MIN_WAVELENGTH_DIFFERENCE = 117
 
     @property
     def clock_rate(self) -> float:
