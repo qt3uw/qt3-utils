@@ -34,22 +34,9 @@ except ImportError as e:
 
 class LightfieldApplicationManager:
     def __init__(self, visible):
-        self._addinbase = lf.AddIns.AddInBase()
         self._automation = lf.Automation.Automation(visible, List[String]())
         self._application = self._automation.LightFieldApplication
         self._experiment = self._application.Experiment
-
-    @property
-    def automation(self):
-        return self._automation
-
-    @property
-    def addinbase(self):
-        return self._addinbase
-
-    @property
-    def application(self):
-        return self._application
 
     @property
     def experiment(self):
@@ -61,7 +48,8 @@ class LightfieldApplicationManager:
         AddInProcess.exe, if this is not done, LightField will not reopen
         properly.
         """
-        self.automation.Dispose()
+        #NOTE: May need to call '.Dispose()' here again as qt3scan may fail to call 'close'
+        self._automation.Dispose()
         logger.info('Closed AddInProcess.exe')
 
     def set(self, setting, value):
@@ -93,6 +81,10 @@ class LightfieldApplicationManager:
 
     def load_experiment(self, value):
         self.experiment.Load(value)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachDate, True)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachTime, True)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachIncrement, False)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationBaseFileName, "TestingStuff")
 
     #TODO: Need to actually implement the three methods below so that you can:
     #      - save a new experiment
@@ -121,7 +113,7 @@ class LightfieldApplicationManager:
         - Data from successive exposures is added as a new dimension, resulting in a 3D array.
         - Averaging across frames can be done by summing over this additional dimension.
         """
-
+        
         acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) #to allow the camera to capture the desired amount of data during the specified exposure time.
         num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
         self.experiment.Acquire()
@@ -131,8 +123,8 @@ class LightfieldApplicationManager:
         while self.experiment.IsRunning:
             sleep(0.1)  #loop that repeatedly checks whether the experiment is still running so it decided when to move to next block of code
 
-        last_file = self.application.FileManager.GetRecentlyAcquiredFileNames().get_Item(0)
-        curr_image = self.application.FileManager.OpenFile(last_file, FileAccess.Read)
+        last_file = self._application.FileManager.GetRecentlyAcquiredFileNames()[0]
+        curr_image = self._application.FileManager.OpenFile(last_file, FileAccess.Read)
 
         if curr_image.Regions.Length == 1:
             #Single Frame
@@ -156,7 +148,7 @@ class LightfieldApplicationManager:
         """
         Closes the Lightfield application without saving the settings.
         """
-        self.automation.Dispose()
+        self._automation.Dispose()
         logger.info('Closed AddInProcess.exe')
 
 class SpectrometerConfig():
@@ -172,17 +164,17 @@ class SpectrometerConfig():
         Closes the Lightfield application without saving the settings.
         """
         self.light.close()
-
+    
     def get_wavelengths(self):
         """
         Returns the wavelength calibration for a single frame.
-        """
-        size = self.light.experiment.SystemColumnCalibration.get_Length()
-        result = np.empty(size)
-        for i in range(size):
-            result[i] = self.light.experiment.SystemColumnCalibration[i]
-        return result
 
+        According to the person who made the Lightfield sofware there is not current way to use the exact Lightfield settings
+        for step and glue. Will have to interpolate for now.
+        """
+        wavelength_array = np.fromiter(self.light.experiment.SystemColumnCalibration, np.float64)
+        return wavelength_array
+    
     @property
     def center_wavelength(self):
         """
@@ -332,7 +324,7 @@ class SpectrometerDataAcquisition(SpectrometerConfig):
             raise ValueError(f"End wavelength must be atleast {self.MIN_WAVELENGTH_DIFFERENCE} units greater than the start wavelength.") 
 
         data = self.light.acquire()
-        spectrum = np.mean(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
-        wavelength = np.linspace(self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength), self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength), data.shape[0])
+        spectrum = np.sum(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
+        wavelength = np.linspace(lambda_min, lambda_max, data.shape[0]) #just remember that this is not exact and just interpolates
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         return spectrum, wavelength
-    

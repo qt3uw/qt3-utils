@@ -380,6 +380,7 @@ class QT3ScanHyperSpectralApplicationController:
 
         self.position_controller.go_to_position(**{axis: min})
         time.sleep(self.raster_line_pause)
+        
         for val in np.arange(min, max, step_size):
             self.position_controller.go_to_position(**{axis: val})
             measured_spectrum, measured_wavelengths = self.daq_controller.sample_spectrum()
@@ -388,18 +389,17 @@ class QT3ScanHyperSpectralApplicationController:
                 initial_spectrum_size = len(measured_spectrum)
             if wavelength_array is None:
                 wavelength_array = measured_wavelengths
-            try: 
-                if initial_spectrum_size != len(measured_spectrum):
-                    raise QT3Error("Inconsistent spectrum size obtained during scan! Check your hardware.")
-                if initial_spectrum_size != len(measured_wavelengths):
-                    raise QT3Error("Inconsistent wavelength array size obtained during scan! Check your hardware.")
-                if len(measured_spectrum) != len(measured_wavelengths):
-                    raise QT3Error("Inconsistent wavelength array and spectrum size obtained during scan! Check your hardware.")
-                if np.array_equal(wavelength_array, measured_wavelengths) is False:
-                    raise QT3Error("Inconsistent wavelength array obtained during scan! Check your hardware.")
-                spectrums_in_scan.append(measured_spectrum)
-            except QT3Error as e:
-                self.logger.error(f"Scan halted due to error: {str(e)}")
+            
+            if initial_spectrum_size != len(measured_spectrum):
+                raise QT3Error("Inconsistent spectrum size obtained during scan! Check your hardware.")
+            if initial_spectrum_size != len(measured_wavelengths):
+                raise QT3Error("Inconsistent wavelength array size obtained during scan! Check your hardware.")
+            if len(measured_spectrum) != len(measured_wavelengths):
+                raise QT3Error("Inconsistent wavelength array and spectrum size obtained during scan! Check your hardware.")
+            if np.array_equal(wavelength_array, measured_wavelengths) is False:
+                raise QT3Error("Inconsistent wavelength array obtained during scan! Check your hardware.")
+            spectrums_in_scan.append(measured_spectrum)
+            
         return np.array(spectrums_in_scan), wavelength_array
 
     def move_y(self) -> None:
