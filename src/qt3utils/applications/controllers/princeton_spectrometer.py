@@ -50,6 +50,8 @@ class QT3ScanPrincetonSpectrometerController:
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
         self.last_measured_spectrum, self.last_wavelength_array = (self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end]))
+        #self.logger.debug(f'Length of what you pulled from get_wavelengths is {len(self.spectrometer.get_wavelengths())}')
+        #self.logger.debug(f'Length of measured spectrum is {len(self.last_measured_spectrum)} and length of last wave array is {len(self.last_wavelength_array)}')
         self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
         return self.last_measured_spectrum, self.last_wavelength_array
 
