@@ -35,22 +35,14 @@ logging.basicConfig()
 if args.quiet is False:
     logger.setLevel(logging.INFO)
 
-NIDAQ_DEVICE_NAME = 'NIDAQ Rate Counter'
+NIDAQ_DEVICE_NAMES = ['NIDAQ Rate Counter', "Lockin & Wavemeter"]
 RANDOM_DAQ_DEVICE_NAME = 'Random Data Generator'
 
-DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DEVICE_NAME
+DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DEVICE_NAMES[0]
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
-SUPPORTED_CONTROLLERS = {NIDAQ_DEVICE_NAME: 'nidaq_rate_counter.yaml'
-                         }
-STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAME: {'yaml': 'nidaq_rate_counter.yaml',
-                                                'application_controller_class': plescanner.CounterAndScanner}
-                        }
-CONFIG_FILE_APPLICATION_NAME = 'QT3PLE'
-CONFIG_FILE_EXPERIMENT = 'Experiment'
-CONFIG_FILE_DAQ_DEVICE = 'DAQCounter'
-CONFIG_FILE_VOLTAGE_CONTROLLER = 'VoltageController'
-CONFIG_FILE_DAQ_CONTROLLER = 'DAQController'
+STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAMES[0] : 'nidaq_rate_counter.yaml',
+                        NIDAQ_DEVICE_NAMES[1] : 'nidaq_wm_ple.yaml'}
 
 class ScanImage:
     def __init__(self, mplcolormap='gray') -> None:
@@ -165,10 +157,6 @@ class SidePanel():
         self.controller_menu = tk.OptionMenu(frame,
                                              self.controller_option,
                                              *STANDARD_CONTROLLERS.keys(),
-                                             command=root.load_daq_from_config_dict)
-        self.controller_menu = tk.OptionMenu(frame,
-                                             self.controller_option,
-                                             *STANDARD_CONTROLLERS.keys(),
                                              command=root.load_controller_from_name)
 
         self.controller_menu.grid(row=row, column=0, columnspan=3)
@@ -208,9 +196,9 @@ class MainTkApplication():
         self.view = MainApplicationView(self)
         self.view.controller_option = controller_name
         # data acquisition model that is used to acquire data
-        self.data_acquisition_model = None
+        self.data_acquisition_models = {}
+        self.controller_models = {}
         # load the data acquisition model
-        self.load_daq_from_config_dict(controller_name)
         self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
         self.view.sidepanel.saveScanButton.bind("<Button>", self.save_scan)
         self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
@@ -327,7 +315,7 @@ class MainTkApplication():
             h5file.close()
         self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
 
-    def configure_from_yaml(self) -> None:
+    def configure_from_yaml(self, afile=None) -> None:
         """
         This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
 
@@ -336,95 +324,55 @@ class MainTkApplication():
         filetypes = (
             ('YAML', '*.yaml'),
         )
-        afile = tk.filedialog.askopenfile(filetypes=filetypes, defaultextension='.yaml')
-        if afile is None:
-            return  # selection was canceled.
-
-        config = yaml.safe_load(afile)
-        afile.close()
-
-        counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_DEVICE]
-
-        same_daq_name = self.data_acquisition_model.__class__.__name__ == counter_config['class_name']
-        same_daq_module = self.data_acquisition_model.__class__.__module__ == counter_config['import_path']
-
-        if same_daq_name is False or same_daq_module is False:
-            msg = f"""\nCurrent data acquisition object is not of type found in YAML
-Found in YAML: {counter_config['import_path']}.{counter_config['class_name']}.
-Current data acquistion object: {self.data_acquisition_model.__class__.__module__}.{self.data_acquisition_model.__class__.__name__}
-Configuration not loaded. Please select appropriate controller from the pull-down menu
-or check your YAML file to ensure configuration of supported hardware controller.
-"""
-            logger.warning(msg)
+        if not afile:
+            afile = tk.filedialog.askopenfile(filetypes=filetypes, defaultextension='.yaml')
+            if afile is None:
+                return  # selection was canceled.
+            config = yaml.safe_load(afile)
+            afile.close()
         else:
-            logger.info("load settings from yaml")
-            logger.info(counter_config['configure'])
-            self.data_acquisition_model.configure(counter_config['configure'])
+            with open(afile, 'r') as file:
+                config = yaml.safe_load(file)
 
+        CONFIG_FILE_APPLICATION_NAME = list(config.keys())[0]
 
-    def _open_config_for_hardware(self, hardware_name: str) -> dict:
-        with importlib.resources.path(CONTROLLER_PATH, SUPPORTED_CONTROLLERS[hardware_name]) as yaml_path:
-            logger.info(f"opening config file: {yaml_path}")
-            with open(yaml_path, 'r') as yaml_file:
-                config = yaml.safe_load(yaml_file)
-
-        return config
-
-    def load_daq_from_config_dict(self, controller_name: str) -> None:
-
-        config = self._open_config_for_hardware(controller_name)
-
-        counter_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_DEVICE]
-
-        logger.info("loading from configuration")
-        logger.info(counter_config)
-
-        # Dynamically import the module
-        module = importlib.import_module(counter_config['import_path'])
-
-        # Dynamically instantiate the class
-        cls = getattr(module, counter_config['class_name'])
-        # cls should be instance of QT3ScopeNIDAQEdgeCounterController
-        self.data_acquisition_model = cls(logger.level)
-        assert isinstance(self.data_acquisition_model, QT3ScopeNIDAQEdgeCounterController)
-
-        # configure the data acquisition model
-        self.data_acquisition_model.configure(counter_config['configure'])
-        #self.view.hardware_config_button.bind("<Button>", lambda e: self.data_acquisition_model.configure_view(self.root))
-        self.animation = None  # reset the animation
-
-    def _open_yaml_config_for_controller(self, controller_name: str) -> dict:
-        with importlib.resources.path(CONTROLLER_PATH, STANDARD_CONTROLLERS[controller_name]['yaml']) as yaml_path:
-            logger.info(f"opening config file: {yaml_path}")
-            with open(yaml_path, 'r') as yaml_file:
-                config = yaml.safe_load(yaml_file)
-
-        return config
-
-    def _load_controller_from_dict(self, config: dict, a_protocol: Protocol) -> Any:
-        """
-        Dynamically imports the module and instantiates the class specified in the config dictionary.
-        Class the class configure method if it exists.
-        """
-        # Dynamically import the module
-        module = importlib.import_module(config['import_path'])
-        logger.debug(f"loading {config['import_path']}")
-
-        # Dynamically instantiate the class
-        cls = getattr(module, config['class_name'])
-        logger.debug(f"instantiating {config['class_name']}")
-
-        controller = cls(logger.level)
-
-        logger.debug(f"asserting {config['class_name']} of proper type {a_protocol}")
-        assert isinstance(controller, a_protocol)
-
-        # configure the controller
-        # all controllers *should* have a configure method
-        logger.debug(f"calling {a_protocol} configure method")
-        controller.configure(config['configure'])
-
-        return controller
+        self.app_controller_config = config[CONFIG_FILE_APPLICATION_NAME]["ApplicationController"]
+        self.app_config = self.app_controller_config["configure"]
+        logger.info("load settings from yaml")
+        daq_readers = self.app_config["readers"]["daq_readers"]
+        if daq_readers is not None:
+            for daq_reader in daq_readers:
+                daq_reader_name = daq_readers[daq_reader]
+                daq_reader_config = config[CONFIG_FILE_APPLICATION_NAME][daq_reader_name]
+                module = importlib.import_module(daq_reader_config['import_path'])
+                logger.debug(f"loading {daq_reader_config['import_path']}")
+                cls = getattr(module, daq_reader_config['class_name'])
+                self.data_acquisition_models[daq_reader] = cls()
+                self.data_acquisition_models[daq_reader].configure(daq_reader_config['configure'])
+        wm_readers = self.app_config["readers"]["wm_readers"]
+        if wm_readers is not None:
+            for wm_reader in wm_readers:
+                wm_reader_name = wm_readers[wm_reader]
+                wm_reader_config = config[CONFIG_FILE_APPLICATION_NAME][wm_reader_name]
+                module = importlib.import_module(wm_reader_config['import_path'])
+                logger.debug(f"loading {wm_reader_config['import_path']}")
+                cls = getattr(module, wm_reader_config['class_name'])
+                self.data_acquisition_models[wm_reader] = cls()
+                self.data_acquisition_models[wm_reader].configure(wm_reader_config['configure'])
+        daq_controllers = self.app_config["controllers"]["daq_writers"]
+        if daq_controllers is not None:
+            for daq_controller in daq_controllers:
+                daq_controller_name = daq_controllers[daq_controller]
+                daq_controller_config = config[CONFIG_FILE_APPLICATION_NAME][daq_controller_name]
+                module = importlib.import_module(daq_controller_config['import_path'])
+                logger.debug(f"loading {daq_controller_config['import_path']}")
+                cls = getattr(module, daq_controller_config['class_name'])
+                self.controller_models[daq_controller] = cls(logger.level)
+                self.controller_models[daq_controller].configure(daq_controller_config['configure'])
+        app_module = importlib.import_module(self.app_controller_config['import_path'])
+        logger.debug(f"loading {self.app_controller_config['import_path']}")
+        app_cls = getattr(app_module, self.app_controller_config["class_name"])
+        self.application_controller = plescanner.GetApplicationControllerInstance(app_cls, self.data_acquisition_models, self.controller_models)
 
     def load_controller_from_name(self, application_controller_name: str) -> None:
         """
@@ -433,27 +381,10 @@ or check your YAML file to ensure configuration of supported hardware controller
         Should be called during instantiation of this class and should be the callback
         function for the support controller pull-down menu in the side panel
         """
-        logger.info(f"loading {application_controller_name}")
-        config = self._open_yaml_config_for_controller(application_controller_name)
-        self._build_controllers_from_config_dict(config, application_controller_name)
+        #yaml_path = importlib.resources.path(CONTROLLER_PATH, STANDARD_CONTROLLERS[application_controller_name])
+        yaml_path = importlib.resources.files(CONTROLLER_PATH).joinpath(STANDARD_CONTROLLERS[application_controller_name])
+        self.configure_from_yaml(str(yaml_path))
 
-    def _build_controllers_from_config_dict(self, config: dict, controller_name: str) -> None:
-
-        # load the position controller from dict
-        pos_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_VOLTAGE_CONTROLLER]
-        voltage_controller = self._load_controller_from_dict(pos_config, VControl)
-
-        # load the data acquisition model from dict
-        daq_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_DEVICE]
-        daq_controller = self._load_controller_from_dict(daq_config, QT3ScopeNIDAQEdgeCounterController)
-
-        ControllerClass = STANDARD_CONTROLLERS[controller_name]['application_controller_class']
-        self.application_controller = plescanner.CounterAndScanner(daq_controller.data_generator, voltage_controller)
-
-        # bind buttons to controllers
-        #self.view.scan_view.set_rightclick_callback(self.application_controller.scan_image_rightclick_event)
-        #self.view.voltage_controller_config_button.bind("<Button>", lambda e: self.application_controller.wavelength_controller.configure_view(self.root))
-        #self.view.daq_config_button.bind("<Button>", lambda e: self.application_controller.rate_counter.configure_view(self.root))
 def main() -> None:
     tkapp = MainTkApplication(DEFAULT_DAQ_DEVICE_NAME)
     tkapp.run()

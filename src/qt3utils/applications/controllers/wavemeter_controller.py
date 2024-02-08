@@ -1,9 +1,11 @@
 import ctypes
+import logging
 
-class WavemeterController
+class WavemeterController:
     def __init__(self, dll_path=""):
+        self.logger = logging.getLogger(__name__)
         if not dll_path == "":
-            self.init_dll()
+            self.init_dll(dll_path)
         self.dll_path = dll_path
         self.last_config_dict = {}
 
@@ -31,6 +33,6 @@ class WavemeterController
         self.logger.debug("calling configure on the wave meter controller")
         self.last_config_dict.update(config_dict)
 
-        self.dll_path = config_dict.get('daq_name', self.data_generator.daq_name)
+        self.dll_path = config_dict.get('daq_name', self.dll_path)
         self.init_dll(self.dll_path)
 

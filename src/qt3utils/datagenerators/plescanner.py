@@ -2,8 +2,12 @@ import tkinter as tk
 import numpy as np
 import time
 import logging
+from qt3utils.applications.controllers.nidaqedgecounter import QT3ScopeNIDAQEdgeCounterController
+from qt3utils.nidaq.customcontrollers import VControl
+from qt3utils.applications.controllers.wavemeter_controller import WavemeterController
 
 logger = logging.getLogger(__name__)
+
 
 class PleScanner:
 
@@ -96,9 +100,11 @@ class PleScanner:
     @property
     def step_size(self):
         return self._step_size
+
     @step_size.setter
     def step_size(self, val):
         self._step_size = val
+
 
 class CounterAndScanner(PleScanner):
     def __init__(self, rate_counter, wavelength_controller) -> None:
@@ -114,7 +120,6 @@ class CounterAndScanner(PleScanner):
     def start(self) -> None:
         self.running = True
         self.rate_counter.start()
-
 
     def close(self) -> None:
         self.rate_counter.close()
@@ -166,11 +171,11 @@ class CounterAndScanner(PleScanner):
         self.scanned_count_rate = []
 
 
-
-class WavemeterAndScanner(CounterAndScanner):
-    def __init__(self, wm_reader, wavelength_controller):
+class WavemeterAndScanner(PleScanner):
+    def __init__(self, wm_reader, v_readers, wavelength_controller):
         super(WavemeterAndScanner, self).__init__(wavelength_controller)
         self.wm_reader = wm_reader
+        self.v_readers = v_readers
         self.scanned_raw_counts = []
         self.scanned_wm = []
 
@@ -191,6 +196,9 @@ class WavemeterAndScanner(CounterAndScanner):
         Returns a list of readings from the wave meter for each scan
         """
         wm_scan = []
+        vs_scans = {}
+        for v_reader in self.v_readers:
+            vs_scans[v_reader.read_channel] = []
         self.wavelength_controller.go_to_voltage(**{axis: min})
         time.sleep(self.raster_line_pause)
         for val in np.arange(min, max, step_size):
@@ -201,8 +209,14 @@ class WavemeterAndScanner(CounterAndScanner):
             wm_scan.append(_wm_reading)
             if self.wavelength_controller:
                 logger.info(f'current voltage: {self.wavelength_controller.get_current_voltage()}')
-        return wm_scan
+            for v_reader in self.v_readers:
+                v_reading = v_reader.get_current_voltage()
+                vs_scans[v_reader.read_channel].append(v_reading)
+        return wm_scan, vs_scans
 
 
-
-
+def GetApplicationControllerInstance(classtype, readers, controllers):
+    if classtype == WavemeterAndScanner:
+        return classtype(list(readers.values())[-1], list(readers.values())[0:-1], list(controllers.values())[0])
+    elif classtype == CounterAndScanner:
+        return classtype(list(readers.values())[0], list(controllers.values())[0])

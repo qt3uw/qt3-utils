@@ -5,7 +5,7 @@ import logging
 logger = logging.getLogger(__name__)
 class VControl():
 
-    def __init__(self, device_name: str,
+    def __init__(self, device_name: str = "",
                  write_channel: str = 'ao0',
                  read_channel: str = None,
                  scale_nm_per_volt: float = 8,
