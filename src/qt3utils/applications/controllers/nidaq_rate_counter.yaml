@@ -1,4 +1,5 @@
 QT3PLE:
+
   DAQCounter:
     import_path : qt3utils.applications.controllers.nidaqedgecounter
     class_name  : QT3ScopeNIDAQEdgeCounterController
@@ -10,6 +11,51 @@ QT3PLE:
       num_data_samples_per_batch : 1000
       read_write_timeout : 10  # timeout in seconds for read/write operations
       signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
+
+  DAQReader1:
+    import_path: qt3utils.applications.controllers.nidaqedgecounter
+    class_name: QT3ScopeNIDAQEdgeCounterController
+    configure:
+      daq_name: Dev1  # NI DAQ Device Name
+      signal_terminal: PFI0  # NI DAQ terminal connected to input digital TTL signal
+      clock_terminal:    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
+      clock_rate: 100000  # NI DAQ clock rate in Hz
+      num_data_samples_per_batch: 1000
+      read_write_timeout: 10  # timeout in seconds for read/write operations
+      signal_counter: ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
+
+  DAQReader2:
+    import_path: qt3utils.applications.controllers.nidaqedgecounter
+    class_name: QT3ScopeNIDAQEdgeCounterController
+    configure:
+      daq_name: Dev1  # NI DAQ Device Name
+      signal_terminal: PFI0  # NI DAQ terminal connected to input digital TTL signal
+      clock_terminal:    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
+      clock_rate: 100000  # NI DAQ clock rate in Hz
+      num_data_samples_per_batch: 1000
+      read_write_timeout: 10  # timeout in seconds for read/write operations
+      signal_counter: ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
+
+
+  VoltageController:
+    import_path : qt3utils.nidaq.customcontrollers
+    class_name  : VControl
+    configure :
+      daq_name : Dev1  # NI DAQ Device Name
+      write_channels : ao0  # NI DAQ analog output channels to use for writing position
+      read_channels : ai0  # NI DAQ analog input channels to use for reading position
+      min_position: -10  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
+      max_position: 10  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
+      scale_nm_per_volt: 1  # microns
+
+  WavemeterController:
+    import_path : qt3utils.applications.controllers.wavemeter_controller
+    class_name  : WavemeterController
+    configure :
+      dll_path : C:\\\\Users\\\\Fulab\\\\Downloads\\\\00392-2-06-A_CustomerCD621\\\\00392-2-06-A_Customer CD 621\\\\Programming Interface\\\\x64\\\\CLDevIFace.dll\
+
+
+
 # notes
 
 # clock_rate:
@@ -24,14 +70,3 @@ QT3PLE:
 #   Specifies the digital input terminal to the NI DAQ to use for a clock.
 #   If None, the internal NI DAQ clock is used. Otherwise, a string value
 #   specifies the terminal to use for the clock.
-
-  VoltageController:
-    import_path : qt3utils.nidaq.customcontrollers
-    class_name  : VControl
-    configure :
-      daq_name : Dev1  # NI DAQ Device Name
-      write_channels : ao0  # NI DAQ analog output channels to use for writing position
-      read_channels : ai0  # NI DAQ analog input channels to use for reading position
-      min_position: -10  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
-      max_position: 10  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
-      scale_nm_per_volt: 1  # microns

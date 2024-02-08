@@ -5,10 +5,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+class PleScanner:
 
-class CounterAndScanner:
-    def __init__(self, rate_counter, wavelength_controller) -> None:
-
+    def __init__(self, wavelength_controller):
         self.running = False
         self.current_t = 0
         self.vmin = float(wavelength_controller.minimum_allowed_position)
@@ -16,21 +15,14 @@ class CounterAndScanner:
         self.tmax = 100
         self._step_size = 0.5
         self.raster_line_pause = 0.150  # wait 150ms for the voltage to settle before a line scan
-
-        self.scanned_raw_counts = []
-        self.scanned_count_rate = []
-
         self.wavelength_controller = wavelength_controller
-        self.rate_counter = rate_counter
         self.num_daq_batches = 1  # could change to 10 if want 10x more samples for each position
 
     def stop(self) -> None:
-        self.rate_counter.stop()
         self.running = False
 
     def start(self) -> None:
         self.running = True
-        self.rate_counter.start()
 
     def set_to_starting_position(self) -> None:
         self.current_v = self.vmin
@@ -38,18 +30,7 @@ class CounterAndScanner:
             self.wavelength_controller.go_to_voltage(v=self.vmin)
 
     def close(self) -> None:
-        self.rate_counter.close()
-
-    def set_num_data_samples_per_batch(self, N) -> None:
-        self.rate_counter.num_data_samples_per_batch = N
-
-    def sample_counts(self) -> np.ndarray:
-        return self.rate_counter.sample_counts(self.num_daq_batches)
-
-    def sample_count_rate(self, data_counts=None) -> np.floating:
-        if data_counts is None:
-            data_counts = self.sample_counts()
-        return self.rate_counter.sample_count_rate(data_counts)
+        pass
 
     def set_scan_range(self, vmin, vmax) -> None:
         if self.wavelength_controller:
@@ -98,6 +79,58 @@ class CounterAndScanner:
                 logger.info(f'out of range\n\n{e}')
 
     def scan_v(self) -> None:
+        pass
+
+    def scan_axis(self, axis, min, max, step_size) -> list:
+        pass
+
+    def reset(self) -> None:
+        pass
+
+    def configure_view(self, gui_root: tk.Toplevel) -> None:
+        """
+        This method launches a GUI window to configure the controller.
+        """
+        pass
+
+    @property
+    def step_size(self):
+        return self._step_size
+    @step_size.setter
+    def step_size(self, val):
+        self._step_size = val
+
+class CounterAndScanner(PleScanner):
+    def __init__(self, rate_counter, wavelength_controller) -> None:
+        super(CounterAndScanner, self).__init__(wavelength_controller)
+        self.scanned_raw_counts = []
+        self.scanned_count_rate = []
+        self.rate_counter = rate_counter
+
+    def stop(self) -> None:
+        self.rate_counter.stop()
+        self.running = False
+
+    def start(self) -> None:
+        self.running = True
+        self.rate_counter.start()
+
+
+    def close(self) -> None:
+        self.rate_counter.close()
+
+    def set_num_data_samples_per_batch(self, N) -> None:
+        self.rate_counter.num_data_samples_per_batch = N
+
+    def sample_counts(self) -> np.ndarray:
+        return self.rate_counter.sample_counts(self.num_daq_batches)
+
+    def sample_count_rate(self, data_counts=None) -> np.floating:
+        if data_counts is None:
+            data_counts = self.sample_counts()
+        return self.rate_counter.sample_count_rate(data_counts)
+
+    def scan_v(self) -> None:
         """
         Scans the wavelengths from vmin to vmax in steps of step_size.
 
@@ -110,10 +143,8 @@ class CounterAndScanner:
 
     def scan_axis(self, axis, min, max, step_size) -> list:
         """
-        Moves the stage along the specified axis from min to max in steps of step_size.
+        Moves the voltage from min to max in steps of step_size.
         Returns a list of raw counts from the scan in the shape
-        [[[counts, clock_samples]], [[counts, clock_samples]], ...] where each [[counts, clock_samples]] is the
-        result of a single call to sample_counts at each scan position along the axis.
         """
         raw_counts = []
         self.wavelength_controller.go_to_voltage(**{axis: min})
@@ -134,18 +165,44 @@ class CounterAndScanner:
         self.scanned_raw_counts = []
         self.scanned_count_rate = []
 
-    def configure_view(self, gui_root: tk.Toplevel) -> None:
-        """
-        This method launches a GUI window to configure the controller.
-        """
-        pass
 
-    @property
-    def step_size(self):
-        return self._step_size
-    @step_size.setter
-    def step_size(self, val):
-        self._step_size = val
+
+class WavemeterAndScanner(CounterAndScanner):
+    def __init__(self, wm_reader, wavelength_controller):
+        super(WavemeterAndScanner, self).__init__(wavelength_controller)
+        self.wm_reader = wm_reader
+        self.scanned_raw_counts = []
+        self.scanned_wm = []
+
+    def scan_v(self) -> None:
+        """
+        Scans the wavelengths from vmin to vmax in steps of step_size.
+        """
+        _wm_scan = self.scan_axis('v', self.vmin, self.vmax, self._step_size)
+        self.scanned_wm.append(_wm_scan)
+        self.current_t = self.current_t + 1
+
+    def read_wavemeter(self):
+        self.wavelength_controller.read_wavemeter()
+
+    def scan_axis(self, axis, min, max, step_size) -> list:
+        """
+        Moves the voltage from min to max in steps of step_size.
+        Returns a list of readings from the wave meter for each scan
+        """
+        wm_scan = []
+        self.wavelength_controller.go_to_voltage(**{axis: min})
+        time.sleep(self.raster_line_pause)
+        for val in np.arange(min, max, step_size):
+            if self.wavelength_controller:
+                logger.info(f'go to voltage {axis}: {val:.2f}')
+                self.wavelength_controller.go_to_voltage(**{axis: val})
+            _wm_reading = self.read_wavemeter()
+            wm_scan.append(_wm_reading)
+            if self.wavelength_controller:
+                logger.info(f'current voltage: {self.wavelength_controller.get_current_voltage()}')
+        return wm_scan
+
 
 
 

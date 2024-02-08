@@ -47,6 +47,7 @@ STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAME: {'yaml': 'nidaq_rate_counter.yaml',
                                                 'application_controller_class': plescanner.CounterAndScanner}
                         }
 CONFIG_FILE_APPLICATION_NAME = 'QT3PLE'
+CONFIG_FILE_EXPERIMENT = 'Experiment'
 CONFIG_FILE_DAQ_DEVICE = 'DAQCounter'
 CONFIG_FILE_VOLTAGE_CONTROLLER = 'VoltageController'
 CONFIG_FILE_DAQ_CONTROLLER = 'DAQController'
