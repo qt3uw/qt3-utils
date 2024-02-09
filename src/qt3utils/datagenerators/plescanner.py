@@ -10,6 +10,10 @@ logger = logging.getLogger(__name__)
 
 
 class PleScanner:
+    """
+    Base class with function methods which any PLE experiment will need to operate
+    Override this class for specific types of PLE experiments
+    """
 
     def __init__(self, wavelength_controller):
         self.running = False
@@ -107,6 +111,10 @@ class PleScanner:
 
 
 class CounterAndScanner(PleScanner):
+    """
+    Inherits from PleScanner base class
+    Adds a rate counter for the SPCM and correlates counts with scans
+    """
     def __init__(self, rate_counter, wavelength_controller) -> None:
         super(CounterAndScanner, self).__init__(wavelength_controller)
         self.scanned_raw_counts = []
@@ -172,11 +180,15 @@ class CounterAndScanner(PleScanner):
 
 
 class WavemeterAndScanner(PleScanner):
+    """
+    Inherits from PleScanner base class
+    Adds a wavemeter and daq readings to the correlated voltage sweeps
+    """
     def __init__(self, wm_reader, v_readers, wavelength_controller):
         super(WavemeterAndScanner, self).__init__(wavelength_controller)
         self.wm_reader = wm_reader
         self.v_readers = v_readers
-        self.scanned_raw_counts = []
+        self.scanned_count_rate = []
         self.scanned_wm = []
 
     def scan_v(self) -> None:
@@ -185,7 +197,7 @@ class WavemeterAndScanner(PleScanner):
         """
         _wm_scan, _vs_scan = self.scan_axis('v', self.vmin, self.vmax, self._step_size)
         self.scanned_wm.append(_wm_scan)
-        self.scanned_raw_counts.append(_vs_scan)
+        self.scanned_count_rate.append(_vs_scan)
         self.current_t = self.current_t + 1
 
     def read_wavemeter(self):
@@ -194,7 +206,7 @@ class WavemeterAndScanner(PleScanner):
     def scan_axis(self, axis, min, max, step_size) -> list:
         """
         Moves the voltage from min to max in steps of step_size.
-        Returns a list of readings from the wave meter for each scan
+        Returns a list of readings from the wave meter and DAQ for each scan
         """
         wm_scan = []
         vs_scans = {}
@@ -216,7 +228,16 @@ class WavemeterAndScanner(PleScanner):
         return wm_scan, vs_scans
 
 
-def GetApplicationControllerInstance(classtype, readers, controllers):
+def GetApplicationControllerInstance(classtype, readers: dict, controllers: dict):
+    """
+    Create an instance of the application controller depending on the type
+    classtype : class
+        - either WavemeterAndScanner or CounterAndScanner
+    readers : dict
+        - dict of readers this class uses. For WaveMeterAndScanner, wavemeter is first, then DAQs
+    controllers : dict
+        - dict of controllers this class uses. This will always be a VControl class
+    """
     if classtype == WavemeterAndScanner:
         return classtype(list(readers.values())[-1], list(readers.values())[0:-1], list(controllers.values())[0])
     elif classtype == CounterAndScanner:

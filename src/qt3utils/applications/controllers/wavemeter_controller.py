@@ -2,6 +2,9 @@ import ctypes
 import logging
 
 class WavemeterController:
+    """
+    Class for interfacing with wavemeter hardware
+    """
     def __init__(self, dll_path=""):
         self.logger = logging.getLogger(__name__)
         if not dll_path == "":
@@ -9,14 +12,17 @@ class WavemeterController:
         self.dll_path = dll_path
         self.last_config_dict = {}
 
-    def init_dll(self, dll_path):
+    def init_dll(self, dll_path) -> None:
+        """
+        Set the path to the dll used for interfacing with the wavemeter
+        """
         self._mydll = ctypes.cdll.LoadLibrary(dll_path)
         self._mydll.CLGetLambdaReading.restype = ctypes.c_double
         self._dh = self._mydll.CLOpenUSBSerialDevice(4)
         if self._dh == -1:
             raise Exception("Failed to connect to wave meter.")
 
-    def read_wavemeter(self):
+    def read_wavemeter(self) -> float:
         return self._mydll.CLGetLambdaReading(self._dh)
 
     def close_wavemeter(self) -> None:

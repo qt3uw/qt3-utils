@@ -319,8 +319,8 @@ class MainTkApplication():
     def configure_from_yaml(self, afile=None) -> None:
         """
         This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
-
-        This does not instantiate a new hardware controller class. It only configures the existing one.
+        Or it loads a specified configuration yaml file.
+        It will attempt to configure the hardware specified in the configuration file and instantiate a controller class
         """
         filetypes = (
             ('YAML', '*.yaml'),
