@@ -100,49 +100,66 @@ class LightfieldApplicationManager:
     def stop_scan(self):
         self.experiment.Stop()
 
-    def acquire(self):
+    #NOTE: Thw while loop in here will not be needed once you fix the "FileNameGeneration" problem.
+    def start_acquisition_and_wait(self):
         """
-        This function retrieves image data with special consideration for the unique configuration of the camera,
-        which possesses a single vertical pixel. The following describes the data handling:
-
-        - **Single Frame**:
-        - Data is returned as a 2D array representing raw counts from each pixel.
-        - A vertical section (spanning 400 pixels) represents a range for wavelength averaging.
-
-        - **Multiple Frames**:
-        - Data from successive exposures is added as a new dimension, resulting in a 3D array.
-        - Averaging across frames can be done by summing over this additional dimension.
+        Starts the acquisition process and waits until it is completed before carrying on.
         """
-        
-        acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) #to allow the camera to capture the desired amount of data during the specified exposure time.
+        acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime)
         num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
         self.experiment.Acquire()
         
-        sleep(0.001 * acquisition_time * num_frames)  #sleep delay that waits for the exposure duration of the camera
-
+        sleep(0.001 * acquisition_time * num_frames)  # waiting for the exposure duration
+        
         while self.experiment.IsRunning:
-            sleep(0.1)  #loop that repeatedly checks whether the experiment is still running so it decided when to move to next block of code
+            sleep(0.1)  # checking if the experiment is still running
 
+    def process_acquired_data(self):
+        """
+        Processes the most recently acquired data and returns it as a numpy array.
+        """
         last_file = self._application.FileManager.GetRecentlyAcquiredFileNames()[0]
         curr_image = self._application.FileManager.OpenFile(last_file, FileAccess.Read)
 
         if curr_image.Regions.Length == 1:
-            #Single Frame
+            # Handle Single Frame
             if curr_image.Frames == 1:
-                frame = curr_image.GetFrame(0, 0)
-                data = np.reshape(np.fromiter(frame.GetData(), dtype='uint16'), [frame.Width, frame.Height],order='F')
-            #Multiple Frames
+                return self._process_single_frame(curr_image)
+            # Handle Multiple Frames
             else:
-                data = np.array([])
-                for i in range(0, curr_image.Frames):
-                    frame = curr_image.GetFrame(0, i)
-                    new_frame = np.reshape(np.fromiter(frame.GetData(), dtype='uint16'), [frame.Width, frame.Height],order='F')
-                    data = np.dstack((data, new_frame)) if data.size else new_frame
-            return data
+                return self._process_multiple_frames(curr_image)
         else:
-            logger.warning('curr_image.Regions is not valid. Please retry.')
-            logger.info('Frame count: %s', curr_image.Frames)
-        return np.array([[]])  # Return an empty 2D numpy array by default
+            raise Exception('curr_image.Regions is not valid. Please retry.')
+
+    def _process_single_frame(self, curr_image):
+        """
+            **Single Frame**:
+            - Data is returned as a 2D array representing raw counts from each pixel.
+            - A vertical section (spanning 400 pixels) represents a range for wavelength averaging.
+        """
+        frame = curr_image.GetFrame(0, 0)
+        return np.reshape(np.fromiter(frame.GetData(), dtype='uint16'), [frame.Width, frame.Height], order='F')
+
+    def _process_multiple_frames(self, curr_image):
+        """
+            **Multiple Frames**:
+            - Data from successive exposures is added as a new dimension, then returns a 3D array.
+            - Averaging across frames can be done by summing over this additional dimension.
+        """
+        data = np.array([])
+        for i in range(curr_image.Frames):
+            frame = curr_image.GetFrame(0, i)
+            new_frame = np.reshape(np.fromiter(frame.GetData(), dtype='uint16'), [frame.Width, frame.Height], order='F')
+            data = np.dstack((data, new_frame)) if data.size else new_frame
+        return data
+
+    #NOTE: May not need to call the 'start_acquisition_and_wait' method if you fix the 'FileNameGeneration' issue
+    def acquire(self):
+        """
+        Acquires image data from the spectrometer.
+        """
+        self.start_acquisition_and_wait()
+        return self.process_acquired_data()
 
     def close(self):
         """
