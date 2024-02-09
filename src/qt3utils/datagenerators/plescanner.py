@@ -183,12 +183,13 @@ class WavemeterAndScanner(PleScanner):
         """
         Scans the wavelengths from vmin to vmax in steps of step_size.
         """
-        _wm_scan = self.scan_axis('v', self.vmin, self.vmax, self._step_size)
+        _wm_scan, _vs_scan = self.scan_axis('v', self.vmin, self.vmax, self._step_size)
         self.scanned_wm.append(_wm_scan)
+        self.scanned_raw_counts.append(_vs_scan)
         self.current_t = self.current_t + 1
 
     def read_wavemeter(self):
-        self.wavelength_controller.read_wavemeter()
+        return self.wm_reader.read_wavemeter()
 
     def scan_axis(self, axis, min, max, step_size) -> list:
         """

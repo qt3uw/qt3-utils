@@ -50,4 +50,4 @@ QT3PLE:
     import_path : qt3utils.applications.controllers.wavemeter_controller
     class_name  : WavemeterController
     configure :
-      dll_path : C:\\\\Users\\\\Fulab\\\\Downloads\\\\00392-2-06-A_CustomerCD621\\\\00392-2-06-A_Customer CD 621\\\\Programming Interface\\\\x64\\\\CLDevIFace.dll\
+      dll_path : C:/Users/Fulab/Downloads/00392-2-06-A_CustomerCD621/00392-2-06-A_Customer CD 621/Programming Interface/x64/CLDevIFace.dll

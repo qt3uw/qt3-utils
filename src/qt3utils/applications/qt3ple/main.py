@@ -262,7 +262,8 @@ class MainTkApplication():
 
         self.application_controller.set_scan_range(vmin, vmax)
         self.application_controller.step_size = step_size
-        self.application_controller.set_num_data_samples_per_batch(N)
+        if isinstance(self.application_controller, plescanner.CounterAndScanner):
+            self.application_controller.set_num_data_samples_per_batch(N)
 
         try:
             self.application_controller.reset()  # clears the data
