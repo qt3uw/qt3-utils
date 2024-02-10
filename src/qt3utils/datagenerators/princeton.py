@@ -240,13 +240,13 @@ class SpectrometerConfig():
         """
         Sets the current grating to be the one specified by parameter grating.
         """
-        if grating_string in self.gratings_options:
+        if grating_string in self.grating_options:
             self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, grating_string)
         else:
-            logger.error(f"Grating {grating_string} is not an options. The options are: {self.gratings_options}")
+            logger.error(f"Grating {grating_string} is not an options. The options are: {self.grating_options}")
 
     @property
-    def gratings_options(self):
+    def grating_options(self):
         """
         Returns a list of all installed gratings.
         """
