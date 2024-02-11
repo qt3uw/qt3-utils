@@ -37,41 +37,6 @@ class QT3ScanConfocalApplicationController:
                  daq_controller: QT3ScanCounterDAQControllerInterface,
                  logger_level: int) -> None:
 
-        # I realize this implementation looks strange since it essentially wraps all the calls
-        # to a CounterAndScanner object, except for a few of the methods.
-        # The reason for this is that the CounterAndScanner object is designed to be used
-        # programatically. It was not designed to be used by a GUI application and I wanted
-        # to implement good engineering practices.
-        # I considered subclassing the CounterAndScanner object here,
-        # but that required work too far outside the scope of the issue where this was developed.
-        # Future work could consider that possiblity.
-        #
-        # However, better organizations of the code are also possible and open to development.
-        #
-        # Here is one such proposal
-        #
-        # The proposal would result in two sets of Protocol/Interface classes.  One set would define
-        # a programmatic interface (to be used by researchers in Jupyter notebooks and
-        # in their own external scripts that depend on qt3utils classes). The second set
-        # would define the GUI application interfaces, which we have already
-        # done in interface.py.
-        #
-        # The programmatic interface would define
-        #   * PositionControllerInterface
-        #   * DAQControllerInterface
-        #   * XYMicroscopeScannerInterface (perhaps ConfocalScannerInterface?).
-        # Then we would change CounterAndScanner object to
-        # be an implementation of XYMicroscopeScannerInterface.
-        # We would also then make implemetnations of PositionControllerInterface and
-        # DAQControllerInterface using the nipiezojenapy classes and the classes in
-        # daqsamplers.py.
-        #
-        # From that point, we could then see if the GUI interfaces should subclass the
-        # programmatic interfaces or remain independent.
-        #
-        # Additionally, this proposal alo implies a future programmatic interface for the
-        # SpectromterController and a GUI interface for the SpectrometerController.
-
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
@@ -211,6 +176,7 @@ class QT3ScanConfocalApplicationController:
         """
         self.logger.debug(f"scan_image_rightclick_event. click at {event.xdata}, {event.ydata}")
 
+
 class QT3ScanHyperSpectralApplicationController:
     """
      Implements qt3utils.applications.qt3scan.interface.QT3ScanApplicationControllerInterface
@@ -243,6 +209,7 @@ class QT3ScanHyperSpectralApplicationController:
 
         self.hyper_spectral_raw_data = None  # is there way to create a "default numpy array", similar a 'default dict'??
         self.hyper_spectral_wavelengths = None
+
     @property
     def step_size(self) -> float:
         return self._step_size
@@ -318,10 +285,10 @@ class QT3ScanHyperSpectralApplicationController:
         self.position_controller.go_to_position(x = self.xmin, y = self.ymin)
 
     def still_scanning(self) -> bool:
-        if self.running == False: #this allows external process to stop scan
+        if self.running is False:  # this allows external process to stop scan
             return False
 
-        if self.current_y < self.ymax: #stops scan when reaches final position
+        if self.current_y < self.ymax:  # stops scan when reaches final position
             return True
         else:
             self.running = False
@@ -380,7 +347,7 @@ class QT3ScanHyperSpectralApplicationController:
 
         self.position_controller.go_to_position(**{axis: min})
         time.sleep(self.raster_line_pause)
-        
+
         for val in np.arange(min, max, step_size):
             self.position_controller.go_to_position(**{axis: val})
             measured_spectrum, measured_wavelengths = self.daq_controller.sample_spectrum()
@@ -389,7 +356,7 @@ class QT3ScanHyperSpectralApplicationController:
                 initial_spectrum_size = len(measured_spectrum)
             if wavelength_array is None:
                 wavelength_array = measured_wavelengths
-            
+
             if initial_spectrum_size != len(measured_spectrum):
                 raise QT3Error("Inconsistent spectrum size obtained during scan! Check your hardware.")
             if initial_spectrum_size != len(measured_wavelengths):
@@ -399,7 +366,7 @@ class QT3ScanHyperSpectralApplicationController:
             if np.array_equal(wavelength_array, measured_wavelengths) is False:
                 raise QT3Error("Inconsistent wavelength array obtained during scan! Check your hardware.")
             spectrums_in_scan.append(measured_spectrum)
-            
+
         return np.array(spectrums_in_scan), wavelength_array
 
     def move_y(self) -> None:
@@ -437,7 +404,7 @@ class QT3ScanHyperSpectralApplicationController:
         :return: xmin, xmax, ymin, current_y
         """
         return self.xmin, self.xmax, self.ymin, self.current_y
-    
+
     def save_scan(self, afile_name) -> None:
         file_type = afile_name.split('.')[-1]
 
