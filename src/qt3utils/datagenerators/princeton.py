@@ -1,9 +1,10 @@
 import os
+import uuid
 import logging
 import numpy as np
 from time import sleep
 from pathlib import Path
-from typing import Any, Tuple, List, Union, Optional
+from typing import Any, Tuple, List, Union
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -82,11 +83,14 @@ class LightfieldApplicationManager:
 
     def load_experiment(self, value: str) -> None:
         self.experiment.Load(value)
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachDate, True)
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachTime, True)
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachIncrement, False)
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationBaseFileName, "TestingStuff")
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachDate, False)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachTime, False)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachIncrement, True)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationIncrementNumber, 0)
 
+    def file_setup(self) -> None:
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationBaseFileName, str(uuid.uuid4()))
+    
     #TODO: Need to actually implement the three methods below so that you can:
     #      - save a new experiment
     #      - save what you are currently working on
@@ -157,6 +161,7 @@ class LightfieldApplicationManager:
         """
         Acquires image data from the spectrometer.
         """
+        self.file_setup()
         self.start_acquisition_and_wait()
         return self.process_acquired_data()
 
@@ -306,7 +311,7 @@ class SpectrometerDataAcquisition(SpectrometerConfig):
         """
         return self.light.acquire(), self.get_wavelengths()
     
-    def acquire_step_and_glue(self, wavelength_range: Tuple[float, float]) -> Tuple[np.ndarray, np.ndarray]:
+    def acquire_step_and_glue(self, wavelength_range: List[float]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Acquires a step and glue (wavelength sweep) over the specified range.
         Wavelength range must have two elements (both in nm), corresponding
