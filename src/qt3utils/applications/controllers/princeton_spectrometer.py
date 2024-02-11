@@ -14,7 +14,6 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
-        #self.spectrometerconfig = princeton.SpectrometerConfig()
         self.spectrometer = princeton.SpectrometerDataAcquisition()
         self.last_config_dict = {}
 
@@ -139,8 +138,10 @@ class QT3ScanPrincetonSpectrometerController:
 
         row += 1
         tk.Label(config_win, text="Grating").grid(row=row, column=0, padx=10)
+        grating_options = self.spectrometer.grating_options
         grating_var = tk.StringVar(value=self.spectrometer.grating)
-        tk.Entry(config_win, textvariable=grating_var).grid(row=row, column=1)
+        grating_menu = tk.OptionMenu(config_win, grating_var, *grating_options)
+        grating_menu.grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Wavelength Start (nm)").grid(row=row, column=0, padx=10)
