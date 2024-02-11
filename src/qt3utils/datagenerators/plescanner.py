@@ -1,13 +1,9 @@
-import tkinter as tk
+import logging
 import numpy as np
 import time
-import logging
-from qt3utils.applications.controllers.nidaqedgecounter import QT3ScopeNIDAQEdgeCounterController
-from qt3utils.nidaq.customcontrollers import VControl
-from qt3utils.applications.controllers.wavemeter_controller import WavemeterController
+import tkinter as tk
 
 logger = logging.getLogger(__name__)
-
 
 class PleScanner:
     """
@@ -200,7 +196,10 @@ class WavemeterAndScanner(PleScanner):
         self.scanned_count_rate.append(_vs_scan)
         self.current_t = self.current_t + 1
 
-    def read_wavemeter(self):
+    def read_wavemeter(self) -> float:
+        """
+        Returns the reading from the wavemeter
+        """
         return self.wm_reader.read_wavemeter()
 
     def scan_axis(self, axis, min, max, step_size) -> list:

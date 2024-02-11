@@ -1,32 +1,27 @@
 import argparse
-import tkinter as tk
-import logging
-from threading import Thread
-import yaml
+import h5py
 import importlib
 import importlib.resources
-from typing import Any, Protocol
-
-import numpy as np
+import logging
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib
-import h5py
 import nidaqmx
-from qt3utils.nidaq.customcontrollers import VControl
+import numpy as np
+import tkinter as tk
+import yaml
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from qt3utils.datagenerators import plescanner
-from qt3utils.applications.controllers.nidaqedgecounter import QT3ScopeNIDAQEdgeCounterController
+from threading import Thread
 
 matplotlib.use('Agg')
 
 parser = argparse.ArgumentParser(description='NI DAQ (PCIx 6363) / PLE Scanner',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-
 parser.add_argument('-q', '--quiet', action='store_true',
                     help='When true,logger level will be set to warning. Otherwise, set to "info".')
 parser.add_argument('-cmap', metavar='<MPL color>', default='gray',
                     help='Set the MatplotLib colormap scale')
-
 args = parser.parse_args()
 
 logger = logging.getLogger(__name__)
@@ -96,20 +91,20 @@ class SidePanel():
         row = 0
         tk.Label(frame, text="Scan Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
         row += 1
-        self.startButton = tk.Button(frame, text="Start Scan")
-        self.startButton.grid(row=row, column=0)
-        self.stopButton = tk.Button(frame, text="Stop Scan")
-        self.stopButton.grid(row=row, column=1)
-        self.saveScanButton = tk.Button(frame, text="Save Scan")
-        self.saveScanButton.grid(row=row, column=2)
+        self.start_button = tk.Button(frame, text="Start Scan")
+        self.start_button.grid(row=row, column=0)
+        self.stop_button = tk.Button(frame, text="Stop Scan")
+        self.stop_button.grid(row=row, column=1)
+        self.save_scan_button = tk.Button(frame, text="Save Scan")
+        self.save_scan_button.grid(row=row, column=2)
         row += 1
         tk.Label(frame, text="Voltage Range (V)").grid(row=row, column=0)
-        self.v_min_entry = tk.Entry(frame, width=10)
-        self.v_max_entry = tk.Entry(frame, width=10)
-        self.v_min_entry.insert(10, scan_range[0])
-        self.v_max_entry.insert(10, scan_range[1])
-        self.v_min_entry.grid(row=row, column=1)
-        self.v_max_entry.grid(row=row, column=2)
+        self.voltage_min_entry = tk.Entry(frame, width=10)
+        self.voltage_max_entry = tk.Entry(frame, width=10)
+        self.voltage_min_entry.insert(10, scan_range[0])
+        self.voltage_max_entry.insert(10, scan_range[1])
+        self.voltage_min_entry.grid(row=row, column=1)
+        self.voltage_max_entry.grid(row=row, column=2)
 
         row += 1
         tk.Label(frame, text="Number of Pixels").grid(row=row, column=0)
@@ -133,22 +128,22 @@ class SidePanel():
         tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
 
         row += 1
-        self.GotoButton = tk.Button(frame, text="Go To Voltage")
-        self.GotoButton.grid(row=row, column=0)
+        self.goto_button = tk.Button(frame, text="Go To Voltage")
+        self.goto_button.grid(row=row, column=0)
         row += 1
         tk.Label(frame, text="Voltage (V)").grid(row=row, column=0)
-        self.v_entry = tk.Entry(frame, width=10)
-        self.v_entry.insert(10, 0)
-        self.v_entry.grid(row=row, column=1)
+        self.voltage_entry = tk.Entry(frame, width=10)
+        self.voltage_entry.insert(10, 0)
+        self.voltage_entry.grid(row=row, column=1)
 
         row += 1
         tk.Label(frame, text="Voltage Limits (V)").grid(row=row, column=0)
-        self.v_lmin_entry = tk.Entry(frame, width=10)
-        self.v_lmax_entry = tk.Entry(frame, width=10)
-        self.v_lmin_entry.insert(10, float(scan_range[0]))
-        self.v_lmax_entry.insert(10, float(scan_range[1]))
-        self.v_lmin_entry.grid(row=row, column=1)
-        self.v_lmax_entry.grid(row=row, column=2)
+        self.voltage_lmin_entry = tk.Entry(frame, width=10)
+        self.voltage_lmax_entry = tk.Entry(frame, width=10)
+        self.voltage_lmin_entry.insert(10, float(scan_range[0]))
+        self.voltage_lmax_entry.insert(10, float(scan_range[1]))
+        self.voltage_lmin_entry.grid(row=row, column=1)
+        self.voltage_lmax_entry.grid(row=row, column=2)
 
         row+=1
         self.controller_option = tk.StringVar(frame)
@@ -183,11 +178,6 @@ class MainApplicationView():
 
         self.canvas.draw()
 
-    #@property
-    #def hardware_config_button(self) -> tk.Button:
-    #    return self.sidepanel.hardware_config_button
-
-
 class MainTkApplication():
 
     def __init__(self, controller_name) -> None:
@@ -199,34 +189,34 @@ class MainTkApplication():
         self.data_acquisition_models = {}
         self.controller_models = {}
         # load the data acquisition model
-        self.view.sidepanel.startButton.bind("<Button>", self.start_scan)
-        self.view.sidepanel.saveScanButton.bind("<Button>", self.save_scan)
-        self.view.sidepanel.stopButton.bind("<Button>", self.stop_scan)
-        self.view.sidepanel.GotoButton.bind("<Button>", self.go_to_voltage)
+        self.view.sidepanel.start_button.bind("<Button>", self.start_scan)
+        self.view.sidepanel.save_scan_button.bind("<Button>", self.save_scan)
+        self.view.sidepanel.stop_button.bind("<Button>", self.stop_scan)
+        self.view.sidepanel.goto_button.bind("<Button>", self.go_to_voltage)
         self.view.sidepanel.hardware_config_from_yaml_button.bind("<Button>", lambda e: self.configure_from_yaml())
         self.root.protocol("WM_DELETE_WINDOWwait_visibility()", self.on_closing)
 
     def go_to_voltage(self, event=None) -> None:
-        self.view.sidepanel.startButton['state'] = 'disabled'
-        self.view.sidepanel.GotoButton['state'] = 'disabled'
+        self.view.sidepanel.start_button['state'] = 'disabled'
+        self.view.sidepanel.goto_button['state'] = 'disabled'
         self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
-        self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
-        self.application_controller.go_to_v(float(self.view.sidepanel.v_entry.get()))
-        self.view.sidepanel.startButton['state'] = 'normal'
-        self.view.sidepanel.GotoButton['state'] = 'normal'
+        self.view.sidepanel.save_scan_button.config(state=tk.DISABLED)
+        self.application_controller.go_to_v(float(self.view.sidepanel.voltage_entry.get()))
+        self.view.sidepanel.start_button['state'] = 'normal'
+        self.view.sidepanel.goto_button['state'] = 'normal'
         self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
+        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
 
     def start_scan(self, event=None) -> None:
-        self.view.sidepanel.startButton['state'] = 'disabled'
-        self.view.sidepanel.GotoButton['state'] = 'disabled'
+        self.view.sidepanel.start_button['state'] = 'disabled'
+        self.view.sidepanel.goto_button['state'] = 'disabled'
         self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
-        self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
+        self.view.sidepanel.save_scan_button.config(state=tk.DISABLED)
 
         n_sample_size = int(self.view.sidepanel.num_pixels.get())
         sweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
-        vmin = float(self.view.sidepanel.v_min_entry.get())
-        vmax = float(self.view.sidepanel.v_max_entry.get())
+        vmin = float(self.view.sidepanel.voltage_min_entry.get())
+        vmax = float(self.view.sidepanel.voltage_max_entry.get())
         step_size = (vmax - vmin) / float(n_sample_size)
         args = [vmin, vmax]
         args.append(step_size)
@@ -245,10 +235,10 @@ class MainTkApplication():
 
     def stop_scan(self, event=None) -> None:
         self.application_controller.stop()
-        self.view.sidepanel.startButton['state'] = 'normal'
-        self.view.sidepanel.GotoButton['state'] = 'normal'
+        self.view.sidepanel.start_button['state'] = 'normal'
+        self.view.sidepanel.goto_button['state'] = 'normal'
         self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
+        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
     def on_closing(self) -> None:
         try:
             self.stop_scan()
@@ -282,10 +272,10 @@ class MainTkApplication():
             logger.info(
                 'Check for other applications using resources. If not, you may need to restart the application.')
 
-        self.view.sidepanel.startButton['state'] = 'normal'
-        self.view.sidepanel.GotoButton['state'] = 'normal'
+        self.view.sidepanel.start_button['state'] = 'normal'
+        self.view.sidepanel.goto_button['state'] = 'normal'
         self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
+        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
 
     def save_scan(self, event = None):
         myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
@@ -314,7 +304,7 @@ class MainTkApplication():
             for key, value in data.items():
                 h5file.create_dataset(key, data=value)
             h5file.close()
-        self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
+        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
 
     def configure_from_yaml(self, afile=None) -> None:
         """
@@ -382,7 +372,6 @@ class MainTkApplication():
         Should be called during instantiation of this class and should be the callback
         function for the support controller pull-down menu in the side panel
         """
-        #yaml_path = importlib.resources.path(CONTROLLER_PATH, STANDARD_CONTROLLERS[application_controller_name])
         yaml_path = importlib.resources.files(CONTROLLER_PATH).joinpath(STANDARD_CONTROLLERS[application_controller_name])
         self.configure_from_yaml(str(yaml_path))
 

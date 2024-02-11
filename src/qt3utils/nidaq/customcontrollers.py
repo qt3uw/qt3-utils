@@ -1,9 +1,13 @@
+import logging
 import nidaqmx
 import time
-import logging
 
 logger = logging.getLogger(__name__)
 class VControl():
+    """
+    Class for interfacing with DAQ hardware with the express purpose of
+    controlling and/or reading the voltage at the DAQ that sets the wavelength of a laser
+    """
 
     def __init__(self, device_name: str = "",
                  write_channel: str = 'ao0',
@@ -20,26 +24,26 @@ class VControl():
         self.scale_nm_per_volt = scale_nm_per_volt
         self.minimum_allowed_position = min_position
         self.maximum_allowed_position = max_position
-        self._settling_time_in_seconds = move_settle_time #10 millisecond settle time
+        self._settling_time_in_seconds = move_settle_time  # 10 millisecond settle time
         self.last_write_value = None
 
 
 
-    def go_to_voltage(self, v: float = None) -> None:
+    def go_to_voltage(self, voltage: float = None) -> None:
         '''
-        !//Sets the voltage
+        Sets the voltage
         raises ValueError if try to set position out of bounds.
         '''
         debug_string = []
-        if v is not None:
-            self._validate_value(v)
+        if voltage is not None:
+            self._validate_value(voltage)
             with nidaqmx.Task() as task:
-                task.ao_channels.add_ao_voltage_chan(self.device_name + '/' + self.write_channel)
-                task.write(self._nm_to_volts(nm=v))
-                self.last_write_value = v
-            debug_string.append(f'v: {v:.2f}')
+                task.ao_channels.add_ao_voltage_chan(f"{self.device_name}/{self.write_channel}")
+                task.write(self._nm_to_volts(nm=voltage))
+                self.last_write_value = voltage
+            debug_string.append(f'voltage: {voltage:.2f}')
         logger.info(f'go to voltage {" ".join(debug_string)}')
-        time.sleep(self.settling_time_in_seconds) #wait to ensure piezo actuator has settled into position.
+        time.sleep(self.settling_time_in_seconds)  # wait to ensure piezo actuator has settled into position.
         logger.debug(f'last write: {self.last_write_value}')
 
     def get_current_voltage(self) -> float:

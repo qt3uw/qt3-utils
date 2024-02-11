@@ -37,8 +37,6 @@ class WavemeterController:
         This method is used to configure the data controller.
         """
         self.logger.debug("calling configure on the wave meter controller")
-        #self.last_config_dict.update(config_dict)
-
         self.dll_path = config_dict.get('dll_path', self.dll_path)
         self.init_dll(self.dll_path)
 
