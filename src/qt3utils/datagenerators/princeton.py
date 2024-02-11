@@ -4,6 +4,7 @@ import logging
 import numpy as np
 from time import sleep
 from pathlib import Path
+from qt3utils.errors import  QT3Error
 from typing import Any, Tuple, List, Union
 
 logging.basicConfig(level=logging.INFO)
@@ -110,54 +111,54 @@ class LightfieldApplicationManager:
         """
         Starts the acquisition process and waits until it is completed before carrying on.
         """
-        acquisition_time = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime)
+        acquisition_time_seconds = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) / 1000.0
         num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
         self.experiment.Acquire()
-        
-        sleep(0.001 * acquisition_time * num_frames)  # waiting for the exposure duration
+
+        sleep(num_frames * acquisition_time_seconds) 
         
         while self.experiment.IsRunning:
             sleep(0.1)  # checking if the experiment is still running
 
-    def process_acquired_data(self) -> Union[np.ndarray, Any]:
+    def process_acquired_data(self) -> np.ndarray:
         """
         Processes the most recently acquired data and returns it as a numpy array.
         """
         last_file = self._application.FileManager.GetRecentlyAcquiredFileNames()[0]
-        curr_image = self._application.FileManager.OpenFile(last_file, FileAccess.Read)
+        image_dataset = self._application.FileManager.OpenFile(last_file, FileAccess.Read)
 
-        if curr_image.Regions.Length == 1:
-            if curr_image.Frames == 1:
-                return self._process_single_frame(curr_image)
+        if image_dataset.Regions.Length == 1:
+            if image_dataset.Frames == 1:
+                return self._process_single_frame(image_dataset)
             else:
-                return self._process_multiple_frames(curr_image)
+                return self._process_multiple_frames(image_dataset)
         else:
-            raise Exception('curr_image.Regions is not valid. Please retry.')
+            raise QT3Error(f"LightField FileManager OpenFile error. Unsupported value for Regions.Length: {image_dataset.Regions.Length}.Should be == 1")
 
-    def _process_single_frame(self, curr_image: Any) -> np.ndarray:
+    def _process_single_frame(self, image_dataset: Any) -> np.ndarray:
         """
             **Single Frame**:
             - Data is returned as a 2D array representing raw counts from each pixel.
             - A vertical section (spanning 400 pixels) represents a range for wavelength averaging.
         """
-        frame = curr_image.GetFrame(0, 0)
+        frame = image_dataset.GetFrame(0, 0)
         return np.reshape(np.fromiter(frame.GetData(), dtype='uint16'), [frame.Width, frame.Height], order='F')
 
-    def _process_multiple_frames(self, curr_image: Any) -> np.ndarray:
+    def _process_multiple_frames(self, image_dataset: Any) -> np.ndarray:
         """
             **Multiple Frames**:
             - Data from successive exposures is added as a new dimension, then returns a 3D array.
             - Averaging across frames can be done by summing over this additional dimension.
         """
         data = np.array([])
-        for i in range(curr_image.Frames):
-            frame = curr_image.GetFrame(0, i)
+        for i in range(image_dataset.Frames):
+            frame = image_dataset.GetFrame(0, i)
             new_frame = np.reshape(np.fromiter(frame.GetData(), dtype='uint16'), [frame.Width, frame.Height], order='F')
             data = np.dstack((data, new_frame)) if data.size else new_frame
         return data
 
     #NOTE: May not need to call the 'start_acquisition_and_wait' method if you fix the 'FileNameGeneration' issue
-    def acquire(self) -> Union[np.array, None]:
+    def acquire(self) -> np.ndarray:
         """
         Acquires image data from the spectrometer.
         """
@@ -240,14 +241,14 @@ class SpectrometerConfig():
         return self.light.get(lf.AddIns.SpectrometerSettings.GratingSelected)
 
     @grating.setter
-    def grating(self, grating_string: str) -> None:
+    def grating(self, value: str) -> None:
         """
         Sets the current grating to be the one specified by parameter grating.
         """
-        if grating_string in self.grating_options:
-            self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, grating_string)
+        if value in self.grating_options:
+            self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, value)
         else:
-            logger.error(f"Grating {grating_string} is not an options. The options are: {self.grating_options}")
+            logger.error(f"Grating {value} is not an options. The options are: {self.grating_options}")
 
     @property
     def grating_options(self) -> List[str]:
@@ -311,7 +312,7 @@ class SpectrometerDataAcquisition(SpectrometerConfig):
         """
         return self.light.acquire(), self.get_wavelengths()
     
-    def acquire_step_and_glue(self, wavelength_range: List[float]) -> Tuple[np.ndarray, np.ndarray]:
+    def acquire_step_and_glue(self, wavelength_range: Tuple[float, float]) -> Tuple[np.ndarray, np.ndarray]:
         """
         Acquires a step and glue (wavelength sweep) over the specified range.
         Wavelength range must have two elements (both in nm), corresponding
