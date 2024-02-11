@@ -99,6 +99,7 @@ class QT3ScanDAQControllerInterface(Protocol):
         """
         pass
 
+
 @runtime_checkable
 class QT3ScanCounterDAQControllerInterface(QT3ScanDAQControllerInterface, Protocol):
     """
@@ -146,6 +147,7 @@ class QT3ScanSpectrometerDAQControllerInterface(QT3ScanDAQControllerInterface, P
         """
         pass
 
+
 @runtime_checkable
 class QT3ScanApplicationControllerInterface(Protocol):
 
@@ -164,9 +166,6 @@ class QT3ScanApplicationControllerInterface(Protocol):
     def step_size(self, value: float):
         pass
 
-    ## TODO -- scanned_count_rate and scanned_raw_counts might not be the best names for these properties
-    # these are the 2D data representation of the scan -- for confocal scans, each pixel is
-    # simply the number of counts. for hyperspectral, the pixel is the counts summed across the spectrum
     @property
     def scanned_count_rate(self) -> np.ndarray:
         """
