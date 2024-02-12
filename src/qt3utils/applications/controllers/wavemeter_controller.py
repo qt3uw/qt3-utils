@@ -3,16 +3,48 @@ import logging
 
 class WavemeterController:
     """
+    Base class for other types of wavemeter controllers to inherit from
+    """
+    def __init__(self, logger_level):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logger_level)
+
+    def open(self):
+        """
+        Override this method to open and initialize wavemeter
+        """
+        pass
+
+    def read_wavemeter(self):
+        """
+        Override this method to read the value from the wavemeter
+        """
+        pass
+
+    def close_wavemeter(self):
+        """
+        Override this method to close the connection to the wavemeter
+        """
+        pass
+
+    def configure(self):
+        """
+        Override this method to configure the wavemeter from a dict set via yaml file
+        """
+        pass
+
+class WavemeterDllController(WavemeterController):
+    """
     Class for interfacing with wavemeter hardware
     """
-    def __init__(self, dll_path=""):
-        self.logger = logging.getLogger(__name__)
+    def __init__(self, logger_level, dll_path=""):
+        super(WavemeterDllController, self).__init__(logger_level)
         if not dll_path == "":
-            self.init_dll(dll_path)
+            self.open(dll_path)
         self.dll_path = dll_path
         self.last_config_dict = {}
 
-    def init_dll(self, dll_path) -> None:
+    def open(self, dll_path) -> None:
         """
         Set the path to the dll used for interfacing with the wavemeter
         """
@@ -23,9 +55,15 @@ class WavemeterController:
             raise Exception("Failed to connect to wave meter.")
 
     def read_wavemeter(self) -> float:
+        """
+        Return the value from the wavemeter via the dll
+        """
         return self._mydll.CLGetLambdaReading(self._dh)
 
     def close_wavemeter(self) -> None:
+        """
+        Close the connection to the wavemeter via the dll
+        """
         ending = self._mydll.CLCloseDevice(self._dh)
         if ending == -1:
             raise Exception("Failed to properly close connection to wave meter.")
@@ -38,5 +76,5 @@ class WavemeterController:
         """
         self.logger.debug("calling configure on the wave meter controller")
         self.dll_path = config_dict.get('dll_path', self.dll_path)
-        self.init_dll(self.dll_path)
+        self.open(self.dll_path)
 

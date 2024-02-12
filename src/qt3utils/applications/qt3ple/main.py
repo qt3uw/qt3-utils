@@ -3,16 +3,17 @@ import h5py
 import importlib
 import importlib.resources
 import logging
-import matplotlib.pyplot as plt
+from threading import Thread
+
 import matplotlib
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+import matplotlib.pyplot as plt
 import nidaqmx
 import numpy as np
 import tkinter as tk
 import yaml
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from qt3utils.datagenerators import plescanner
-from threading import Thread
 
 matplotlib.use('Agg')
 
@@ -57,10 +58,10 @@ class ScanImage:
             data = model.scanned_count_rate
         data = np.array(data).T.tolist()
 
-        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.current_t + model.raster_line_pause,
+        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.current_frame + model.raster_line_pause,
                                                                    0,
-                                                                   model.vmin,
-                                                                   model.vmax + model.step_size
+                                                                   model.vstart,
+                                                                   model.vend + model.step_size
                                                                    ])
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
@@ -99,12 +100,12 @@ class SidePanel():
         self.save_scan_button.grid(row=row, column=2)
         row += 1
         tk.Label(frame, text="Voltage Range (V)").grid(row=row, column=0)
-        self.voltage_min_entry = tk.Entry(frame, width=10)
-        self.voltage_max_entry = tk.Entry(frame, width=10)
-        self.voltage_min_entry.insert(10, scan_range[0])
-        self.voltage_max_entry.insert(10, scan_range[1])
-        self.voltage_min_entry.grid(row=row, column=1)
-        self.voltage_max_entry.grid(row=row, column=2)
+        self.voltage_start_entry = tk.Entry(frame, width=10)
+        self.voltage_end_entry = tk.Entry(frame, width=10)
+        self.voltage_start_entry.insert(10, scan_range[0])
+        self.voltage_end_entry.insert(10, scan_range[1])
+        self.voltage_start_entry.grid(row=row, column=1)
+        self.voltage_end_entry.grid(row=row, column=2)
 
         row += 1
         tk.Label(frame, text="Number of Pixels").grid(row=row, column=0)
@@ -197,30 +198,23 @@ class MainTkApplication():
         self.root.protocol("WM_DELETE_WINDOWwait_visibility()", self.on_closing)
 
     def go_to_voltage(self, event=None) -> None:
-        self.view.sidepanel.start_button['state'] = 'disabled'
-        self.view.sidepanel.goto_button['state'] = 'disabled'
-        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
-        self.view.sidepanel.save_scan_button.config(state=tk.DISABLED)
-        self.application_controller.go_to_v(float(self.view.sidepanel.voltage_entry.get()))
-        self.view.sidepanel.start_button['state'] = 'normal'
-        self.view.sidepanel.goto_button['state'] = 'normal'
-        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
+        self.disable_buttons()
+        self.application_controller.go_to_voltage(float(self.view.sidepanel.voltage_entry.get()))
+        self.enable_buttons()
 
     def start_scan(self, event=None) -> None:
-        self.view.sidepanel.start_button['state'] = 'disabled'
-        self.view.sidepanel.goto_button['state'] = 'disabled'
-        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
-        self.view.sidepanel.save_scan_button.config(state=tk.DISABLED)
+        self.disable_buttons()
 
         n_sample_size = int(self.view.sidepanel.num_pixels.get())
+        n_scans = int(self.view.sidepanel.scan_num_entry.get())
         sweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
-        vmin = float(self.view.sidepanel.voltage_min_entry.get())
-        vmax = float(self.view.sidepanel.voltage_max_entry.get())
-        step_size = (vmax - vmin) / float(n_sample_size)
-        args = [vmin, vmax]
+        vstart= float(self.view.sidepanel.voltage_start_entry.get())
+        vend = float(self.view.sidepanel.voltage_end_entry.get())
+        step_size = (vend - vstart) / float(n_sample_size)
+        args = [vstart, vend]
         args.append(step_size)
         args.append(n_sample_size)
+        args.append(n_scans)
 
         settling_time = sweep_time_entry / n_sample_size
         self.application_controller.wavelength_controller.settling_time_in_seconds = settling_time
@@ -235,10 +229,7 @@ class MainTkApplication():
 
     def stop_scan(self, event=None) -> None:
         self.application_controller.stop()
-        self.view.sidepanel.start_button['state'] = 'normal'
-        self.view.sidepanel.goto_button['state'] = 'normal'
-        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
+        self.enable_buttons()
     def on_closing(self) -> None:
         try:
             self.stop_scan()
@@ -248,20 +239,26 @@ class MainTkApplication():
             logger.debug(e)
             pass
 
-    def scan_thread_function(self, vmin, vmax, step_size, N) -> None:
+    def scan_thread_function(self, vstart: float, vend: float, step_size: float, n_sample_size: int, n_scans: int) -> None:
+        """
+        Function to be called in background thread
+        Scans the voltage from vstart to vend in increments of step_size
+        for a total of n_sample_size data points n_scans number of times
+        """
 
-        self.application_controller.set_scan_range(vmin, vmax)
+        self.application_controller.set_scan_range(vstart, vend)
         self.application_controller.step_size = step_size
+        self.application_controller.tmax = n_scans
         if isinstance(self.application_controller, plescanner.CounterAndScanner):
-            self.application_controller.set_num_data_samples_per_batch(N)
+            self.application_controller.set_num_data_samples_per_batch(n_sample_size)
 
         try:
             self.application_controller.reset()  # clears the data
             self.application_controller.start()  # starts the DAQ
-            self.application_controller.set_to_starting_position()  # moves the stage to starting position
+            self.application_controller.set_to_starting_voltage()  # moves the stage to starting voltage
 
             while self.application_controller.still_scanning():
-                self.application_controller.scan_v()
+                self.application_controller.scan_voltage()
                 self.view.scan_view.update(self.application_controller)
                 self.view.canvas.draw()
 
@@ -272,10 +269,7 @@ class MainTkApplication():
             logger.info(
                 'Check for other applications using resources. If not, you may need to restart the application.')
 
-        self.view.sidepanel.start_button['state'] = 'normal'
-        self.view.sidepanel.goto_button['state'] = 'normal'
-        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
+        self.enable_buttons()
 
     def save_scan(self, event = None):
         myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
@@ -304,7 +298,6 @@ class MainTkApplication():
             for key, value in data.items():
                 h5file.create_dataset(key, data=value)
             h5file.close()
-        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
 
     def configure_from_yaml(self, afile=None) -> None:
         """
@@ -338,7 +331,7 @@ class MainTkApplication():
                 module = importlib.import_module(daq_reader_config['import_path'])
                 logger.debug(f"loading {daq_reader_config['import_path']}")
                 cls = getattr(module, daq_reader_config['class_name'])
-                self.data_acquisition_models[daq_reader] = cls()
+                self.data_acquisition_models[daq_reader] = cls(logger.level)
                 self.data_acquisition_models[daq_reader].configure(daq_reader_config['configure'])
         wm_readers = self.app_config["readers"]["wm_readers"]
         if wm_readers is not None:
@@ -348,7 +341,7 @@ class MainTkApplication():
                 module = importlib.import_module(wm_reader_config['import_path'])
                 logger.debug(f"loading {wm_reader_config['import_path']}")
                 cls = getattr(module, wm_reader_config['class_name'])
-                self.data_acquisition_models[wm_reader] = cls()
+                self.data_acquisition_models[wm_reader] = cls(logger.level)
                 self.data_acquisition_models[wm_reader].configure(wm_reader_config['configure'])
         daq_controllers = self.app_config["controllers"]["daq_writers"]
         if daq_controllers is not None:
@@ -374,6 +367,18 @@ class MainTkApplication():
         """
         yaml_path = importlib.resources.files(CONTROLLER_PATH).joinpath(STANDARD_CONTROLLERS[application_controller_name])
         self.configure_from_yaml(str(yaml_path))
+
+    def disable_buttons(self):
+        self.view.sidepanel.start_button['state'] = 'disabled'
+        self.view.sidepanel.goto_button['state'] = 'disabled'
+        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
+        self.view.sidepanel.save_scan_button.config(state=tk.DISABLED)
+
+    def enable_buttons(self):
+        self.view.sidepanel.start_button['state'] = 'normal'
+        self.view.sidepanel.goto_button['state'] = 'normal'
+        self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
+        self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
 
 def main() -> None:
     tkapp = MainTkApplication(DEFAULT_DAQ_DEVICE_NAME)

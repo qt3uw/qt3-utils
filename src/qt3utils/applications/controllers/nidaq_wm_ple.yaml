@@ -11,7 +11,7 @@ QT3PLE:
           daq_reader : DAQReader
           daq_reader2 : DAQReader2
         wm_readers:
-          wm_reader : WavemeterController
+          wm_reader : WavemeterDllController
 
   DAQReader:
     import_path : qt3utils.nidaq.customcontrollers
@@ -48,6 +48,6 @@ QT3PLE:
 
   WavemeterController:
     import_path : qt3utils.applications.controllers.wavemeter_controller
-    class_name  : WavemeterController
+    class_name  : WavemeterDllController
     configure :
       dll_path : C:/Users/Fulab/Downloads/00392-2-06-A_CustomerCD621/00392-2-06-A_Customer CD 621/Programming Interface/x64/CLDevIFace.dll
