@@ -92,20 +92,6 @@ class LightfieldApplicationManager:
     def file_setup(self) -> None:
         self.set(lf.AddIns.ExperimentSettings.FileNameGenerationBaseFileName, str(uuid.uuid4()))
     
-    #TODO: Need to actually implement the three methods below so that you can:
-    #      - save a new experiment
-    #      - save what you are currently working on
-    #      - stop the scan 
-        
-    def save_current_experiment(self) -> None:
-        self.experiment.Save()
-    
-    def save_new_experient(self, value) -> None:
-        self.experiment.SaveAs(value)
-
-    def stop_scan(self) -> None:
-        self.experiment.Stop()
-
     #NOTE: Thw while loop in here will not be needed once you fix the "FileNameGeneration" problem.
     def start_acquisition_and_wait(self) -> None:
         """
@@ -186,6 +172,12 @@ class SpectrometerConfig():
         Closes the Lightfield application without saving the settings.
         """
         self.light.close()
+        
+    def stop_scan(self) -> None:
+        """ 
+        Stop/Pause the current acquisition. If you click "Start" you will be able to continue the scan.
+        """
+        self.light.experiment.Stop()
     
     def get_wavelengths(self) -> np.ndarray:
         """

@@ -41,7 +41,7 @@ class QT3ScanPrincetonSpectrometerController:
         """
         Implementations should do necessary steps to stop acquiring data.
         """
-        #TODO: Need to implement a feature to pause scan here. If there is a way to interrupt data acquistion, do that here. Otherwise, do nothing
+        self.spectrometer.stop_scan()
         self.logger.debug('calling QT3ScanPrincetonSpectrometerController stop')
 
     def close(self) -> None:
