@@ -95,18 +95,14 @@ class QT3ScanPrincetonSpectrometerController:
         """
         self.logger.debug("Calling configure on the Princeton Spectrometer data controller")
         self.last_config_dict.update(config_dict)
-
-        try:
-            #NOTE: If you dont type cast these then you will get serialization errors
-            self.spectrometer.experiment_name = str(config_dict.get('experiment_name', self.spectrometer.experiment_name))
-            self.spectrometer.exposure_time = float(config_dict.get('exposure_time', self.spectrometer.exposure_time))
-            self.spectrometer.center_wavelength = float(config_dict.get('center_wavelength', self.spectrometer.center_wavelength))
-            self.spectrometer.temperature_sensor_setpoint = float(config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint))
-            self.spectrometer.grating = str(config_dict.get('grating', self.spectrometer.grating))
-            self.wave_start = float(config_dict.get('wave_start', self.wave_start))
-            self.wave_end = float(config_dict.get('wave_end', self.wave_end))
-        except Exception as e:
-            self.logger.error({str(e)})
+    
+        self.spectrometer.experiment_name = config_dict.get('experiment_name', self.spectrometer.experiment_name)
+        self.spectrometer.exposure_time = config_dict.get('exposure_time', self.spectrometer.exposure_time)
+        self.spectrometer.center_wavelength = config_dict.get('center_wavelength', self.spectrometer.center_wavelength)
+        self.spectrometer.temperature_sensor_setpoint = config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint)
+        self.spectrometer.grating = config_dict.get('grating', self.spectrometer.grating)
+        self.wave_start = config_dict.get('wave_start', self.wave_start)
+        self.wave_end = config_dict.get('wave_end', self.wave_end)
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """
@@ -161,7 +157,7 @@ class QT3ScanPrincetonSpectrometerController:
             'temperature_sensor_setpoint': temperature_sensor_setpoint_var,
             'grating': grating_var,
             'wave_start': wave_start_var,
-            'wave_end': wave_end_var, 
+            'wave_end': wave_end_var
         }
 
         row += 1

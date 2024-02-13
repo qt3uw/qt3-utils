@@ -27,7 +27,7 @@ try:
     clr.AddReference("System.Collections")
     clr.AddReference("System.IO")
     from System.Collections.Generic import List
-    from System import String
+    from System import String, Int32, Int64, IntPtr, Double
     from System.IO import FileAccess
 except KeyError as e:
     logger.error(f"KeyError {e} during import")
@@ -83,11 +83,11 @@ class LightfieldApplicationManager:
         return value
 
     def load_experiment(self, value: str) -> None:
-        self.experiment.Load(value)
+        self.experiment.Load(String(value))
         self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachDate, False)
         self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachTime, False)
         self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachIncrement, True)
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationIncrementNumber, 0)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationIncrementNumber, Int32(0))
 
     def file_setup(self) -> None:
         self.set(lf.AddIns.ExperimentSettings.FileNameGenerationBaseFileName, str(uuid.uuid4()))
@@ -211,7 +211,7 @@ class SpectrometerConfig():
         """
         # The line below addresses bug where if step and glue is enabled it wont allow you to set the center wavelength.
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-        self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, nanometers)
+        self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, Double(nanometers))
 
     @property
     def experiment_name(self) -> Union[str, None]:
@@ -246,7 +246,7 @@ class SpectrometerConfig():
         Sets the current grating to be the one specified by parameter grating.
         """
         if value in self.grating_options:
-            self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, value)
+            self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, String(value))
         else:
             logger.error(f"Grating {value} is not an options. The options are: {self.grating_options}")
 
@@ -271,7 +271,7 @@ class SpectrometerConfig():
         """
         Sets the number of frames to be taken during acquisition to number.
         """
-        self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, num_frames)
+        self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, Int64(num_frames))
 
     @property
     def exposure_time(self) -> float:
@@ -285,7 +285,7 @@ class SpectrometerConfig():
         """
         Sets the single frame exposure time to be ms (in ms).
         """
-        self.light.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, ms)
+        self.light.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, Double(ms))
 
     @property
     def temperature_sensor_setpoint(self) -> float:
@@ -302,7 +302,7 @@ class SpectrometerConfig():
         The `temperature_sensor_setpoint` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
         Depending on the setpoint, the behavior or response of the camera sensor might vary.
         """
-        self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, deg_C)
+        self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, Double(deg_C))
 
 class SpectrometerDataAcquisition(SpectrometerConfig):
     def acquire_frame(self) -> Tuple[np.ndarray, np.ndarray]:
@@ -332,8 +332,8 @@ class SpectrometerDataAcquisition(SpectrometerConfig):
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
             logger.error(f'Unable to perform step and glue due to error: {e}')
 
-        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, lambda_min)
-        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, lambda_max)
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, Double(lambda_min))
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, Double(lambda_max))
         
         if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
             raise ValueError(f"End wavelength must be atleast {self.MIN_WAVELENGTH_DIFFERENCE} units greater than the start wavelength.") 
