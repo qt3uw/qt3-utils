@@ -5,7 +5,7 @@ QT3Scan:
     configure :
       exposure_time : 500 # This is in ms
       center_wavelength : 700 # This is in nm
-      temperature_sensor_setpoint : -70 # This is in Celsius
+      sensor_temperature_set_point : -70 # This is in Celsius
       wave_start : 600
       wave_end : 850
       experiment_name: "HAL-9000 test one"

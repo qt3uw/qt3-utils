@@ -161,7 +161,7 @@ class QT3ScanRandomSpectrometerDataController:
             self.wave_end = 850
             self.num_frames = 1
             self.center_wavelength = 700  # nm
-            self.temperature_sensor_setpoint = -70  # grad
+            self.sensor_temperature_set_point = -70  # grad
 
             self.nv_probability = 0.01
             self.background_counts = int(1e5)
@@ -224,7 +224,7 @@ class QT3ScanRandomSpectrometerDataController:
         self.spectrometer.experiment_name = config_dict.get('experiment_name', self.spectrometer.experiment_name)
         self.spectrometer.center_wavelength = config_dict.get('center_wavelength', self.spectrometer.center_wavelength)
         self.spectrometer.exposure_time = config_dict.get('exposure_time', self.spectrometer.exposure_time)
-        self.spectrometer.temperature_sensor_setpoint = config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint)
+        self.spectrometer.sensor_temperature_set_point = config_dict.get('sensor_temperature_set_point', self.spectrometer.sensor_temperature_set_point)
         self.spectrometer.num_frames = config_dict.get('num_frames', self.spectrometer.num_frames)
         self.spectrometer.num_wavelength_bins = config_dict.get('num_wavelength_bins', self.spectrometer.num_wavelength_bins)
         self.spectrometer.wave_start = config_dict.get('wave_start', self.spectrometer.wave_start)
@@ -256,8 +256,8 @@ class QT3ScanRandomSpectrometerDataController:
 
         row += 1
         tk.Label(config_win, text="Temperature Sensor Setpoint (°C)").grid(row=row, column=0, padx=10)
-        temperature_sensor_setpoint_var = tk.IntVar(value=str(self.spectrometer.temperature_sensor_setpoint))
-        tk.Entry(config_win, textvariable=temperature_sensor_setpoint_var).grid(row=row, column=1)
+        sensor_temperature_set_point_var = tk.IntVar(value=str(self.spectrometer.sensor_temperature_set_point))
+        tk.Entry(config_win, textvariable=sensor_temperature_set_point_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Num Wavelength Bins").grid(row=row, column=0, padx=10)
@@ -283,7 +283,7 @@ class QT3ScanRandomSpectrometerDataController:
             'experiment_name': experiment_name_var,
             'exposure_time': exposure_time_var,
             'center_wavelength': center_wavelength_var,
-            'temperature_sensor_setpoint': temperature_sensor_setpoint_var,
+            'sensor_temperature_set_point': sensor_temperature_set_point_var,
             'num_wavelength_bins': num_wavelength_bins_var,
             'wave_start': wave_start_var,
             'wave_end': wave_end_var,

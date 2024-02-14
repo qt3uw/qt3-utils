@@ -40,20 +40,15 @@ class LightfieldApplicationManager:
         self._automation = lf.Automation.Automation(visible, List[String]())
         self._application = self._automation.LightFieldApplication
         self._experiment = self._application.Experiment
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachDate, False)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachTime, False)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachIncrement, True)
+        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationIncrementNumber, Int32(0))
+        self.stop_flag = False
 
     @property
     def experiment(self) -> Any:
         return self._experiment
-
-    def __del__(self) -> None:
-        """
-        Uses Python garbage collection method used to terminate
-        AddInProcess.exe, if this is not done, LightField will not reopen
-        properly.
-        """
-        #NOTE: May need to call '.Dispose()' here again as qt3scan may fail to call 'close'
-        self._automation.Dispose()
-        logger.info('Closed AddInProcess.exe')
 
     def set(self, setting: str, value: Any) -> None:
         """
@@ -64,11 +59,9 @@ class LightfieldApplicationManager:
             if self.experiment.IsValid(setting, value):
                 self.experiment.SetValue(setting, value)
             else:
-                # TODO: might need to add a proper exception
-                logger.error(f'Invalid value: {value} for setting: {setting}.')
+                raise Exception(f'Invalid value: {value} for setting: {setting}.')
         else:
-            # TODO: might need to add a proper exception
-            logger.error(f'Invalid setting: {setting}.')
+            raise Exception(f'Invalid setting: {setting}.')
 
     def get(self, setting: Any) -> Any:
         """
@@ -82,31 +75,31 @@ class LightfieldApplicationManager:
             logger.error(f'Invalid setting: {setting}.')
         return value
 
-    def load_experiment(self, value: str) -> None:
-        self.experiment.Load(String(value))
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachDate, False)
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachTime, False)
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationAttachIncrement, True)
-        self.set(lf.AddIns.ExperimentSettings.FileNameGenerationIncrementNumber, Int32(0))
+    def load_experiment(self, selected_experiment: str) -> None:
+        """
+        This method loads a specified experiment from the list of experiments stored in Lightfield.
+        
+        Additionally this method:
+        - Removes the date and time previously attached to acquisition file names.
+        - Adds an incremental value to each acquisition starting from zero.
+        """
+        self.experiment.Load(String(selected_experiment))
 
-    def file_setup(self) -> None:
+    def _file_setup(self) -> None:
         self.set(lf.AddIns.ExperimentSettings.FileNameGenerationBaseFileName, str(uuid.uuid4()))
     
-    #NOTE: Thw while loop in here will not be needed once you fix the "FileNameGeneration" problem.
-    def start_acquisition_and_wait(self) -> None:
+    def _start_acquisition_and_wait(self) -> None:
         """
         Starts the acquisition process and waits until it is completed before carrying on.
         """
-        acquisition_time_seconds = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) / 1000.0
-        num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
-        self.experiment.Acquire()
+        #acquisition_time_seconds = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) / 1000.0
+        #num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
+        if self.stop_flag == False:
+            self.experiment.Acquire()
+            while self.experiment.IsRunning:
+                sleep(0.1) 
 
-        sleep(num_frames * acquisition_time_seconds) 
-        
-        while self.experiment.IsRunning:
-            sleep(0.1)  # checking if the experiment is still running
-
-    def process_acquired_data(self) -> np.ndarray:
+    def _process_acquired_data(self) -> np.ndarray:
         """
         Processes the most recently acquired data and returns it as a numpy array.
         """
@@ -148,9 +141,10 @@ class LightfieldApplicationManager:
         """
         Acquires image data from the spectrometer.
         """
-        self.file_setup()
-        self.start_acquisition_and_wait()
-        return self.process_acquired_data()
+        self.stop_flag = False
+        self._file_setup()
+        self._start_acquisition_and_wait()
+        return self._process_acquired_data()
 
     def close(self) -> None:
         """
@@ -158,12 +152,25 @@ class LightfieldApplicationManager:
         """
         self._automation.Dispose()
         logger.info('Closed AddInProcess.exe')
+        
+    def __del__(self) -> None:
+        """
+        Uses Python garbage collection method used to terminate
+        AddInProcess.exe, if this is not done, LightField will not reopen
+        properly.
+        """
+        self.close()
+        logger.info('Closed AddInProcess.exe')
 
 class SpectrometerConfig():
 
+    """ 
+    This constant represents the minimum difference your maximum and minimum wavelength have to be away from each other in order to perform 'acquire_step_and_glue".
+    If the difference between lambda_max and lambda_min is less than this you will run into an error.
+    """
     MIN_WAVELENGTH_DIFFERENCE = 117
-
-    def __init__(self, experiment_name=None) -> None:
+    
+    def __init__(self, experiment_name: str = None) -> None:
         self._experiment_name = experiment_name
         self.light = LightfieldApplicationManager(True)
 
@@ -177,6 +184,7 @@ class SpectrometerConfig():
         """ 
         Stop/Pause the current acquisition. If you click "Start" you will be able to continue the scan.
         """
+        self.light.stop_flag = True
         self.light.experiment.Stop()
     
     def get_wavelengths(self) -> np.ndarray:
@@ -226,14 +234,14 @@ class SpectrometerConfig():
                 logger.error(f"An experiment with that file name does not exist.")
 
     @property
-    def grating(self) -> str:
+    def grating_selected(self) -> str:
         """
         Returns the current grating.
         """
         return self.light.get(lf.AddIns.SpectrometerSettings.GratingSelected)
 
-    @grating.setter
-    def grating(self, value: str) -> None:
+    @grating_selected.setter
+    def grating_selected(self, value: str) -> None:
         """
         Sets the current grating to be the one specified by parameter grating.
         """
@@ -280,18 +288,18 @@ class SpectrometerConfig():
         self.light.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, Double(ms))
 
     @property
-    def temperature_sensor_setpoint(self) -> float:
+    def sensor_temperature_set_point(self) -> float:
         """
         Returns the sensor setpoint temperature (Celsius).
         """
         return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureSetPoint)
 
-    @temperature_sensor_setpoint.setter
-    def temperature_sensor_setpoint(self, deg_C: float) -> None:
+    @sensor_temperature_set_point.setter
+    def sensor_temperature_set_point(self, deg_C: float) -> None:
         """
         Sets the sensor target temperature (in degrees Celsius) to deg_C.
-        This function retrieves image data, with particular attention to the camera's configuration determined by the `temperature_sensor_setpoint`.
-        The `temperature_sensor_setpoint` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
+        This function retrieves image data, with particular attention to the camera's configuration determined by the `sensor_temperature_set_point`.
+        The `sensor_temperature_set_point` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
         Depending on the setpoint, the behavior or response of the camera sensor might vary.
         """
         self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, Double(deg_C))
