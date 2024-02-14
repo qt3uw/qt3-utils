@@ -5,8 +5,8 @@ QT3Scan:
     configure :
       exposure_time : 2000 # This is in ms
       center_wavelength : 700 # This is in nm
-      temperature_sensor_setpoint : -70 # This is in Celsius
-      grating : "[500nm,300][2][0]" # Varies based on spectrometer type
+      sensor_temperature_set_point : -70 # This is in Celsius
+      grating_selected : "[500nm,300][2][0]" # Varies based on spectrometer type
       wave_start : 600
       wave_end : 850
       experiment_name: "LF_Control"

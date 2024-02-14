@@ -99,8 +99,8 @@ class QT3ScanPrincetonSpectrometerController:
         self.spectrometer.experiment_name = config_dict.get('experiment_name', self.spectrometer.experiment_name)
         self.spectrometer.exposure_time = config_dict.get('exposure_time', self.spectrometer.exposure_time)
         self.spectrometer.center_wavelength = config_dict.get('center_wavelength', self.spectrometer.center_wavelength)
-        self.spectrometer.temperature_sensor_setpoint = config_dict.get('temperature_sensor_setpoint', self.spectrometer.temperature_sensor_setpoint)
-        self.spectrometer.grating = config_dict.get('grating', self.spectrometer.grating)
+        self.spectrometer.sensor_temperature_set_point = config_dict.get('sensor_temperature_set_point', self.spectrometer.sensor_temperature_set_point)
+        self.spectrometer.grating_selected = config_dict.get('grating_selected', self.spectrometer.grating_selected)
         self.wave_start = config_dict.get('wave_start', self.wave_start)
         self.wave_end = config_dict.get('wave_end', self.wave_end)
 
@@ -129,14 +129,14 @@ class QT3ScanPrincetonSpectrometerController:
 
         row += 1
         tk.Label(config_win, text="Temperature Sensor Setpoint (°C)").grid(row=row, column=0, padx=10)
-        temperature_sensor_setpoint_var = tk.DoubleVar(value=self.spectrometer.temperature_sensor_setpoint)
-        tk.Entry(config_win, textvariable=temperature_sensor_setpoint_var).grid(row=row, column=1)
+        sensor_temperature_set_point_var = tk.DoubleVar(value=self.spectrometer.sensor_temperature_set_point)
+        tk.Entry(config_win, textvariable=sensor_temperature_set_point_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Grating").grid(row=row, column=0, padx=10)
         grating_options = self.spectrometer.grating_options
-        grating_var = tk.StringVar(value=self.spectrometer.grating)
-        grating_menu = tk.OptionMenu(config_win, grating_var, *grating_options)
+        grating_selected_var = tk.StringVar(value=self.spectrometer.grating_selected)
+        grating_menu = tk.OptionMenu(config_win, grating_selected_var, *grating_options)
         grating_menu.grid(row=row, column=1)
 
         row += 1
@@ -154,10 +154,10 @@ class QT3ScanPrincetonSpectrometerController:
             'experiment_name': experiment_name_var,
             'exposure_time': exposure_time_var,
             'center_wavelength': center_wavelength_var,
-            'temperature_sensor_setpoint': temperature_sensor_setpoint_var,
-            'grating': grating_var,
+            'sensor_temperature_set_point': sensor_temperature_set_point_var,
+            'grating_selected': grating_selected_var,
             'wave_start': wave_start_var,
-            'wave_end': wave_end_var
+            'wave_end': wave_end_var,
         }
 
         row += 1
