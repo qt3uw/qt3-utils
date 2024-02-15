@@ -193,9 +193,72 @@ QT3Scan:
 
 ```
 
+###### Default Princeton Spectrometer YAML configuration:
+
+```yaml
+QT3Scan:
+  DAQController:
+    import_path : qt3utils.applications.controllers.princeton_spectrometer
+    class_name  : QT3ScanPrincetonSpectrometerController
+    configure :
+      exposure_time : 2000 # This is in ms
+      center_wavelength : 700 # This is in nm
+      sensor_temperature_set_point : -70 # This is in Celsius
+      grating_selected : "[500nm,300][2][0]" # Varies based on spectrometer type
+      wave_start : 600
+      wave_end : 850
+      experiment_name: "LF_Control"
+
+  PositionController:
+    import_path : qt3utils.applications.controllers.nidaqpiezocontroller
+    class_name  : QT3ScanNIDAQPositionController
+    configure :
+      daq_name : Dev1  # NI DAQ Device Name
+      write_channels : ao0,ao1,ao2  # NI DAQ analog output channels to use for writing position
+      read_channels : ai0,ai1,ai2  # NI DAQ analog input channels to use for reading position
+      scale_microns_per_volt : 8  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
+      zero_microns_volt_offset: 0  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
+      minimum_allowed_position : 0  # microns
+      maximum_allowed_position : 80  # microns
+      settling_time_in_seconds : 0.001
+
+```
+
 ###### Default Random Data Generator configuration:
 
 ```yaml
+QT3Scan:
+  PositionController:
+    import_path : qt3utils.applications.controllers.random_data_generator    
+    class_name  : QT3ScanDummyPositionController
+    configure : 
+      maximum_allowed_position : 80
+      minimum_allowed_position : 0
+
+  DAQController:
+    import_path : qt3utils.applications.controllers.random_data_generator
+    class_name  : QT3ScanRandomDataController
+    configure : 
+      simulate_single_light_source : True
+      num_data_samples_per_batch : 10
+      default_offset: 100
+      signal_noise_amp: 0.1
+
+```
+
+###### Default Spectrometer Random Data Generator configuration:
+
+```yaml
+QT3Scope:
+  DAQController:
+    import_path : qt3utils.applications.controllers.random_data_generator
+    class_name  : QT3ScopeRandomDataController
+    configure : 
+      simulate_single_light_source : False
+      num_data_samples_per_batch : 10
+      default_offset: 100
+      signal_noise_amp: 0.5
+
 QT3Scan:
   PositionController:
     import_path : qt3utils.applications.controllers.random_data_generator    
@@ -257,8 +320,7 @@ There are three controllers that are needed by `qt3scan`:
 
 ### 1. Application Controller 
 
-Currently there is only [one implementation of the Application Controller](src/qt3utils/applications/qt3scan/controller.py#L14) 
-to support standard 2D (x,y) scans. It is used for scans using the NIDAQ Edge Counter
+Currently there are two implementations of the Application Controller. [The first application controller](src/qt3utils/applications/qt3scan/controller.py#L14) is made to support standard 2D (x,y) scans. It is used for scans using the NIDAQ Edge Counter
 Controller, NIDAQ Position Controller, Random Data Generator and Dummy 
 Position Controller. 
 
@@ -266,19 +328,23 @@ If you do not need any changes to the save function
 or special functionality to right-click on the scan image, then you can probably 
 re-use this Application Controller. 
 
-If you are developing something like the 
-hyper-spectral image where each pixel in the 2D scan is based on a spectrum
-of counts over a range of wavelengths, you'll 
-likely want to build a new Application Controller. A 
-`QT3ScanHyperSpectralApplicationController` class would implement a 
-data view when a user right-clicks on the scan and would implement a function
+[The second application controller](https://github.com/qt3uw/qt3-utils/blob/134sub-changes-to-interface/src/qt3utils/applications/qt3scan/controller.py#L180) is an implements the hyperspectral image where each pixel each pixel in the 2D scan is based on a spectrum
+of counts over a range of wavelengths.
+`QT3ScanHyperSpectralApplicationController` class implements this 
+data view when a user right-clicks on the scan and along with a function
 to save the full 3-dimensional data set. 
 
 ### 2. DAQ Controller
 
 To support new hardware that acquires data, build an implementation of `QT3ScanDAQControllerInterface`.
+The DAQ controller interface is now split into two distinct interfaces:
+
+- Counter DAQ Controller (`QT3ScanCounterDAQControllerInterface`): This interface is specifically designed for hardware that functions primarily as counters, such as devices measuring photon counts or other discrete events. It extends the base DAQ controller interface by adding methods tailored to sampling counts and computing count rates.
+
+- Spectrometer DAQ Controller (`QT3ScanSpectrometerDAQControllerInterface`): This is tailored for spectrometers that acquire spectral data. This interface adds a method to sample the spectrum, making it easier for developers to integrate spectrometers into the QT3Scan framework.
+
 Examples are [QT3ScanRandomDataController](src/qt3utils/applications/controllers/random_data_generator.py#L124),
-and [QT3ScanNIDAQEdgeCounterController](src/qt3utils/applications/controllers/nidaqedgecounter.py#L139)
+[QT3ScanNIDAQEdgeCounterController](src/qt3utils/applications/controllers/nidaqedgecounter.py#L139), and `QT3ScanPrincetonSpectrometerController`
 
 Create a new python module in in `src/qt3utils/applications/controllers` for your hardware controller.
 
