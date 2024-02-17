@@ -179,7 +179,8 @@ class SpectrometerConfig():
         Closes the Lightfield application without saving the settings.
         """
         self.light.close()
-        
+    
+    #TODO: This needs to be fixed. It needs to completely stop the data and not pause. The pause will make it output incorrect data
     def stop_scan(self) -> None:
         """ 
         Stop/Pause the current acquisition. If you click "Start" you will be able to continue the scan.
