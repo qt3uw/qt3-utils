@@ -1,0 +1,20 @@
+QT3Scan:
+  DAQController:
+    import_path : qt3utils.applications.controllers.random_data_generator
+    class_name  : QT3ScanRandomSpectrometerDataController
+    configure :
+      exposure_time : 500 # This is in ms
+      center_wavelength : 700 # This is in nm
+      sensor_temperature_set_point : -70 # This is in Celsius
+      wave_start : 600
+      wave_end : 850
+      experiment_name: "HAL-9000 test one"
+      num_frames: 1
+      num_wavelength_bins: 250
+
+  PositionController:
+    import_path : qt3utils.applications.controllers.random_data_generator
+    class_name  : QT3ScanDummyPositionController
+    configure :
+      maximum_allowed_position : 80
+      minimum_allowed_position : 0

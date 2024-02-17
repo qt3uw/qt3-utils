@@ -125,6 +125,7 @@ class QT3ScanRandomDataController(QT3ScopeRandomDataController):
     """
     Implements the qt3utils.applications.qt3scan.interface.QT3ScanDAQControllerInterface for a random data generator.
     """
+
     @property
     def clock_rate(self) -> float:
         return self.data_generator.clock_rate
@@ -132,21 +133,178 @@ class QT3ScanRandomDataController(QT3ScopeRandomDataController):
     def sample_counts(self, num_batches: int) -> np.ndarray:
         return self.data_generator.sample_counts(num_batches)
 
-    def sample_count_rate(self, data_counts: np.ndarray) -> np.ndarray:
+    def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
         return self.data_generator.sample_count_rate(data_counts)
 
+
+class QT3ScanRandomSpectrometerDataController:
+    """
+    Implements qt3utils.applications.qt3scan.interface.QT3ScanSpectrometerDAQControllerInterface
+    """
+    def __init__(self, logger_level: int):
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logger_level)
+
+        self.spectrometer = self.RandomSpectometer()
+
+        self.last_config_dict = {}
+
+        self.last_measured_spectrum = None
+        self.last_wavelength_array = None
+
+    class RandomSpectometer:
+        def __init__(self):
+            self.exposure_time = 500 # milliseconds
+            self.experiment_name = ""
+            self.num_wavelength_bins = 250
+            self.wave_start = 600
+            self.wave_end = 850
+            self.num_frames = 1
+            self.center_wavelength = 700  # nm
+            self.sensor_temperature_set_point = -70  # grad
+
+            self.nv_probability = 0.01
+            self.background_counts = int(1e5)
+            self.nv_brightness = int(1e6)
+
+        def acquire_step_and_glue(self) -> Tuple[np.ndarray, np.ndarray]:
+            wavelengths = np.linspace(self.wave_start, self.wave_end, self.num_wavelength_bins)
+            if np.random.random() > self.nv_probability:
+                spectrum = self.background_counts * np.random.random(self.num_wavelength_bins) / self.num_wavelength_bins
+            else:
+                redux = 10
+                num_samples = int(self.nv_brightness / redux) # a little hack to make the sampling faster
+                sample_sideband = np.random.normal(690, 40, size=99 * num_samples // 100)
+                hist_sideband, _ = np.histogram(sample_sideband, bins=range(self.wave_start, self.wave_end + 1))
+                zpl_sample = np.random.normal(637, 2, size=1 * num_samples // 100)
+                zpl, _ = np.histogram(zpl_sample, bins=range(self.wave_start, self.wave_end + 1))
+                spectrum = (zpl + hist_sideband) * redux
+            return spectrum, wavelengths
+
     @property
-    def num_data_samples_per_batch(self) -> int:
-        return self.data_generator.num_data_samples_per_batch
+    def clock_rate(self) -> float:
+        try:
+            _t = self.spectrometer.exposure_time / 1000.0  #Convert from milliseconds to seconds.
+        except Exception as e:
+            self.logger.error(e)
+            _t = 2  #TODO: better default behavior. Should this be -1? 1? or should Spectrometer be changed.
+        return 1.0 / _t
 
-    @num_data_samples_per_batch.setter
-    def num_data_samples_per_batch(self, value):
-        """Abstract property setter for num_data_samples_per_batch"""
-        self.data_generator.num_data_samples_per_batch = value
+    def start(self) -> None:
+        """
+        Nothing to be done in this method. All acquisition is happening in the "sample_spectrum" method.
+        """
+        self.logger.debug('calling QT3ScanRandomSpectrometerDataController start')
 
-    def scan_image_rightclick_event(self, event) -> None:
-        self.logger.debug(f"scan_image_rightclick_event. click at {event.x}, {event.y}")
+    def stop(self) -> None:
+        """
+        Implementations should do necessary steps to stop acquiring data.
+        """
+        # if there is a way to interrupt data acquistion, do that here. Otherwise, do nothing
+        self.logger.debug('calling QT3ScanRandomSpectrometerDataController stop')
 
+    def close(self) -> None:
+        self.logger.debug('calling QT3ScanRandomSpectrometerDataController close')
+
+    def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
+        self.last_measured_spectrum, self.last_wavelength_array = (
+            self.spectrometer.acquire_step_and_glue()
+        )
+        # self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]}'
+        #                   f'to {self.last_wavelength_array[-1]} nm')
+        return self.last_measured_spectrum, self.last_wavelength_array
+
+    def configure(self, config_dict: dict) -> None:
+        """
+        This method is used to configure the spectrometer with the provided settings.
+        """
+        self.logger.debug("QT3ScanRandomSpectrometerDataController.configure called")
+        self.last_config_dict.update(config_dict)
+
+        self.spectrometer.experiment_name = config_dict.get('experiment_name', self.spectrometer.experiment_name)
+        self.spectrometer.center_wavelength = config_dict.get('center_wavelength', self.spectrometer.center_wavelength)
+        self.spectrometer.exposure_time = config_dict.get('exposure_time', self.spectrometer.exposure_time)
+        self.spectrometer.sensor_temperature_set_point = config_dict.get('sensor_temperature_set_point', self.spectrometer.sensor_temperature_set_point)
+        self.spectrometer.num_frames = config_dict.get('num_frames', self.spectrometer.num_frames)
+        self.spectrometer.num_wavelength_bins = config_dict.get('num_wavelength_bins', self.spectrometer.num_wavelength_bins)
+        self.spectrometer.wave_start = config_dict.get('wave_start', self.spectrometer.wave_start)
+        self.spectrometer.wave_end = config_dict.get('wave_end', self.spectrometer.wave_end)
+        self.spectrometer.nv_probability = config_dict.get('nv_probability', self.spectrometer.nv_probability)
+
+    def configure_view(self, gui_root: tk.Toplevel) -> None:
+        """
+        This method launches a GUI window to configure the data controller.
+        """
+        config_win = tk.Toplevel(gui_root)
+        config_win.grab_set()
+        config_win.title('Princeton Spectrometer Settings')
+
+        row = 0
+        tk.Label(config_win, text="Experiment Name)").grid(row=row, column=0, padx=10)
+        experiment_name_var = tk.StringVar(value=str(self.spectrometer.experiment_name))
+        tk.Entry(config_win, textvariable=experiment_name_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="Exposure Time (ms)").grid(row=row, column=0, padx=10)
+        exposure_time_var = tk.IntVar(value=str(self.spectrometer.exposure_time))
+        tk.Entry(config_win, textvariable=exposure_time_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="Center Wavelength (nm)").grid(row=row, column=0, padx=10)
+        center_wavelength_var = tk.IntVar(value=str(self.spectrometer.center_wavelength))
+        tk.Entry(config_win, textvariable=center_wavelength_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="Temperature Sensor Setpoint (°C)").grid(row=row, column=0, padx=10)
+        sensor_temperature_set_point_var = tk.IntVar(value=str(self.spectrometer.sensor_temperature_set_point))
+        tk.Entry(config_win, textvariable=sensor_temperature_set_point_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="Num Wavelength Bins").grid(row=row, column=0, padx=10)
+        num_wavelength_bins_var = tk.IntVar(value=self.spectrometer.num_wavelength_bins)
+        tk.Entry(config_win, textvariable=num_wavelength_bins_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="Wavelength Start (nm)").grid(row=row, column=0, padx=10)
+        wave_start_var = tk.IntVar(value=str(self.spectrometer.wave_start))
+        tk.Entry(config_win, textvariable=wave_start_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="Wavelength End (nm)").grid(row=row, column=0, padx=10)
+        wave_end_var = tk.IntVar(value=str(self.spectrometer.wave_end))
+        tk.Entry(config_win, textvariable=wave_end_var).grid(row=row, column=1)
+
+        row += 1
+        tk.Label(config_win, text="NV Probability").grid(row=row, column=0, padx=10)
+        nv_probability_var = tk.DoubleVar(value=str(self.spectrometer.nv_probability))
+        tk.Entry(config_win, textvariable=nv_probability_var).grid(row=row, column=1)
+
+        gui_info = {
+            'experiment_name': experiment_name_var,
+            'exposure_time': exposure_time_var,
+            'center_wavelength': center_wavelength_var,
+            'sensor_temperature_set_point': sensor_temperature_set_point_var,
+            'num_wavelength_bins': num_wavelength_bins_var,
+            'wave_start': wave_start_var,
+            'wave_end': wave_end_var,
+            'nv_probability': nv_probability_var,
+        }
+
+        row += 1
+        tk.Button(config_win, text='Set', command=lambda: self._set_from_gui(gui_info)).grid(row=row, column=0)
+        tk.Button(config_win, text='Close', command=config_win.destroy).grid(row=row, column=1)
+
+    def _set_from_gui(self, gui_vars: dict) -> None:
+        """
+        Sets the spectrometer configuration from the GUI.
+        """
+        config_dict = {k:v.get() if v.get() not in ['None', ''] else None for k, v in gui_vars.items()}  # code to handle the edge case where there are "None" value
+        self.logger.info(config_dict)
+        self.configure(config_dict)
+
+    def print_config(self) -> None:
+        print("Princeton Spectrometer config")
+        print(self.last_config_dict)  #NOTE: We dont' use the logger because we want to be sure this is printed to stdout
 
 class QT3ScanDummyPositionController:
     """
@@ -187,7 +345,6 @@ class QT3ScanDummyPositionController:
                                z: Optional[float] = None) -> None:
         """
         This method checks if the position is within the allowed range.
-
         If the position is not within the allowed range, a ValueError should be raised.
         """
         self.dummy_position.check_allowed_position(x, y, z)
@@ -222,7 +379,6 @@ class QT3ScanDummyPositionController:
         minimum_allowed_position_var = tk.IntVar(value=self.dummy_position.minimum_allowed_position)
         tk.Entry(config_win, textvariable=minimum_allowed_position_var).grid(row=row, column=1)
 
-        # pack variables into a dictionary to pass to the convert_gui_info_and_configure method
         gui_info = {
             'maximum_allowed_position': maximum_allowed_position_var,
             'minimum_allowed_position': minimum_allowed_position_var,
@@ -235,7 +391,6 @@ class QT3ScanDummyPositionController:
             config_dict = {k: v.get() for k, v in gui_info.items()}
             self.configure(config_dict)
 
-        # add a button to set the values and close the window
         row += 1
         tk.Button(config_win,
                   text='  Set  ',

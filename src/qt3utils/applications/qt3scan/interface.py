@@ -30,6 +30,9 @@ class QT3ScanPositionControllerInterface(Protocol):
         pass
 
     def get_current_position(self) -> Tuple[float, float, float]:
+        """
+        This method is used to get the current position of the stage or objective.
+        """
         pass
 
     def check_allowed_position(self,
@@ -51,7 +54,7 @@ class QT3ScanPositionControllerInterface(Protocol):
 
     def configure_view(self, gui_root: Tk.Toplevel) -> None:
         """
-        This method launches a GUI window to configure the controller.
+        This method should launch a GUI window to configure the controller.
         """
         pass
 
@@ -67,27 +70,21 @@ class QT3ScanDAQControllerInterface(Protocol):
         pass
 
     def start(self) -> None:
+        """
+        Implenentations should do necessary steps to prepare DAQ hardware to acquire data.
+        """
         pass
 
     def stop(self) -> None:
+        """
+        Implementations should do necessary steps to stop acquiring data.
+        """
         pass
 
     def close(self) -> None:
-        pass
-
-    def sample_counts(self, num_batches: int) -> np.ndarray:
-        pass
-
-    def sample_count_rate(self, data_counts: np.ndarray) -> np.ndarray:
-        pass
-
-    @property
-    def num_data_samples_per_batch(self) -> int:
-        pass
-
-    @num_data_samples_per_batch.setter
-    def num_data_samples_per_batch(self, value: int):
-        """Abstract property setter for num_data_samples_per_batch"""
+        """
+        Implementations should do necessary steps to close the DAQ
+        """
         pass
 
     def configure(self, config_dict: dict) -> None:
@@ -99,6 +96,54 @@ class QT3ScanDAQControllerInterface(Protocol):
     def configure_view(self, gui_root: Tk.Toplevel) -> None:
         """
         This method launches a GUI window to configure the controller.
+        """
+        pass
+
+
+@runtime_checkable
+class QT3ScanCounterDAQControllerInterface(QT3ScanDAQControllerInterface, Protocol):
+    """
+    Extends the base DAQ Controller interface to require two functions
+    to return single measured counts and count rates.
+    """
+
+    def sample_counts(self, num_batches: int) -> np.ndarray:
+        """
+        Implementations should return a new data set on each call to this method.
+
+        Implementations should return a numpy array of shape (1,2)
+
+        The first element of the array should be the total number of counts
+        The second element of the array should be the total number of clock ticks.
+        For example, see daqsamplers.RateCounterBase.sample_counts(), which
+        returns a numpy array of shape (1,2) when sum_counts = True.
+        """
+        pass
+
+    def sample_count_rate(self, data_counts: np.ndarray) -> np.floating:
+        """
+        Implementations should return a numpy floating point number
+
+        The returned value should be the count rate in counts per second.
+        The input of data_counts should be of shape (1, 2) where the first
+        element is the number of counts, the second element is the number of clock ticks.
+        Using the clock_rate, this method should compute the count rate, which is
+        counts / (clock_ticks / clock_rate).
+        """
+        pass
+
+
+@runtime_checkable
+class QT3ScanSpectrometerDAQControllerInterface(QT3ScanDAQControllerInterface, Protocol):
+    """
+    Extends the base DAQ Controller interface to require a functions to return a measured spectrum.
+    """
+
+    def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Returns a list of two numpy arrays. The first array contains
+        the photon counts for each wavelength bin in the spectrum.
+        The second array contains the list of wavelength bin center values.
         """
         pass
 
@@ -121,15 +166,26 @@ class QT3ScanApplicationControllerInterface(Protocol):
     def step_size(self, value: float):
         pass
 
-    ## TODO -- scanned_count_rate and scanned_raw_counts might not be the best names for these properties
-    # these are the 2D data representation of the scan -- for confocal scans, each pixel is
-    # simply the number of counts. for hyperspectral, the pixel is the counts summed across the spectrum
     @property
     def scanned_count_rate(self) -> np.ndarray:
+        """
+        This property should return a 2D numpy array of the count rate at each position in the scan.
+        The shape of the array should be (num_y_positions, num_x_positions)
+
+        It can also return a list or array-like object of length zero (len(scanned_count_tate) == 0)
+        to indicate no data.
+        """
         pass
 
     @property
     def scanned_raw_counts(self) -> np.ndarray:
+        """
+        This property should return a 2D numpy array of the total number of counts at each position in the scan.
+        The shape of the array should be (num_y_positions, num_x_positions)
+
+        It can also return a list or array-like object of length zero (len(scanned_count_tate) == 0)
+        to indicate no data.
+        """
         pass
 
     @property
@@ -142,43 +198,89 @@ class QT3ScanApplicationControllerInterface(Protocol):
 
     @property
     def xmin(self) -> float:
+        """
+        This property should return the minimum x position of the scan
+        """
         pass
 
     @property
     def xmax(self) -> float:
+        """
+        This property should return the maximum x position of the scan
+        """
         pass
 
     @property
     def ymin(self) -> float:
+        """
+        This property should return the minimum y position of the scan
+        """
         pass
 
     @property
     def ymax(self) -> float:
+        """
+        This property should return the maximum y position of the scan
+        """
         pass
 
     @property
     def current_y(self) -> float:
+        """
+        This property should return the current y position of the scan
+        """
         pass
 
     def start(self) -> None:
+        """
+        This method is used to start the scan over the scan range. It should prepare the hardware to
+        begin acquistion of data.
+
+        TODO: Consider renaming this to 'prepare_for_start'
+        """
         pass
 
     def stop(self) -> None:
+        """
+        This method is used to stop the scan. It should stop the hardware from acquiring data.
+
+        TODO: Consider renaming this to 'stop_and_cleanup'
+        """
         pass
 
     def reset(self) -> None:
+        """
+        This method is used to reset any internal state of the scan,
+        such as the current position, data arrays, hardware conditions, etc.
+        """
         pass
 
     def set_to_starting_position(self) -> None:
+        """
+        This method is used to set the stage or objective to the starting position of the scan.
+        """
         pass
 
     def still_scanning(self) -> bool:
+        """
+        This method is used to determine if the scan is still running.
+        """
         pass
 
     def scan_x(self) -> None:
+        """
+        This method is used to scan along the x axis.
+
+        Scans are performed along the x-axis first at each y position before moving to the next y position.
+        The implmementation of this method should take and store data at each x position in range. The
+        implementation is responsible for moving the stage or objective to each x position in range.
+        """
         pass
 
     def move_y(self) -> None:
+        """
+        This method is used to move the stage or objective along the y axis.
+        """
         pass
 
     def optimize_position(self, axis: str,
@@ -206,17 +308,16 @@ class QT3ScanApplicationControllerInterface(Protocol):
         '''
         pass
 
-    # TODO -- should this be part of daq controler?? I think yes.
-    def set_num_data_samples_per_batch(self, N: int) -> None:
-        pass
-
-    # TODO -- investigate if this is necessary. This function is not used in qt3scan.main
-    # but it is used internally in the QT3ScanConfocalApplicationController for saving data
-    # TODO -- check all of the other methods in this interface to see if they are necessary at the interface level
-    def get_completed_scan_range(self) -> Tuple[float, float, float, float]:
-        pass
-
     def save_scan(self) -> None:
+        """
+        This method is used to save the scan data. An implementation could save the
+        data in any way that is seen fit. This method is called by the "save" button.
+        The current expectation is that a GUI window is launched allowing the user
+        to save the data in the supported format of their choice. The implementation
+        of this methdo should also package the data. There are alternatives, of course.
+        For example, the implementation could set up a database connection for
+        data to be saved in a continuous way.
+        """
         pass
 
     def allowed_file_save_formats(self) -> list:
@@ -232,7 +333,7 @@ class QT3ScanApplicationControllerInterface(Protocol):
         '''
         pass
 
-    def scan_image_rightclick_event(self, event: MouseEvent) -> None:
+    def scan_image_rightclick_event(self, event: MouseEvent, index_x: int, index_y: int) -> None:
         """
         This method is called when the user right clicks on the scan image.
         """

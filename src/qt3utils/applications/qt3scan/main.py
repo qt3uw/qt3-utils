@@ -16,10 +16,15 @@ import yaml
 
 import qt3utils.nidaq
 import qt3utils.pulsers.pulseblaster
-from qt3utils.applications.qt3scan.interface import QT3ScanDAQControllerInterface
-from qt3utils.applications.qt3scan.interface import QT3ScanPositionControllerInterface
-from qt3utils.applications.qt3scan.interface import QT3ScanApplicationControllerInterface
-from qt3utils.applications.qt3scan.controller import QT3ScanConfocalApplicationController
+from qt3utils.applications.qt3scan.interface import (
+    QT3ScanDAQControllerInterface,
+    QT3ScanPositionControllerInterface,
+    QT3ScanApplicationControllerInterface,
+)
+from qt3utils.applications.qt3scan.controller import (
+    QT3ScanConfocalApplicationController,
+    QT3ScanHyperSpectralApplicationController
+)
 
 matplotlib.use('Agg')
 
@@ -40,16 +45,23 @@ if args.verbose == 2:
 
 
 NIDAQ_DAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
-RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Data Generator'
+RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Counter'
+PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
+RANDOM_SPECTROMETER_DAQ_DEVICE_NAME = 'Random Spectrometer'
 
 DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DAQ_DEVICE_NAME
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
 STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml',
-                                                 'application_controller_class': QT3ScanConfocalApplicationController},
-                         RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
-                                                       'application_controller_class': QT3ScanConfocalApplicationController},
-                         }
+                        'application_controller_class': QT3ScanConfocalApplicationController},
+                        PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml': 'princeton_spectrometer.yaml',
+                        'application_controller_class': QT3ScanHyperSpectralApplicationController},
+                        RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
+                        'application_controller_class': QT3ScanConfocalApplicationController},
+                        RANDOM_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml': 'random_spectrometer.yaml',
+                        'application_controller_class': QT3ScanHyperSpectralApplicationController}
+                        }
+
 # Hyper Spectral Imaging would add the following to STANDARD_CONTROLLERS
 # PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
 # PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectromter.yaml',
@@ -71,24 +83,32 @@ class ScanImage:
         self.log_data = False
         self.pointer_line2d = None
         self.position_line2d = None
+        self.app_controller_step_size = 0
 
     def update(self, app_controller: QT3ScanApplicationControllerInterface) -> None:
 
         if len(app_controller.scanned_count_rate) == 0:
             return
-        
+
         if self.log_data:
             data = np.log10(app_controller.scanned_count_rate)
             data[np.isinf(data)] = 0  # protect against +-inf
         else:
             data = app_controller.scanned_count_rate
 
+        # we must retain these values for callback functions (feels a bit hacky)
+        self.app_controller_step_size = app_controller.step_size
+        self.xmin = app_controller.xmin
+        self.ymin = app_controller.ymin
+
+        # shift the extent so that position centers are directly aligned with data
+        # rather than aligned on bin edges
         self.artist = self.ax.imshow(data, origin='lower',
                                      cmap=self.cmap,
-                                     extent=[app_controller.xmin - app_controller.step_size/2.0,
-                                             app_controller.xmax - app_controller.step_size/2.0,
-                                             app_controller.ymin - app_controller.step_size/2.0,
-                                             app_controller.current_y - app_controller.step_size/2.0])
+                                     extent=[app_controller.xmin - app_controller.step_size / 2.0,
+                                             app_controller.xmax - app_controller.step_size / 2.0,
+                                             app_controller.ymin - app_controller.step_size / 2.0,
+                                             app_controller.current_y - app_controller.step_size / 2.0])
 
         if self.cbar is None:
             self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
@@ -107,9 +127,27 @@ class ScanImage:
         self.position_line2d = None
 
     def set_onclick_callback(self, func: Callable) -> None:
+        """
+        The callback function should expect three arguments
+            * matplotlib.backend_bases.MouseEvent
+            * pixel_x
+            * pixel_y
+
+            where pixel_x and pixel_y correspond to the pixel
+            index of the data
+        """
         self.onclick_callback = func
 
     def set_rightclick_callback(self, func: Callable) -> None:
+        """
+        The callback function should expect three arguments
+            * matplotlib.backend_bases.MouseEvent
+            * pixel_x
+            * pixel_y
+
+            where pixel_x and pixel_y correspond to the pixel
+            index of the data
+        """
         self.rightclick_callback = func
 
     def update_pointer_indicator(self, x_position: float, y_position: float) -> None:
@@ -132,11 +170,19 @@ class ScanImage:
 
     def onclick(self, event: MouseEvent) -> None:
         logger.debug(f"Button {event.button} click at: ({event.xdata} microns, {event.ydata}) microns")
+
+        dist_x = event.xdata + self.app_controller_step_size / 2 - self.xmin  # we have to subtract step_size / 2 because the GUI shifts the view.
+        dist_y = event.ydata + self.app_controller_step_size / 2 - self.ymin
+        logger.debug(f'Selected position at distance from lower left (x, y): {dist_x, dist_y}')
+        index_x = int(dist_x / self.app_controller_step_size)
+        index_y = int(dist_y / self.app_controller_step_size)
+
         if event.button == 3:  # Right click
-            self.rightclick_callback(event)
+            if event.inaxes is self.ax:
+                self.rightclick_callback(event, index_x, index_y)
         elif event.button == 1:  # Left click
             if event.inaxes is self.ax:
-                self.onclick_callback(event)
+                self.onclick_callback(event, index_x, index_y)
                 self.update_pointer_indicator(event.xdata, event.ydata)
                 self.fig.canvas.draw()
 
@@ -273,7 +319,7 @@ class SidePanel():
         if z is not None:
             self.z_entry_text.set(np.round(z, 4))
 
-    def mpl_onclick_callback(self, mpl_event: MouseEvent) -> None:
+    def mpl_onclick_callback(self, mpl_event: MouseEvent, index_x: int, index_y: int) -> None:
         if mpl_event.xdata and mpl_event.ydata:
             self.update_go_to_position(mpl_event.xdata, mpl_event.ydata)
 
@@ -626,7 +672,7 @@ class MainTkApplication():
         self.scan_thread.start()
 
     def save_scan(self) -> None:
-        afile = tk.filedialog.asksaveasfilename(filetypes=self.application_controller.allowed_file_save_formats(), 
+        afile = tk.filedialog.asksaveasfilename(filetypes=self.application_controller.allowed_file_save_formats(),
                                                 defaultextension=self.application_controller.default_file_format())
         if afile is None or afile == '':
             return  # selection was canceled.
@@ -660,6 +706,9 @@ class MainTkApplication():
         except nidaqmx.errors.DaqError as e:
             logger.info(e)
             logger.info('Check for other applications using resources. If not, you may need to restart the application.')
+
+        except NotImplementedError as e:
+            logger.info(e)
 
         finally:
             self.view.sidepanel.startButton.config(state=tk.NORMAL)
