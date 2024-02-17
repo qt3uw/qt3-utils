@@ -54,11 +54,6 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
         return self.last_measured_spectrum, self.last_wavelength_array
 
-        self.wave_start = None
-        self.wave_end = None
-        self.last_measured_spectrum = None
-        self.last_wavelength_array = None
-
     @property
     def clock_rate(self) -> float:
         try:

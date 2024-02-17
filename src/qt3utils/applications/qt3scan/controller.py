@@ -415,7 +415,11 @@ class QT3ScanHyperSpectralApplicationController:
             raw_counts=self.scanned_raw_counts,
             count_rate=self.scanned_count_rate,
             step_size=self.step_size,
+            daq_clock_rate=self.daq_controller.clock_rate
+        )
+
         if file_type == 'npy':
+            np.save(afile_name, data['count_rate'])
 
         elif file_type == 'npz':
             np.savez_compressed(afile_name, **data)
