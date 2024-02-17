@@ -180,7 +180,7 @@ class SpectrometerConfig():
         """
         self.light.close()
     
-    #TODO: This needs to be fixed. It needs to completely stop the data and not pause. The pause will make it output incorrect data
+    #TODO: Might need to be worked on further. There is a risk of it showing incorrect data on the GUI after stopping and the resuming.
     def stop_scan(self) -> None:
         """ 
         Stop/Pause the current acquisition. If you click "Start" you will be able to continue the scan.
