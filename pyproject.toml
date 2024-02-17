@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qt3utils"
-version = "1.1.0.dev1"
+version = "1.0.4.dev0"
 
 description = "A package for performing experiments in the QT3 lab at UW."
 readme = "README.md"
