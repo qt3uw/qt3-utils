@@ -1,11 +1,14 @@
-import os
-import uuid
 import logging
-import numpy as np
-from time import sleep
+import os
+import time
+import uuid
 from pathlib import Path
-from qt3utils.errors import  QT3Error
-from typing import Any, Tuple, List, Union
+from typing import Any, List, Literal, Tuple, Union
+
+import numpy as np
+
+from qt3utils.errors import QT3Error
+from qt3utils.datagenerators.spectrometers import Spectrometer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,6 +39,9 @@ except ImportError as e:
 
 
 class LightfieldApplicationManager:
+    # TODO: implement a function that opens the application, instead of automatically opening the applcation when
+    #  this class is instantiated.
+
     def __init__(self, visible: bool) -> None:
         self._automation = lf.Automation.Automation(visible, List[String]())
         self._application = self._automation.LightFieldApplication
@@ -87,17 +93,17 @@ class LightfieldApplicationManager:
 
     def _file_setup(self) -> None:
         self.set(lf.AddIns.ExperimentSettings.FileNameGenerationBaseFileName, str(uuid.uuid4()))
-    
+
     def _start_acquisition_and_wait(self) -> None:
         """
         Starts the acquisition process and waits until it is completed before carrying on.
         """
-        #acquisition_time_seconds = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) / 1000.0
-        #num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
+        # acquisition_time_seconds = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) / 1000.0
+        # num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
         if self.stop_flag == False:
             self.experiment.Acquire()
             while self.experiment.IsRunning:
-                sleep(0.1) 
+                time.sleep(0.1)
 
     def _process_acquired_data(self) -> np.ndarray:
         """
@@ -112,7 +118,8 @@ class LightfieldApplicationManager:
             else:
                 return self._process_multiple_frames(image_dataset)
         else:
-            raise QT3Error(f"LightField FileManager OpenFile error. Unsupported value for Regions.Length: {image_dataset.Regions.Length}.Should be == 1")
+            raise QT3Error(
+                f"LightField FileManager OpenFile error. Unsupported value for Regions.Length: {image_dataset.Regions.Length}.Should be == 1")
 
     def _process_single_frame(self, image_dataset: Any) -> np.ndarray:
         """
@@ -136,7 +143,7 @@ class LightfieldApplicationManager:
             data = np.dstack((data, new_frame)) if data.size else new_frame
         return data
 
-    #NOTE: May not need to call the 'start_acquisition_and_wait' method if you fix the 'FileNameGeneration' issue
+    # NOTE: May not need to call the 'start_acquisition_and_wait' method if you fix the 'FileNameGeneration' issue
     def acquire(self) -> np.ndarray:
         """
         Acquires image data from the spectrometer.
@@ -152,7 +159,7 @@ class LightfieldApplicationManager:
         """
         self._automation.Dispose()
         logger.info('Closed AddInProcess.exe')
-        
+
     def __del__(self) -> None:
         """
         Uses Python garbage collection method used to terminate
@@ -160,59 +167,37 @@ class LightfieldApplicationManager:
         properly.
         """
         self.close()
-        logger.info('Closed AddInProcess.exe')
 
-class SpectrometerConfig():
 
-    """ 
-    This constant represents the minimum difference your maximum and minimum wavelength have to be away from each other in order to perform 'acquire_step_and_glue".
-    If the difference between lambda_max and lambda_min is less than this you will run into an error.
-    """
+class PrincetonSpectrometer(Spectrometer):
+
+    DEVICE_NAME: str = 'Princeton Spectrometer'
+    ACQUISITION_MODES: set[str] = {'single', 'step-and-glue'}
+
     MIN_WAVELENGTH_DIFFERENCE = 117
-    
-    def __init__(self, experiment_name: str = None) -> None:
+    """
+    This constant represents the minimum difference your maximum 
+    and minimum wavelength have to be away from each other in 
+    order to perform 'acquire_step_and_glue". If the difference between 
+    lambda_max and lambda_min is less than this you will run into an error.
+    """
+
+    def __init__(self, experiment_name: str = None):
+        super().__init__()
         self._experiment_name = experiment_name
         self.light = LightfieldApplicationManager(True)
 
-    def finalize(self) -> None:
+    def open(self) -> None:
+        """ Opens the Lifhtfield application. """
+        # TODO: if light field application is not open, open it
+        pass
+
+    def close(self) -> None:
         """
         Closes the Lightfield application without saving the settings.
         """
+        # TODO: add if-statement to check if light field application is open, then close it.
         self.light.close()
-    
-    #TODO: Might need to be worked on further. There is a risk of it showing incorrect data on the GUI after stopping and the resuming.
-    def stop_scan(self) -> None:
-        """ 
-        Stop/Pause the current acquisition. If you click "Start" you will be able to continue the scan.
-        """
-        self.light.stop_flag = True
-        self.light.experiment.Stop()
-    
-    def get_wavelengths(self) -> np.ndarray:
-        """
-        Returns the wavelength calibration for a single frame.
-
-        According to the person who made the Lightfield sofware there is not current way to use the exact Lightfield settings
-        for step and glue. Will have to interpolate for now.
-        """
-        wavelength_array = np.fromiter(self.light.experiment.SystemColumnCalibration, np.float64)
-        return wavelength_array
-    
-    @property
-    def center_wavelength(self) -> float:
-        """
-        Returns the center wavelength in nanometers.
-        """
-        return self.light.get(lf.AddIns.SpectrometerSettings.GratingCenterWavelength)
-
-    @center_wavelength.setter
-    def center_wavelength(self, nanometers: float) -> None:
-        """
-        Sets the spectrometer center wavelength to nanometers.
-        """
-        # The line below addresses bug where if step and glue is enabled it wont allow you to set the center wavelength.
-        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
-        self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, Double(nanometers))
 
     @property
     def experiment_name(self) -> Union[str, None]:
@@ -228,37 +213,74 @@ class SpectrometerConfig():
         """
         if a_name != self._experiment_name:
             # Added this to prevent errors with incorrect file name
-            if a_name in self.light.experiment.GetSavedExperiments(): 
+            if a_name in self.light.experiment.GetSavedExperiments():
                 self._experiment_name = a_name
                 self.light.load_experiment(self._experiment_name)
             else:
-                logger.error(f"An experiment with that file name does not exist.")
+                self.logger.error(f"An experiment with that file name does not exist.")
 
     @property
-    def grating_selected(self) -> str:
-        """
-        Returns the current grating.
-        """
+    def grating_list(self) -> List[str]:
+        # This line below is critical.
+        # "GetCurrentCapabilities" is able to return the list of
+        # possibilities of any Lightfield call to provide more information.
+        available_gratings = self.light.experiment.GetCurrentCapabilities(
+            lf.AddIns.SpectrometerSettings.GratingSelected)
+        return [str(a) for a in available_gratings]
+
+    @property
+    def current_grating(self) -> str:
         return self.light.get(lf.AddIns.SpectrometerSettings.GratingSelected)
 
-    @grating_selected.setter
-    def grating_selected(self, value: str) -> None:
-        """
-        Sets the current grating to be the one specified by parameter grating.
-        """
-        if value in self.grating_options:
+    @current_grating.setter
+    def current_grating(self, value: str) -> None:
+        if value in self.grating_list:
             self.light.set(lf.AddIns.SpectrometerSettings.GratingSelected, String(value))
         else:
-            logger.error(f"Grating {value} is not an options. The options are: {self.grating_options}")
+            self.logger.error(f"Grating {value} is not an options. The options are: {self.grating_list}")
 
     @property
-    def grating_options(self) -> List[str]:
+    def center_wavelength(self) -> float:
+        return self.light.get(lf.AddIns.SpectrometerSettings.GratingCenterWavelength)
+
+    @center_wavelength.setter
+    def center_wavelength(self, nanometers: float) -> None:
+        # The line below addresses bug where if step-and-glue is enabled,
+        # it won't allow you to set the center wavelength.
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
+        self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, Double(nanometers))
+
+    def get_wavelengths(self) -> np.ndarray:
         """
-        Returns a list of all installed gratings.
+        Returns the wavelength calibration for a single frame.
+
+        According to the person who made the Lightfield software,
+        there is not a current way to use the exact Lightfield settings
+        for step and glue. Will have to interpolate for now.
         """
-        # This line below is critical. "GetCurrentCapabilities" is able to return the list of possibilities of any Lightfield call in order to provide more information.
-        available_gratings = self.light.experiment.GetCurrentCapabilities(lf.AddIns.SpectrometerSettings.GratingSelected)
-        return [str(a) for a in available_gratings]
+        wavelength_array = np.fromiter(self.light.experiment.SystemColumnCalibration, np.float64)
+        return wavelength_array
+
+    @property
+    def sensor_temperature_set_point(self) -> float:
+        return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureSetPoint)
+
+    @sensor_temperature_set_point.setter
+    def sensor_temperature_set_point(self, deg_celsius: float) -> None:
+        """
+        This function retrieves image data, with particular attention to the camera's configuration determined by the `sensor_temperature_set_point`.
+        The `sensor_temperature_set_point` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
+        Depending on the setpoint, the behavior or response of the camera sensor might vary.
+        """
+        self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, Double(deg_celsius))
+
+    @property
+    def exposure_time(self) -> float:
+        return self.light.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime)
+
+    @exposure_time.setter
+    def exposure_time(self, ms: float) -> None:
+        self.light.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, Double(ms))
 
     @property
     def num_frames(self) -> int:
@@ -274,46 +296,20 @@ class SpectrometerConfig():
         """
         self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, Int64(num_frames))
 
-    @property
-    def exposure_time(self) -> float:
-        """
-        Returns the single frame exposure time (in ms).
-        """
-        return self.light.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime)
+    def acquire(
+            self,
+            acquisition_mode: Literal['single', 'step-and-glue'],
+            wavelength_range: Tuple[float, float] = (0, 0),
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        return super().acquire(acquisition_mode, **{'wavelength_range': wavelength_range})
 
-    @exposure_time.setter
-    def exposure_time(self, ms: float) -> None:
-        """
-        Sets the single frame exposure time to be ms (in ms).
-        """
-        self.light.set(lf.AddIns.CameraSettings.ShutterTimingExposureTime, Double(ms))
-
-    @property
-    def sensor_temperature_set_point(self) -> float:
-        """
-        Returns the sensor setpoint temperature (Celsius).
-        """
-        return self.light.get(lf.AddIns.CameraSettings.SensorTemperatureSetPoint)
-
-    @sensor_temperature_set_point.setter
-    def sensor_temperature_set_point(self, deg_C: float) -> None:
-        """
-        Sets the sensor target temperature (in degrees Celsius) to deg_C.
-        This function retrieves image data, with particular attention to the camera's configuration determined by the `sensor_temperature_set_point`.
-        The `sensor_temperature_set_point` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
-        Depending on the setpoint, the behavior or response of the camera sensor might vary.
-        """
-        self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, Double(deg_C))
-
-class SpectrometerDataAcquisition(SpectrometerConfig):
-    def acquire_frame(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Acquires a frame (or series of frames) from the spectrometer, and the
-        corresponding wavelength data.
-        """
+    def single_acquisition(self) -> Tuple[np.ndarray, np.ndarray]:
         return self.light.acquire(), self.get_wavelengths()
-    
-    def acquire_step_and_glue(self, wavelength_range: Tuple[float, float]) -> Tuple[np.ndarray, np.ndarray]:
+
+    def step_and_glue_acquisition(
+            self,
+            wavelength_range: Tuple[float, float] = (0, 0)
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Acquires a step and glue (wavelength sweep) over the specified range.
         Wavelength range must have two elements (both in nm), corresponding
@@ -321,7 +317,7 @@ class SpectrometerDataAcquisition(SpectrometerConfig):
         Please note that the wavelength must be calibrated for this to be useful.
 
         Returns:
-        - tuple:
+        Tuple[numpy.ndarray, numpy.ndarray]
         - spectrum (numpy.ndarray): The average spectrum obtained from the acquisition.
         - wavelength (numpy.ndarray): An array of wavelengths corresponding to the spectrum.
         """
@@ -335,12 +331,29 @@ class SpectrometerDataAcquisition(SpectrometerConfig):
 
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, Double(lambda_min))
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, Double(lambda_max))
-        
+
         if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
-            raise ValueError(f"End wavelength must be atleast {self.MIN_WAVELENGTH_DIFFERENCE} units greater than the start wavelength.") 
+            error_message = (f"End wavelength must be atleast {self.MIN_WAVELENGTH_DIFFERENCE} "
+                             f"units greater than the start wavelength.")
+            raise ValueError(error_message)
 
         data = self.light.acquire()
-        spectrum = np.sum(data, axis=1) #had to add this here to flatten data so it is not 2D but rather, 1D
-        wavelength = np.linspace(lambda_min, lambda_max, data.shape[0]) #just remember that this is not exact and just interpolates
+        spectrum = np.sum(data, axis=1)  # had to add this here to flatten data, so it is not 2D but rather, 1D
+        wavelength = np.linspace(lambda_min, lambda_max,
+                                 data.shape[0])  # just remember that this is not exact and just interpolates
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         return spectrum, wavelength
+
+    def stop_acquisition(self) -> None:
+        """
+        Stop/Pause the current acquisition.
+        If you click "Start" you will be able to continue the scan.
+        """
+        # TODO: Might need to be worked on further.
+        #  There is a risk of it showing incorrect data on the
+        #  GUI after stopping and the resuming.
+        self.light.stop_flag = True
+        self.light.experiment.Stop()
+
+    def __del__(self):
+        self.close()

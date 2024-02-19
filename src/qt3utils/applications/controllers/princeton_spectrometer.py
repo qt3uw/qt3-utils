@@ -1,9 +1,10 @@
-import numpy as np
-import tkinter as tk
 import logging
+import tkinter as tk
 from typing import Tuple
 
-import qt3utils.datagenerators.princeton as princeton
+import numpy as np
+
+import qt3utils.datagenerators.spectrometers.princeston as princeton
 
 
 class QT3ScanPrincetonSpectrometerController:
@@ -14,7 +15,7 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
-        self.spectrometer = princeton.SpectrometerDataAcquisition()
+        self.spectrometer = princeton.PrincetonSpectrometer()
         self.last_config_dict = {}
 
         self.wave_start = None
@@ -22,66 +23,29 @@ class QT3ScanPrincetonSpectrometerController:
         self.last_measured_spectrum = None
         self.last_wavelength_array = None
 
-    @property
-    def clock_rate(self) -> float:
-        try:
-            _t = self.spectrometer.exposure_time / 1000.0  # Converting from milliseconds to seconds.
-        except Exception as e:
-            self.logger.error(e)
-            _t = 2  # TODO: better default behavior. Should this be -1? 1? or should Spectrometer be changed.
-        return 1.0 / _t
-
     def start(self) -> None:
         """
-        Nothing to be done in this method. All acquisition is happening in the "sample_spectrum" method.
+        Nothing to be done in this method. All acquisitions are happening in the "sample_spectrum" method.
         """
         self.logger.debug('calling QT3ScanPrincetonSpectrometerController start')
 
     def stop(self) -> None:
         """
-        Implementations should do necessary steps to stop acquiring data.
+        Implementations should do the necessary steps to stop acquiring data.
         """
-        self.spectrometer.stop_scan()
+        self.spectrometer.stop_acquisition()
         self.logger.debug('calling QT3ScanPrincetonSpectrometerController stop')
 
     def close(self) -> None:
-        self.spectrometer.finalize()
+        self.spectrometer.close()
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
-        self.last_measured_spectrum, self.last_wavelength_array = (self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end]))
-        #self.logger.debug(f'Length of what you pulled from get_wavelengths is {len(self.spectrometer.get_wavelengths())}')
-        #self.logger.debug(f'Length of measured spectrum is {len(self.last_measured_spectrum)} and length of last wave array is {len(self.last_wavelength_array)}')
-        self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
-        return self.last_measured_spectrum, self.last_wavelength_array
-
-    @property
-    def clock_rate(self) -> float:
-        try:
-            _t = self.spectrometer.exposure_time / 1000.0  # Converting from milliseconds to seconds.
-        except Exception as e:
-            self.logger.error(e)
-            _t = 2  # TODO: better default behavior. Should this be -1? 1? or should Spectrometer be changed.
-        return 1.0 / _t
-
-    def start(self) -> None:
-        """
-        Nothing to be done in this method. All acquisition is happening in the "sample_spectrum" method.
-        """
-        self.logger.debug('calling QT3ScanPrincetonSpectrometerController start')
-
-    def stop(self) -> None:
-        """
-        Implementations should do necessary steps to stop acquiring data.
-        """
-        #TODO: Need to implement a feature to pause scan here. If there is a way to interrupt data acquistion, do that here. Otherwise, do nothing
-        self.logger.debug('calling QT3ScanPrincetonSpectrometerController stop')
-
-    def close(self) -> None:
-        self.spectrometer.finalize()
-
-    def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
-        self.last_measured_spectrum, self.last_wavelength_array = (self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end]))
-        self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
+        self.last_measured_spectrum, self.last_wavelength_array = (
+            self.spectrometer.acquire('step-and-glue', (self.wave_start, self.wave_end)))
+        # self.logger.debug(f'Length of what you pulled from get_wavelengths is {len(self.spectrometer.get_wavelengths())}')
+        # self.logger.debug(f'Length of measured spectrum is {len(self.last_measured_spectrum)} and length of last wave array is {len(self.last_wavelength_array)}')
+        self.logger.debug(
+            f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
         return self.last_measured_spectrum, self.last_wavelength_array
 
     def configure(self, config_dict: dict) -> None:
@@ -90,11 +54,12 @@ class QT3ScanPrincetonSpectrometerController:
         """
         self.logger.debug("Calling configure on the Princeton Spectrometer data controller")
         self.last_config_dict.update(config_dict)
-    
+
         self.spectrometer.experiment_name = config_dict.get('experiment_name', self.spectrometer.experiment_name)
         self.spectrometer.exposure_time = config_dict.get('exposure_time', self.spectrometer.exposure_time)
         self.spectrometer.center_wavelength = config_dict.get('center_wavelength', self.spectrometer.center_wavelength)
-        self.spectrometer.sensor_temperature_set_point = config_dict.get('sensor_temperature_set_point', self.spectrometer.sensor_temperature_set_point)
+        self.spectrometer.sensor_temperature_set_point = config_dict.get('sensor_temperature_set_point',
+                                                                         self.spectrometer.sensor_temperature_set_point)
         self.spectrometer.grating_selected = config_dict.get('grating_selected', self.spectrometer.grating_selected)
         self.wave_start = config_dict.get('wave_start', self.wave_start)
         self.wave_end = config_dict.get('wave_end', self.wave_end)
@@ -129,9 +94,9 @@ class QT3ScanPrincetonSpectrometerController:
 
         row += 1
         tk.Label(config_win, text="Grating").grid(row=row, column=0, padx=10)
-        grating_options = self.spectrometer.grating_options
-        grating_selected_var = tk.StringVar(value=self.spectrometer.grating_selected)
-        grating_menu = tk.OptionMenu(config_win, grating_selected_var, *grating_options)
+        grating_list = self.spectrometer.grating_list
+        current_grating_var = tk.StringVar(value=self.spectrometer.current_grating)
+        grating_menu = tk.OptionMenu(config_win, current_grating_var, *grating_list)
         grating_menu.grid(row=row, column=1)
 
         row += 1
@@ -150,7 +115,7 @@ class QT3ScanPrincetonSpectrometerController:
             'exposure_time': exposure_time_var,
             'center_wavelength': center_wavelength_var,
             'sensor_temperature_set_point': sensor_temperature_set_point_var,
-            'grating_selected': grating_selected_var,
+            'grating_selected': current_grating_var,
             'wave_start': wave_start_var,
             'wave_end': wave_end_var,
         }
@@ -163,10 +128,11 @@ class QT3ScanPrincetonSpectrometerController:
         """
         Sets the spectrometer configuration from the GUI.
         """
-        config_dict = {k:v.get() if v.get() not in ['None', ''] else None for k, v in gui_vars.items()}  # code to handle the edge case where there are "None" value
+        config_dict = {k: v.get() if v.get() not in ['None', ''] else None for k, v in
+                       gui_vars.items()}  # code to handle the edge case where there are "None" value
         self.logger.info(config_dict)
         self.configure(config_dict)
 
     def print_config(self) -> None:
         print("Princeton Spectrometer config")
-        print(self.last_config_dict)  #NOTE: We dont' use the logger because we want to be sure this is printed to stdout
+        print(self.last_config_dict)  # NOTE: We don't use the logger to be sure this is printed to stdout
