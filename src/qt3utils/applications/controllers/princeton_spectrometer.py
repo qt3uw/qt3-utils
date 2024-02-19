@@ -45,42 +45,12 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger.debug('calling QT3ScanPrincetonSpectrometerController stop')
 
     def close(self) -> None:
-        self.spectrometer.finalize()
+        self.spectrometer.close()
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
         self.last_measured_spectrum, self.last_wavelength_array = (self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end]))
         #self.logger.debug(f'Length of what you pulled from get_wavelengths is {len(self.spectrometer.get_wavelengths())}')
         #self.logger.debug(f'Length of measured spectrum is {len(self.last_measured_spectrum)} and length of last wave array is {len(self.last_wavelength_array)}')
-        self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
-        return self.last_measured_spectrum, self.last_wavelength_array
-
-    @property
-    def clock_rate(self) -> float:
-        try:
-            _t = self.spectrometer.exposure_time / 1000.0  # Converting from milliseconds to seconds.
-        except Exception as e:
-            self.logger.error(e)
-            _t = 2  # TODO: better default behavior. Should this be -1? 1? or should Spectrometer be changed.
-        return 1.0 / _t
-
-    def start(self) -> None:
-        """
-        Nothing to be done in this method. All acquisition is happening in the "sample_spectrum" method.
-        """
-        self.logger.debug('calling QT3ScanPrincetonSpectrometerController start')
-
-    def stop(self) -> None:
-        """
-        Implementations should do necessary steps to stop acquiring data.
-        """
-        #TODO: Need to implement a feature to pause scan here. If there is a way to interrupt data acquistion, do that here. Otherwise, do nothing
-        self.logger.debug('calling QT3ScanPrincetonSpectrometerController stop')
-
-    def close(self) -> None:
-        self.spectrometer.finalize()
-
-    def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
-        self.last_measured_spectrum, self.last_wavelength_array = (self.spectrometer.acquire_step_and_glue([self.wave_start, self.wave_end]))
         self.logger.debug(f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
         return self.last_measured_spectrum, self.last_wavelength_array
 

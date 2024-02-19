@@ -174,7 +174,7 @@ class SpectrometerConfig():
         self._experiment_name = experiment_name
         self.light = LightfieldApplicationManager(True)
 
-    def finalize(self) -> None:
+    def close(self) -> None:
         """
         Closes the Lightfield application without saving the settings.
         """
