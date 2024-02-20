@@ -171,10 +171,11 @@ class LightfieldApplicationManager:
 
 
 _light_app = LightfieldApplicationManager(True)
-""" Instansiation of the lightfield application manager. """
+""" Instantiation of the lightfield application manager. """
 # TODO: This WILL open the app the moment python runs this file.
 #  We need to add an "open" method that opens the application separately
 #  from the object definition.
+
 
 class PrincetonSpectrometerConfig(SpectrometerConfig):
 
@@ -251,7 +252,8 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
     
     @property
     def starting_wavelength(self) -> float:
-        self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength)
+        """ The step-and-glue minimum wavelength. """
+        return self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength)
     
     @starting_wavelength.setter
     def starting_wavelength(self, lambda_min: float) -> None:
@@ -259,7 +261,8 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
         
     @property
     def ending_wavelength(self) -> float:
-        self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength)
+        """ The step-and-glue maximum wavelength. """
+        return self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength)
     
     @ending_wavelength.setter
     def ending_wavelength(self, lambda_max: float) -> None:
@@ -311,6 +314,7 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
         """
         self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, Int64(num_frames))
 
+
 class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     light = _light_app
@@ -330,9 +334,9 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
     def acquire(
             self,
             acquisition_mode: Literal['single', 'step-and-glue'],
-            wavelength_range: Tuple[float, float]
+            **kwargs
     ) -> Union[Tuple[np.ndarray, np.ndarray], None]:
-        return super().acquire(acquisition_mode, **{'wavelength_range': wavelength_range})
+        return super().acquire(acquisition_mode)
 
     def single_acquisition(self) -> Tuple[np.ndarray, np.ndarray]:
         return self.light.acquire(), self.spectrometer_config.get_wavelengths()
@@ -352,8 +356,9 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         - spectrum (numpy.ndarray): The average spectrum obtained from the acquisition.
         - wavelength (numpy.ndarray): An array of wavelengths corresponding to the spectrum.
         """
-        lambda_min = wavelength_range[0]
-        lambda_max = wavelength_range[1]
+        lambda_max = self.spectrometer_config.ending_wavelength
+        lambda_min = self.spectrometer_config.starting_wavelength
+
         try:
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, True)
         except Exception as e:
@@ -369,7 +374,7 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         spectrum = np.sum(data, axis=1)  # had to add this here to flatten data, so it is not 2D but rather, 1D
         wavelength = np.linspace(lambda_min, lambda_max,
                                  data.shape[0])  # just remember that this is not exact and just interpolates
-        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False) 
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         return spectrum, wavelength
 
     def stop_acquisition(self) -> None:
