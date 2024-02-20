@@ -1,2 +1,2 @@
 from .spectrometer import SpectrometerConfig, SpectrometerDataAcquisition
-from .princeston import PrincetonSpectrometerConfig, PrincetonSpectrometerDataAcquisition
+from .princeton import PrincetonSpectrometerConfig, PrincetonSpectrometerDataAcquisition

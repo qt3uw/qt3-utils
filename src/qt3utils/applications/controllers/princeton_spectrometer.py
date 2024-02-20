@@ -4,7 +4,7 @@ from typing import Tuple
 
 import numpy as np
 
-import qt3utils.datagenerators.spectrometers.princeston as princeton
+import qt3utils.datagenerators.spectrometers.princeton as princeton
 
 
 class QT3ScanPrincetonSpectrometerController:
