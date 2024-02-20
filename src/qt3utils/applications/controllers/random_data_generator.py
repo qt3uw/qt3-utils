@@ -168,16 +168,17 @@ class QT3ScanRandomSpectrometerDataController:
             self.nv_brightness = int(1e6)
 
         def acquire_step_and_glue(self) -> Tuple[np.ndarray, np.ndarray]:
-            wavelengths = np.linspace(self.wave_start, self.wave_end, self.num_wavelength_bins)
+            wavelengths = np.linspace(self.wave_start, self.wave_end, self.num_wavelength_bins, endpoint=False)
             if np.random.random() > self.nv_probability:
                 spectrum = self.background_counts * np.random.random(self.num_wavelength_bins) / self.num_wavelength_bins
             else:
                 redux = 10
                 num_samples = int(self.nv_brightness / redux) # a little hack to make the sampling faster
                 sample_sideband = np.random.normal(690, 40, size=99 * num_samples // 100)
-                hist_sideband, _ = np.histogram(sample_sideband, bins=range(self.wave_start, self.wave_end + 1))
+                bins = np.linspace(self.wave_start, self.wave_end, self.num_wavelength_bins + 1, endpoint=True)
+                hist_sideband, _ = np.histogram(sample_sideband, bins=bins)
                 zpl_sample = np.random.normal(637, 2, size=1 * num_samples // 100)
-                zpl, _ = np.histogram(zpl_sample, bins=range(self.wave_start, self.wave_end + 1))
+                zpl, _ = np.histogram(zpl_sample, bins=bins)
                 spectrum = (zpl + hist_sideband) * redux
             return spectrum, wavelengths
 
