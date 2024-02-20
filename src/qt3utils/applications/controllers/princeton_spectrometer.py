@@ -15,7 +15,8 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
-        self.spectrometer = princeton.PrincetonSpectrometer()
+        self.spectrometer_config = princeton.PrincetonSpectrometerConfig()
+        self.spectrometer_daq = princeton.PrincetonSpectrometerDataAcquisition(self.spectrometer_config)
         self.last_config_dict = {}
 
         self.wave_start = None
@@ -33,15 +34,15 @@ class QT3ScanPrincetonSpectrometerController:
         """
         Implementations should do the necessary steps to stop acquiring data.
         """
-        self.spectrometer.stop_acquisition()
+        self.spectrometer_daq.stop_acquisition()
         self.logger.debug('calling QT3ScanPrincetonSpectrometerController stop')
 
     def close(self) -> None:
-        self.spectrometer.close()
+        self.spectrometer_config.close()
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
         self.last_measured_spectrum, self.last_wavelength_array = (
-            self.spectrometer.acquire('step-and-glue', (self.wave_start, self.wave_end)))
+            self.spectrometer_daq.acquire('step-and-glue', (self.wave_start, self.wave_end)))
         # self.logger.debug(f'Length of what you pulled from get_wavelengths is {len(self.spectrometer.get_wavelengths())}')
         # self.logger.debug(f'Length of measured spectrum is {len(self.last_measured_spectrum)} and length of last wave array is {len(self.last_wavelength_array)}')
         self.logger.debug(
@@ -55,12 +56,12 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger.debug("Calling configure on the Princeton Spectrometer data controller")
         self.last_config_dict.update(config_dict)
 
-        self.spectrometer.experiment_name = config_dict.get('experiment_name', self.spectrometer.experiment_name)
-        self.spectrometer.exposure_time = config_dict.get('exposure_time', self.spectrometer.exposure_time)
-        self.spectrometer.center_wavelength = config_dict.get('center_wavelength', self.spectrometer.center_wavelength)
-        self.spectrometer.sensor_temperature_set_point = config_dict.get('sensor_temperature_set_point',
-                                                                         self.spectrometer.sensor_temperature_set_point)
-        self.spectrometer.grating_selected = config_dict.get('grating_selected', self.spectrometer.grating_selected)
+        self.spectrometer_config.experiment_name = config_dict.get('experiment_name', self.spectrometer_config.experiment_name)
+        self.spectrometer_config.exposure_time = config_dict.get('exposure_time', self.spectrometer_config.exposure_time)
+        self.spectrometer_config.center_wavelength = config_dict.get('center_wavelength', self.spectrometer_config.center_wavelength)
+        self.spectrometer_config.sensor_temperature_set_point = config_dict.get('sensor_temperature_set_point',
+                                                                                self.spectrometer_config.sensor_temperature_set_point)
+        self.spectrometer_config.current_grating = config_dict.get('current_grating', self.spectrometer_config.current_grating)
         self.wave_start = config_dict.get('wave_start', self.wave_start)
         self.wave_end = config_dict.get('wave_end', self.wave_end)
 
@@ -74,28 +75,28 @@ class QT3ScanPrincetonSpectrometerController:
 
         row = 0
         tk.Label(config_win, text="Experiment Name)").grid(row=row, column=0, padx=10)
-        experiment_name_var = tk.StringVar(value=str(self.spectrometer.experiment_name))
+        experiment_name_var = tk.StringVar(value=str(self.spectrometer_config.experiment_name))
         tk.Entry(config_win, textvariable=experiment_name_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Exposure Time (ms)").grid(row=row, column=0, padx=10)
-        exposure_time_var = tk.DoubleVar(value=self.spectrometer.exposure_time)
+        exposure_time_var = tk.DoubleVar(value=self.spectrometer_config.exposure_time)
         tk.Entry(config_win, textvariable=exposure_time_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Center Wavelength (nm)").grid(row=row, column=0, padx=10)
-        center_wavelength_var = tk.DoubleVar(value=self.spectrometer.center_wavelength)
+        center_wavelength_var = tk.DoubleVar(value=self.spectrometer_config.center_wavelength)
         tk.Entry(config_win, textvariable=center_wavelength_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Temperature Sensor Setpoint (°C)").grid(row=row, column=0, padx=10)
-        sensor_temperature_set_point_var = tk.DoubleVar(value=self.spectrometer.sensor_temperature_set_point)
+        sensor_temperature_set_point_var = tk.DoubleVar(value=self.spectrometer_config.sensor_temperature_set_point)
         tk.Entry(config_win, textvariable=sensor_temperature_set_point_var).grid(row=row, column=1)
 
         row += 1
         tk.Label(config_win, text="Grating").grid(row=row, column=0, padx=10)
-        grating_list = self.spectrometer.grating_list
-        current_grating_var = tk.StringVar(value=self.spectrometer.current_grating)
+        grating_list = self.spectrometer_config.grating_list
+        current_grating_var = tk.StringVar(value=self.spectrometer_config.current_grating)
         grating_menu = tk.OptionMenu(config_win, current_grating_var, *grating_list)
         grating_menu.grid(row=row, column=1)
 
@@ -115,7 +116,7 @@ class QT3ScanPrincetonSpectrometerController:
             'exposure_time': exposure_time_var,
             'center_wavelength': center_wavelength_var,
             'sensor_temperature_set_point': sensor_temperature_set_point_var,
-            'grating_selected': current_grating_var,
+            'current_grating': current_grating_var,
             'wave_start': wave_start_var,
             'wave_end': wave_end_var,
         }

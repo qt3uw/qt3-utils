@@ -7,8 +7,9 @@ from typing import Any, List, Literal, Tuple, Union
 
 import numpy as np
 
+from datagenerators.spectrometers import SpectrometerDataAcquisition
 from qt3utils.errors import QT3Error
-from qt3utils.datagenerators.spectrometers import Spectrometer
+from qt3utils.datagenerators.spectrometers import SpectrometerConfig
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -85,7 +86,7 @@ class LightfieldApplicationManager:
         """
         This method loads a specified experiment from the list of experiments stored in Lightfield.
         
-        Additionally this method:
+        Additionally, this method:
         - Removes the date and time previously attached to acquisition file names.
         - Adds an incremental value to each acquisition starting from zero.
         """
@@ -169,26 +170,26 @@ class LightfieldApplicationManager:
         self.close()
 
 
-class PrincetonSpectrometer(Spectrometer):
+_light_app = LightfieldApplicationManager(True)
+""" Instansiation of the lightfield application manager. """
+# TODO: This WILL open the app the moment python runs this file.
+#  We need to add an "open" method that opens the application separately
+#  from the object definition.
+
+
+class PrincetonSpectrometerConfig(SpectrometerConfig):
+
+    light = _light_app
+    """ Access to the Lightfield application manager. """
 
     DEVICE_NAME: str = 'Princeton Spectrometer'
-    ACQUISITION_MODES: set[str] = {'single', 'step-and-glue'}
-
-    MIN_WAVELENGTH_DIFFERENCE = 117
-    """
-    This constant represents the minimum difference your maximum 
-    and minimum wavelength have to be away from each other in 
-    order to perform 'acquire_step_and_glue". If the difference between 
-    lambda_max and lambda_min is less than this you will run into an error.
-    """
 
     def __init__(self, experiment_name: str = None):
         super().__init__()
         self._experiment_name = experiment_name
-        self.light = LightfieldApplicationManager(True)
 
     def open(self) -> None:
-        """ Opens the Lifhtfield application. """
+        """ Opens the Lightfield application. """
         # TODO: if light field application is not open, open it
         pass
 
@@ -296,15 +297,32 @@ class PrincetonSpectrometer(Spectrometer):
         """
         self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, Int64(num_frames))
 
+
+class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
+
+    light = _light_app
+    """ Access to the Lightfield application manager. """
+
+    DEVICE_NAME: str = 'Princeton Spectrometer'
+    ACQUISITION_MODES: set[str] = {'single', 'step-and-glue'}
+
+    MIN_WAVELENGTH_DIFFERENCE = 117
+    """
+    This constant represents the minimum difference your maximum 
+    and minimum wavelength have to be away from each other in 
+    order to perform 'acquire_step_and_glue". If the difference between 
+    lambda_max and lambda_min is less than this you will run into an error.
+    """
+
     def acquire(
             self,
             acquisition_mode: Literal['single', 'step-and-glue'],
             wavelength_range: Tuple[float, float] = (0, 0),
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Union[Tuple[np.ndarray, np.ndarray], None]:
         return super().acquire(acquisition_mode, **{'wavelength_range': wavelength_range})
 
     def single_acquisition(self) -> Tuple[np.ndarray, np.ndarray]:
-        return self.light.acquire(), self.get_wavelengths()
+        return self.light.acquire(), self.spectrometer_config.get_wavelengths()
 
     def step_and_glue_acquisition(
             self,
@@ -333,7 +351,7 @@ class PrincetonSpectrometer(Spectrometer):
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, Double(lambda_max))
 
         if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
-            error_message = (f"End wavelength must be atleast {self.MIN_WAVELENGTH_DIFFERENCE} "
+            error_message = (f"End wavelength must be at least {self.MIN_WAVELENGTH_DIFFERENCE} "
                              f"units greater than the start wavelength.")
             raise ValueError(error_message)
 
@@ -354,6 +372,3 @@ class PrincetonSpectrometer(Spectrometer):
         #  GUI after stopping and the resuming.
         self.light.stop_flag = True
         self.light.experiment.Stop()
-
-    def __del__(self):
-        self.close()

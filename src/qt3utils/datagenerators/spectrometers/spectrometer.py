@@ -2,7 +2,7 @@ import abc
 import inspect
 import logging
 
-from typing import Any, Callable, Dict, List, Literal, Tuple
+from typing import Any, Callable, Dict, List, Literal, Set, Tuple, TypeVar, Union
 
 import numpy as np
 
@@ -21,31 +21,35 @@ def filter_only_valid_kwargs_for_method(method: Callable, all_kwargs: dict) -> D
     return {k: v for k, v in all_kwargs.items() if k in get_method_argument_names(method)}
 
 
-class Spectrometer(abc.ABC):
+class SpectrometerConfig(abc.ABC):
+    """
+    Base class for spectrometer configurations.
+
+    Subclass this class to control all the spectrometer settings prior to data acquisition.
+    For controlling the data acquisition, refer to the `SpectrometerDataAcquisition` abstract class.
+    """
 
     DEVICE_NAME: str = ''
     """ The name of the device used for logging purposes. """
 
-    ACQUISITION_MODES: set[str] = {'single', 'step-and-glue', 'kinetic series', 'accumulation'}
-    """ The supported acquisition modes. """
-
     def __init__(self):
         logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger(self.DEVICE_NAME if self.DEVICE_NAME != '' else self.__class__.__name__)
+        logger_name = f'{self.DEVICE_NAME} Config' if self.DEVICE_NAME != '' else self.__class__.__name__
+        self.logger = logging.getLogger(logger_name)
 
     @abc.abstractmethod
     def open(self) -> None:
         """
         Initializes the connection to devices.
         """
-        raise NotImplementedError()
+        pass
 
     @abc.abstractmethod
     def close(self) -> None:
         """
         Terminates connection to devices.
         """
-        raise NotImplementedError()
+        pass
 
     @abc.abstractmethod
     @property
@@ -138,15 +142,87 @@ class Spectrometer(abc.ABC):
             _t = 2
         return 1.0 / _t
 
+    def __del__(self):
+        self.close()
+
+
+SpectrometerConfigType = TypeVar('SpectrometerConfigType', bound=SpectrometerConfig)
+
+
+class SpectrometerDataAcquisition(abc.ABC):
+    """
+    An abstract class for acquiring spectrometer data.
+
+    Subclass this class to control the data acquisition process after configuring the spectrometer.
+    For controlling the spectrometer settings, refer to the `SpectrometerConfig` abstract class.
+
+    If you want to add a new acquisition mode
+        1. Modify the class constant attribute `ACQUISITION_MODES` to
+         include all the possible modes that are accessible with your
+         spectrometer.
+        2. overwrite the `acquire` method,
+        3. within the overwrote method definition, call the old definition
+         via super().acquire(...), return the response if it is not None,
+        4. and use an if statement for each different mode you implement.
+
+    Since asserting for valid acquisition modes will block
+    any usage of unsuuported modes, it is not required to modify
+    the respective unsupported acquisition methods, since they will
+    never be accessed.
+
+    If you want to remove modes, modify the class
+    constant attribute `ACQUISITION_MODES` accordingly.
+
+    For example, if we want to add a mode called 'my-mode'
+    and remove modes 'accumulation' and 'kinetic series':
+
+        >>> ACQUISITION_MODES = {'single', 'step-and-glue', 'my-mode'}
+        ... def acquire(
+        ...    self,
+        ... acquisition_mode: Literal['single', 'step-and-glue', 'my-mode'],
+        ... **kwargs
+        ... ) -> Tuple[np.ndarray, np.ndarray]:
+        ... response = super().acquire(acquisition_mode, **kwargs)
+        ... if response is not None:
+        ...     return response
+        ... if acquisition_mode == 'my-mode':
+        ...     valid_kwargs = filter_only_valid_kwargs_for_method(self.single_acquisition, kwargs)
+        ...     return self.single_acquisition(**valid_kwargs)
+    """
+
+    DEVICE_NAME: str = ''
+    """ The name of the device used for logging purposes. """
+
+    ACQUISITION_MODES: Set[str] = {'single', 'step-and-glue', 'kinetic series', 'accumulation'}
+    """ The supported acquisition modes. """
+
+    def __init__(self, spectrometer_config: SpectrometerConfigType = None):
+        """
+        Parameters
+        ----------
+        spectrometer_config : Type[SpectrometerConfigType], optional
+            The spectrometer configuration object related to the same spectrometer as this data acquisition object.
+            Used in case the acquisition requires using methods defined in the configuration object.
+            Defaults to None.
+        """
+        logging.basicConfig(level=logging.INFO)
+        logger_name = f'{self.DEVICE_NAME} Data Acquisition' if self.DEVICE_NAME != '' else self.__class__.__name__
+        self.logger = logging.getLogger(logger_name)
+        self.spectrometer_config = spectrometer_config
+
     def acquire(
             self,
             acquisition_mode: Literal['single', 'step-and-glue', 'kinetic series', 'accumulation'],
             **kwargs
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> Union[Tuple[np.ndarray, np.ndarray], None]:
         """
         General method that acquires data depending on the acquisition mode.
-        If you want to add a new mode, overwrite this method, call it via super().acquire(...) and then
-        use an if statement for each different mode you implemented.
+
+        It will raise an error for unsupported acquisition modes.
+        Depending on the valid mode provided, it will call the corresponding method.
+        You can pass any keyword arguments that are relevant to the method of interest.
+        This method will find which of these arguments are accepted by the target method
+        and only pass them down, without raising argument errors.
 
         Parameters
         ----------
@@ -156,8 +232,12 @@ class Spectrometer(abc.ABC):
             Additional keyword arguments.
         Returns
         -------
-        Tuple[np.ndarray, np.ndarray]
-            The single or multiple spectra and the wavelength array.
+        Tuple[np.ndarray, np.ndarray] | None
+            The single or multiple spectra and the wavelength array,
+            if the mode has a corresponding method defined.
+            If the mode is valid, but it is not taken into consideration
+            (e.g., user defines a new mode), this method returns None.
+
         """
         if acquisition_mode not in self.ACQUISITION_MODES:
             raise ValueError(f'Unsupported acquisition mode: {acquisition_mode}')
@@ -223,8 +303,7 @@ class Spectrometer(abc.ABC):
         """
         Stop/Pause the current acquisition.
         """
-        raise NotImplementedError()
+        pass
 
-    def __del__(self):
-        self.close()
 
+SpectrometerDataAcquisitionType = TypeVar('SpectrometerDataAcquisitionType', bound=SpectrometerDataAcquisition)
