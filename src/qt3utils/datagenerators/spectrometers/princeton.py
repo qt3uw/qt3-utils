@@ -176,7 +176,6 @@ _light_app = LightfieldApplicationManager(True)
 #  We need to add an "open" method that opens the application separately
 #  from the object definition.
 
-
 class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     light = _light_app
@@ -213,7 +212,6 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
         User can set the experiment that they want to load.
         """
         if a_name != self._experiment_name:
-            # Added this to prevent errors with incorrect file name
             if a_name in self.light.experiment.GetSavedExperiments():
                 self._experiment_name = a_name
                 self.light.load_experiment(self._experiment_name)
@@ -250,7 +248,23 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
         # it won't allow you to set the center wavelength.
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, Double(nanometers))
-
+    
+    @property
+    def starting_wavelength(self) -> float:
+        self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength)
+    
+    @starting_wavelength.setter
+    def starting_wavelength(self, lambda_min: float) -> None:
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, Double(lambda_min))
+        
+    @property
+    def ending_wavelength(self) -> float:
+        self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength)
+    
+    @ending_wavelength.setter
+    def ending_wavelength(self, lambda_max: float) -> None:
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, Double(lambda_max))
+        
     def get_wavelengths(self) -> np.ndarray:
         """
         Returns the wavelength calibration for a single frame.
@@ -297,7 +311,6 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
         """
         self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, Int64(num_frames))
 
-
 class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     light = _light_app
@@ -317,7 +330,7 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
     def acquire(
             self,
             acquisition_mode: Literal['single', 'step-and-glue'],
-            wavelength_range: Tuple[float, float] = (0, 0),
+            wavelength_range: Tuple[float, float]
     ) -> Union[Tuple[np.ndarray, np.ndarray], None]:
         return super().acquire(acquisition_mode, **{'wavelength_range': wavelength_range})
 
@@ -326,7 +339,7 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     def step_and_glue_acquisition(
             self,
-            wavelength_range: Tuple[float, float] = (0, 0)
+            wavelength_range: Tuple[float, float]
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Acquires a step and glue (wavelength sweep) over the specified range.
@@ -347,9 +360,6 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
             logger.error(f'Unable to perform step and glue due to error: {e}')
 
-        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength, Double(lambda_min))
-        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength, Double(lambda_max))
-
         if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
             error_message = (f"End wavelength must be at least {self.MIN_WAVELENGTH_DIFFERENCE} "
                              f"units greater than the start wavelength.")
@@ -359,7 +369,7 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         spectrum = np.sum(data, axis=1)  # had to add this here to flatten data, so it is not 2D but rather, 1D
         wavelength = np.linspace(lambda_min, lambda_max,
                                  data.shape[0])  # just remember that this is not exact and just interpolates
-        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
+        self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False) 
         return spectrum, wavelength
 
     def stop_acquisition(self) -> None:

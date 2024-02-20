@@ -90,7 +90,39 @@ class SpectrometerConfig(abc.ABC):
         Sets the grating center wavelength.
         """
         pass
+    
+    @abc.abstractmethod
+    @property
+    def starting_wavelength(self) -> float:
+        """ 
+        The Step and Glue starting wavelength.
+        """
+        pass
 
+    @abc.abstractmethod
+    @starting_wavelength.setter
+    def starting_wavelength(self, lambda_min: float) -> None:
+        """ 
+        Sets the Step and Glue starting wavelength.
+        """
+        pass
+    
+    @abc.abstractmethod
+    @property
+    def ending_wavelength(self) -> float:
+        """ 
+        The Step and Glue ending wavelength.
+        """
+        pass
+
+    @abc.abstractmethod
+    @ending_wavelength.setter
+    def ending_wavelength(self, lambda_max: float) -> None:
+        """ 
+        Sets the Step and Glue ending wavelength.
+        """
+        pass
+    
     @abc.abstractmethod
     def get_wavelengths(self) -> np.ndarray:
         """
