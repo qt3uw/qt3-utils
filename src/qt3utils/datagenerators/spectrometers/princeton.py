@@ -7,9 +7,8 @@ from typing import Any, List, Literal, Tuple, Union
 
 import numpy as np
 
-from datagenerators.spectrometers import SpectrometerDataAcquisition
 from qt3utils.errors import QT3Error
-from qt3utils.datagenerators.spectrometers import SpectrometerConfig
+from qt3utils.datagenerators.spectrometers.spectrometer import SpectrometerConfig, SpectrometerDataAcquisition
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,7 +42,7 @@ class LightfieldApplicationManager:
     # TODO: implement a function that opens the application, instead of automatically opening the applcation when
     #  this class is instantiated.
 
-    def __init__(self, visible: bool) -> None:
+    def initialize(self, visible: bool) -> None:
         self._automation = lf.Automation.Automation(visible, List[String]())
         self._application = self._automation.LightFieldApplication
         self._experiment = self._application.Experiment
@@ -85,10 +84,6 @@ class LightfieldApplicationManager:
     def load_experiment(self, selected_experiment: str) -> None:
         """
         This method loads a specified experiment from the list of experiments stored in Lightfield.
-        
-        Additionally, this method:
-        - Removes the date and time previously attached to acquisition file names.
-        - Adds an incremental value to each acquisition starting from zero.
         """
         self.experiment.Load(String(selected_experiment))
 
@@ -99,8 +94,6 @@ class LightfieldApplicationManager:
         """
         Starts the acquisition process and waits until it is completed before carrying on.
         """
-        # acquisition_time_seconds = self.get(lf.AddIns.CameraSettings.ShutterTimingExposureTime) / 1000.0
-        # num_frames = self.get(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore)
         if self.stop_flag == False:
             self.experiment.Acquire()
             while self.experiment.IsRunning:
@@ -170,7 +163,7 @@ class LightfieldApplicationManager:
         self.close()
 
 
-_light_app = LightfieldApplicationManager(True)
+_light_app = LightfieldApplicationManager()
 """ Instantiation of the lightfield application manager. """
 # TODO: This WILL open the app the moment python runs this file.
 #  We need to add an "open" method that opens the application separately
@@ -190,8 +183,7 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     def open(self) -> None:
         """ Opens the Lightfield application. """
-        # TODO: if light field application is not open, open it
-        pass
+        self.light.initialize(True)
 
     def close(self) -> None:
         """

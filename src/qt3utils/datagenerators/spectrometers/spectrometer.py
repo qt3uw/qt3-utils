@@ -50,73 +50,73 @@ class SpectrometerConfig(abc.ABC):
         Terminates connection to devices.
         """
         pass
-
-    @abc.abstractmethod
+    
     @property
+    @abc.abstractmethod
     def grating_list(self) -> List[str]:
         """
         A list of all installed gratings.
         """
         return []
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def current_grating(self) -> str:
         """
         Current spectrometer grating.
         """
         return ''
 
-    @abc.abstractmethod
     @current_grating.setter
+    @abc.abstractmethod
     def current_grating(self, value: str) -> None:
         """
         Set the spectrometer grating.
         """
         pass
-
-    @abc.abstractmethod
+    
     @property
+    @abc.abstractmethod
     def center_wavelength(self) -> float:
         """
         The grating center wavelength.
         """
         return np.nan
 
-    @abc.abstractmethod
     @center_wavelength.setter
+    @abc.abstractmethod
     def center_wavelength(self, nanometers: float) -> None:
         """
         Sets the grating center wavelength.
         """
         pass
     
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def starting_wavelength(self) -> float:
         """ 
         The Step and Glue starting wavelength.
         """
         pass
 
-    @abc.abstractmethod
     @starting_wavelength.setter
+    @abc.abstractmethod
     def starting_wavelength(self, lambda_min: float) -> None:
         """ 
         Sets the Step and Glue starting wavelength.
         """
         pass
     
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def ending_wavelength(self) -> float:
         """ 
         The Step and Glue ending wavelength.
         """
         pass
 
-    @abc.abstractmethod
     @ending_wavelength.setter
+    @abc.abstractmethod
     def ending_wavelength(self, lambda_max: float) -> None:
         """ 
         Sets the Step and Glue ending wavelength.
@@ -129,33 +129,33 @@ class SpectrometerConfig(abc.ABC):
         Returns the wavelength calibration for a single frame.
         """
         pass
-
-    @abc.abstractmethod
+    
     @property
+    @abc.abstractmethod
     def sensor_temperature_set_point(self) -> float:
         """
         The sensor set-point temperature in Celsius.
         """
         return np.nan
 
-    @abc.abstractmethod
     @sensor_temperature_set_point.setter
+    @abc.abstractmethod
     def sensor_temperature_set_point(self, deg_celsius: float) -> None:
         """
         Sets the sensor target temperature in Celsius.
         """
         pass
-
-    @abc.abstractmethod
+    
     @property
+    @abc.abstractmethod
     def exposure_time(self) -> float:
         """
         Returns the single frame exposure time (in ms).
         """
         return np.nan
 
-    @abc.abstractmethod
     @exposure_time.setter
+    @abc.abstractmethod
     def exposure_time(self, ms: float) -> None:
         """
         Sets the single frame exposure time in milliseconds.

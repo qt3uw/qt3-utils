@@ -17,6 +17,8 @@ class QT3ScanPrincetonSpectrometerController:
 
         self.spectrometer_config = princeton.PrincetonSpectrometerConfig()
         self.spectrometer_daq = princeton.PrincetonSpectrometerDataAcquisition(self.spectrometer_config)
+        self.spectrometer_config.open()
+        
         self.last_config_dict = {}
 
         self.last_measured_spectrum = None
