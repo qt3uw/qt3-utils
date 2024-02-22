@@ -335,7 +335,6 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     def step_and_glue_acquisition(
             self,
-            wavelength_range: Tuple[float, float] = (0, 0),
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Acquires a step and glue (wavelength sweep) over the specified range.
