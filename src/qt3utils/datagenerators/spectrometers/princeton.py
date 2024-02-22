@@ -30,7 +30,7 @@ try:
     clr.AddReference("System.Collections")
     clr.AddReference("System.IO")
     from System.Collections.Generic import List
-    from System import String, Int32, Int64, IntPtr, Double
+    from System import String, Int32, Int64, Double
     from System.IO import FileAccess
 except KeyError as e:
     logger.error(f"KeyError {e} during import")
@@ -39,9 +39,6 @@ except ImportError as e:
 
 
 class LightfieldApplicationManager:
-    # TODO: implement a function that opens the application, instead of automatically opening the applcation when
-    #  this class is instantiated.
-
     def initialize(self, visible: bool) -> None:
         self._automation = lf.Automation.Automation(visible, List[String]())
         self._application = self._automation.LightFieldApplication
@@ -55,6 +52,10 @@ class LightfieldApplicationManager:
     @property
     def experiment(self) -> Any:
         return self._experiment
+    
+    @property
+    def automation(self) -> Any:
+        return self._automation
 
     def set(self, setting: str, value: Any) -> None:
         """
@@ -137,7 +138,7 @@ class LightfieldApplicationManager:
             data = np.dstack((data, new_frame)) if data.size else new_frame
         return data
 
-    # NOTE: May not need to call the 'start_acquisition_and_wait' method if you fix the 'FileNameGeneration' issue
+    # NOTE: May not need to call the 'start_acquisition_and_wait' method if you fix the 'FileNameGeneration' issue.
     def acquire(self) -> np.ndarray:
         """
         Acquires image data from the spectrometer.
@@ -165,9 +166,6 @@ class LightfieldApplicationManager:
 
 _light_app = LightfieldApplicationManager()
 """ Instantiation of the lightfield application manager. """
-# TODO: This WILL open the app the moment python runs this file.
-#  We need to add an "open" method that opens the application separately
-#  from the object definition.
 
 
 class PrincetonSpectrometerConfig(SpectrometerConfig):
@@ -189,8 +187,8 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
         """
         Closes the Lightfield application without saving the settings.
         """
-        # TODO: add if-statement to check if light field application is open, then close it.
-        self.light.close()
+        if self.light.automation.LightFieldClosed() == False:
+            self.light.close()
 
     @property
     def experiment_name(self) -> Union[str, None]:
@@ -213,11 +211,9 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     @property
     def grating_list(self) -> List[str]:
-        # This line below is critical.
-        # "GetCurrentCapabilities" is able to return the list of
-        # possibilities of any Lightfield call to provide more information.
-        available_gratings = self.light.experiment.GetCurrentCapabilities(
-            lf.AddIns.SpectrometerSettings.GratingSelected)
+        # The code below is critical.
+        # "GetCurrentCapabilities" is able to return the list of possibilities of any Lightfield call to provide more information.
+        available_gratings = self.light.experiment.GetCurrentCapabilities( lf.AddIns.SpectrometerSettings.GratingSelected)
         return [str(a) for a in available_gratings]
 
     @property
@@ -237,8 +233,7 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     @center_wavelength.setter
     def center_wavelength(self, nanometers: float) -> None:
-        # The line below addresses bug where if step-and-glue is enabled,
-        # it won't allow you to set the center wavelength.
+        # The code below addresses bug where if step-and-glue is enabled, it won't allow you to set the center wavelength.
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, Double(nanometers))
     
@@ -306,7 +301,6 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
         """
         self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, Int64(num_frames))
 
-
 class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     light = _light_app
@@ -357,12 +351,11 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
             logger.error(f'Unable to perform step and glue due to error: {e}')
 
         if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
-            error_message = (f"End wavelength must be at least {self.MIN_WAVELENGTH_DIFFERENCE} "
-                             f"units greater than the start wavelength. The current starting wavelength is {lambda_min} and ending wavelength is {lambda_max}")
+            error_message = (f"End wavelength must be at least {self.MIN_WAVELENGTH_DIFFERENCE} units greater than the start wavelength.")
             raise ValueError(error_message)
 
         data = self.light.acquire()
-        spectrum = np.sum(data, axis=1)  # had to add this here to flatten data, so it is not 2D but rather, 1D
+        spectrum = np.sum(data, axis=1)  # this flattens the data so it is not 2D but rather, 1D
         wavelength = np.linspace(lambda_min, lambda_max,
                                  data.shape[0])  # just remember that this is not exact and just interpolates
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
@@ -374,7 +367,7 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         If you click "Start" you will be able to continue the scan.
         """
         # TODO: Might need to be worked on further.
-        #  There is a risk of it showing incorrect data on the
-        #  GUI after stopping and the resuming.
+        # There is a risk of it showing incorrect data on the GUI after stopping and the resuming.
+        # Try click "Stop" on the GUI then "Start" again when you take a scan and you will be able to replicate the error.
         self.light.stop_flag = True
         self.light.experiment.Stop()
