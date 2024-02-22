@@ -114,7 +114,8 @@ class LightfieldApplicationManager:
                 return self._process_multiple_frames(image_dataset)
         else:
             raise QT3Error(
-                f"LightField FileManager OpenFile error. Unsupported value for Regions.Length: {image_dataset.Regions.Length}.Should be == 1")
+                f"LightField FileManager OpenFile error. Unsupported value for Regions.Length: 
+                {image_dataset.Regions.Length}. Should be == 1")
 
     def _process_single_frame(self, image_dataset: Any) -> np.ndarray:
         """
@@ -211,7 +212,7 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     @property
     def grating_list(self) -> List[str]:
-        # The code below is critical.
+        # NOTE: The code below is critical.
         # "GetCurrentCapabilities" is able to return the list of possibilities of any Lightfield call to provide more information.
         available_gratings = self.light.experiment.GetCurrentCapabilities( lf.AddIns.SpectrometerSettings.GratingSelected)
         return [str(a) for a in available_gratings]
@@ -233,7 +234,7 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     @center_wavelength.setter
     def center_wavelength(self, nanometers: float) -> None:
-        # The code below addresses bug where if step-and-glue is enabled, it won't allow you to set the center wavelength.
+        # NOTE: The code below addresses bug where if step-and-glue is enabled, it won't allow you to set the center wavelength.
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, Double(nanometers))
     
