@@ -254,7 +254,7 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
     @property
     def ending_wavelength(self) -> float:
         """ The step-and-glue maximum wavelength. """
-        return self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueStartingWavelength)
+        return self.light.get(lf.AddIns.ExperimentSettings.StepAndGlueEndingWavelength)
     
     @ending_wavelength.setter
     def ending_wavelength(self, lambda_max: float) -> None:
@@ -358,7 +358,7 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
         if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
             error_message = (f"End wavelength must be at least {self.MIN_WAVELENGTH_DIFFERENCE} "
-                             f"units greater than the start wavelength. The current starting wavelength is {lambda_min} and ending is {lambda_max}")
+                             f"units greater than the start wavelength. The current starting wavelength is {lambda_min} and ending wavelength is {lambda_max}")
             raise ValueError(error_message)
 
         data = self.light.acquire()
