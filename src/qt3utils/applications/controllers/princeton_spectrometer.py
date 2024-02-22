@@ -24,6 +24,18 @@ class QT3ScanPrincetonSpectrometerController:
         self.last_measured_spectrum = None
         self.last_wavelength_array = None
 
+    @property
+    def clock_rate(self) -> float:
+        """
+        The clock rate of a single exposure (1/exposure_time in Hz).
+        """
+        try:
+            _t = self.spectrometer_config.exposure_time / 1000.0  # Converting from milliseconds to seconds.
+        except Exception as e:
+            self.logger.error(e)
+            _t = 2
+        return 1.0 / _t
+
     def start(self) -> None:
         """
         Nothing to be done in this method. All acquisitions are happening in the "sample_spectrum" method.

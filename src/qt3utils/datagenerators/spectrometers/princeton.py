@@ -335,7 +335,7 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     def step_and_glue_acquisition(
             self,
-            wavelength_range: Tuple[float, float]
+            wavelength_range: Tuple[float, float] = (0, 0),
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Acquires a step and glue (wavelength sweep) over the specified range.
@@ -348,8 +348,8 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         - spectrum (numpy.ndarray): The average spectrum obtained from the acquisition.
         - wavelength (numpy.ndarray): An array of wavelengths corresponding to the spectrum.
         """
-        lambda_max = self.spectrometer_config.ending_wavelength
         lambda_min = self.spectrometer_config.starting_wavelength
+        lambda_max = self.spectrometer_config.ending_wavelength
 
         try:
             self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, True)
@@ -359,7 +359,7 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
         if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
             error_message = (f"End wavelength must be at least {self.MIN_WAVELENGTH_DIFFERENCE} "
-                             f"units greater than the start wavelength.")
+                             f"units greater than the start wavelength. The current starting wavelength is {lambda_min} and ending is {lambda_max}")
             raise ValueError(error_message)
 
         data = self.light.acquire()

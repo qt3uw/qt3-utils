@@ -162,18 +162,6 @@ class SpectrometerConfig(abc.ABC):
         """
         pass
 
-    @property
-    def clock_rate(self) -> float:
-        """
-        The clock rate of a single exposure (1/exposure_time in Hz).
-        """
-        try:
-            _t = self.exposure_time / 1000.0  # Converting from milliseconds to seconds.
-        except Exception as e:
-            self.logger.error(e)
-            _t = 2
-        return 1.0 / _t
-
     def __del__(self):
         self.close()
 
