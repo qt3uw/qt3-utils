@@ -113,9 +113,8 @@ class LightfieldApplicationManager:
             else:
                 return self._process_multiple_frames(image_dataset)
         else:
-            raise QT3Error(
-                f"LightField FileManager OpenFile error. Unsupported value for Regions.Length: 
-                {image_dataset.Regions.Length}. Should be == 1")
+            raise QT3Error(f"LightField FileManager OpenFile error. Unsupported value for Regions.Length: \n"
+                           f"{image_dataset.Regions.Length}. Should be == 1")
 
     def _process_single_frame(self, image_dataset: Any) -> np.ndarray:
         """
@@ -153,17 +152,9 @@ class LightfieldApplicationManager:
         """
         Closes the Lightfield application without saving the settings.
         """
-        self._automation.Dispose()
+        self.automation.Dispose()
         logger.info('Closed AddInProcess.exe')
-
-    def __del__(self) -> None:
-        """
-        Uses Python garbage collection method used to terminate
-        AddInProcess.exe, if this is not done, LightField will not reopen
-        properly.
-        """
-        self.close()
-
+      
 
 _light_app = LightfieldApplicationManager()
 """ Instantiation of the lightfield application manager. """
@@ -186,10 +177,23 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     def close(self) -> None:
         """
-        Closes the Lightfield application without saving the settings.
+        Close Lightfield application without saving the settings.
         """
-        if self.light.automation.LightFieldClosed() == False:
-            self.light.close()
+        self.light.close()
+
+    def __del__(self) -> None:
+        """
+        Invoke this after object garbage collection occurs. 
+        This method cannot be placed in the LightfieldApplicationManager class anymore 
+        since 'automation' will be None before it can even be called 
+        and will return a 'TypeError: module object is not callable' error when you close the GUI.
+        Preventing you from running the HyperSpectral GUI again.
+        """
+        if self.light.automation is not None:
+            try:
+                self.light.automation.Dispose()
+            except Exception as e:
+                logger.error(f"Error disposing Lightfield automation: {e}")
 
     @property
     def experiment_name(self) -> Union[str, None]:
