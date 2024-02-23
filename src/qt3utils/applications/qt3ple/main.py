@@ -6,6 +6,7 @@ import logging
 from threading import Thread
 
 import matplotlib
+from matplotlib import gridspec
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
 import nidaqmx
@@ -36,43 +37,64 @@ RANDOM_DAQ_DEVICE_NAME = 'Random Data Generator'
 
 DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DEVICE_NAMES[0]
 
-CONTROLLER_PATH = 'qt3utils.applications.controllers'
+CONTROLLER_PATH = 'qt3utils.applications.controller'
 STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAMES[0] : 'nidaq_rate_counter.yaml',
                         NIDAQ_DEVICE_NAMES[1] : 'nidaq_wm_ple.yaml'}
 
 class ScanImage:
     def __init__(self, mplcolormap='gray') -> None:
-        self.fig, self.ax = plt.subplots()
+        self.fig = plt.figure()
+        self.ax = plt.gca()
         self.cbar = None
         self.cmap = mplcolormap
         self.cid = self.fig.canvas.mpl_connect('button_press_event', self.onclick)
-        self.ax.set_xlabel('Voltage')
         self.log_data = False
 
-    def update(self, model) -> None:
+    def fill_subplot(self, x, y):
+        if self.ax is None:
+            self.ax = plt.gca()
+        sub_plt = self.ax.plot(x, y)
+        return sub_plt
 
-        if self.log_data:
-            data = np.log10(model.scanned_count_rate)
-            data[np.isinf(data)] = 0  # protect against +-inf
-        else:
-            data = model.scanned_count_rate
-        data = np.array(data).T.tolist()
+    def update_image_and_plot(self, model) -> None:
+        num_readers = len(model.readers)
+        grid = plt.GridSpec(2, num_readers)
+        self.update_image(model, grid)
+        self.update_plot(model, grid)
 
-        self.artist = self.ax.imshow(data, cmap=self.cmap, extent=[model.current_frame + model.raster_line_pause,
-                                                                   0,
-                                                                   model.vstart,
-                                                                   model.vend + model.step_size
-                                                                   ])
-        if self.cbar is None:
-            self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
-        else:
-            self.cbar.update_normal(self.artist)
 
-        if self.log_data is False:
-            self.cbar.formatter.set_powerlimits((0, 3))
+    def update_image(self, model, grid) -> None:
+        for ii, reader in enumerate(model.readers):
 
-        self.ax.set_xlabel('Pixels')
-        self.ax.set_ylabel('Voltage (V)')
+            if self.log_data:
+                data = np.log10(model.scanned_count_rate)
+                data[np.isinf(data)] = 0  # protect against +-inf
+            else:
+                data = model.scanned_count_rate
+            data = np.array(data).T.tolist()
+
+            artist = self.ax.imshow(data, plt.subplot(grid[0, ii]), cmap=self.cmap)
+                                   # , extent=[model.current_frame + model.raster_line_pause,
+                                   #                                    0,
+                                   #                                    model.vstart,
+                                   #                                    model.vend + model.step_size]
+            if self.cbar is None:
+                self.cbar = self.fig.colorbar(artist, ax=self.ax)
+            else:
+                self.cbar.update_normal(artist)
+
+            if self.log_data is False:
+                self.cbar.formatter.set_powerlimits((0, 3))
+
+            self.ax.set_xlabel('Pixels')
+            self.ax.set_ylabel('Voltage (V)')
+
+    def update_plot(self, model, grid) -> None:
+
+        for ii, reader in enumerate(model.readers):
+            y_data = model.readers[reader]
+            x_control = model.scanned_control
+            self.ax.plot(x_control, y_data, plt.subplot(grid[1, ii]), color='k', linewidth=1.5)
 
     def reset(self) -> None:
         self.ax.cla()
@@ -249,17 +271,14 @@ class MainTkApplication():
         self.application_controller.set_scan_range(vstart, vend)
         self.application_controller.step_size = step_size
         self.application_controller.tmax = n_scans
-        if isinstance(self.application_controller, plescanner.CounterAndScanner):
-            self.application_controller.set_num_data_samples_per_batch(n_sample_size)
-
         try:
             self.application_controller.reset()  # clears the data
             self.application_controller.start()  # starts the DAQ
             self.application_controller.set_to_starting_voltage()  # moves the stage to starting voltage
 
             while self.application_controller.still_scanning():
-                self.application_controller.scan_voltage()
-                self.view.scan_view.update(self.application_controller)
+                self.application_controller.scan_wavelengths()
+                self.view.scan_view.update_image_and_plot(self.application_controller)
                 self.view.canvas.draw()
 
             self.application_controller.stop()
@@ -343,20 +362,16 @@ class MainTkApplication():
                 cls = getattr(module, wm_reader_config['class_name'])
                 self.data_acquisition_models[wm_reader] = cls(logger.level)
                 self.data_acquisition_models[wm_reader].configure(wm_reader_config['configure'])
-        daq_controllers = self.app_config["controllers"]["daq_writers"]
-        if daq_controllers is not None:
-            for daq_controller in daq_controllers:
-                daq_controller_name = daq_controllers[daq_controller]
-                daq_controller_config = config[CONFIG_FILE_APPLICATION_NAME][daq_controller_name]
-                module = importlib.import_module(daq_controller_config['import_path'])
-                logger.debug(f"loading {daq_controller_config['import_path']}")
-                cls = getattr(module, daq_controller_config['class_name'])
-                self.controller_models[daq_controller] = cls(logger.level)
-                self.controller_models[daq_controller].configure(daq_controller_config['configure'])
-        app_module = importlib.import_module(self.app_controller_config['import_path'])
-        logger.debug(f"loading {self.app_controller_config['import_path']}")
-        app_cls = getattr(app_module, self.app_controller_config["class_name"])
-        self.application_controller = plescanner.GetApplicationControllerInstance(app_cls, self.data_acquisition_models, self.controller_models)
+        daq_controller_config = config[CONFIG_FILE_APPLICATION_NAME]
+        if daq_controller_config is not None:
+            module = importlib.import_module(daq_controller_config['import_path'])
+            logger.debug(f"loading {daq_controller_config['import_path']}")
+            cls = getattr(module, daq_controller_config['class_name'])
+            controller_model = cls(logger.level)
+            controller_model.configure(daq_controller_config['configure'])
+        else:
+           raise Exception("Yaml configuration file must have a controller for PLE scan.")
+        self.application_controller = plescanner.PleScanner(self.data_acquisition_models, controller_model)
 
     def load_controller_from_name(self, application_controller_name: str) -> None:
         """

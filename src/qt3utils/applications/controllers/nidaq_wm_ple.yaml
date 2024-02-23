@@ -3,9 +3,7 @@ QT3PLE:
     import_path : qt3utils.datagenerators.plescanner
     class_name : WavemeterAndScanner
     configure :
-      controllers:
-        daq_writers:
-          daq_writer : VoltageController
+      controller: VoltageController
       readers :
         daq_readers:
           daq_reader : DAQReader

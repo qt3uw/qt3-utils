@@ -33,11 +33,12 @@ class VControl():
 
 
 
-    def go_to_voltage(self, voltage: float = None) -> None:
+    def go_to(self, wl_point: float = None) -> None:
         '''
         Sets the voltage
         raises ValueError if try to set voltage out of bounds.
         '''
+        voltage = wl_point
         debug_string = []
         if voltage is not None:
             self._validate_value(voltage)
@@ -50,7 +51,7 @@ class VControl():
         time.sleep(self.settling_time_in_seconds)  # wait to ensure piezo actuator has settled into voltage.
         logger.debug(f'last write: {self.last_write_value}')
 
-    def get_current_voltage(self) -> float:
+    def get_current_wl_point(self) -> float:
         '''
         Returns the voltage supplied to the three input analog channels.
         If no input analog channels were provided when objected was created,
@@ -74,7 +75,7 @@ class VControl():
         self.minimum_allowed_voltage = config_dict.get('min_voltage', self.minimum_allowed_voltage)
         self.maximum_allowed_voltage = config_dict.get('max_voltage', self.maximum_allowed_voltage)
 
-    def check_allowed_voltage(self, voltage: float = None) -> None:
+    def check_allowed_limits(self, voltage: float = None) -> None:
         if voltage is not None: self._validate_value(voltage)
 
     def _validate_value(self, voltage: float) -> None:
