@@ -1,7 +1,7 @@
 QT3PLE:
   ApplicationController:
     import_path : qt3utils.datagenerators.plescanner
-    class_name : CounterAndScanner
+    class_name : PleScanner
     configure :
       controllers:
         daq_writers:

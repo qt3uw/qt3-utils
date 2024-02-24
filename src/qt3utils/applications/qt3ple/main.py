@@ -37,7 +37,7 @@ RANDOM_DAQ_DEVICE_NAME = 'Random Data Generator'
 
 DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DEVICE_NAMES[0]
 
-CONTROLLER_PATH = 'qt3utils.applications.controller'
+CONTROLLER_PATH = 'qt3utils.applications.controllers'
 STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAMES[0] : 'nidaq_rate_counter.yaml',
                         NIDAQ_DEVICE_NAMES[1] : 'nidaq_wm_ple.yaml'}
 
@@ -59,27 +59,36 @@ class ScanImage:
         return sub_plt
 
     def update_image_and_plot(self, model) -> None:
+        for ax in self.fig.axes:
+            self.fig.delaxes(ax)
         num_readers = len(model.readers)
         grid = plt.GridSpec(2, num_readers)
         self.update_image(model, grid)
         self.update_plot(model, grid)
 
-
     def update_image(self, model, grid) -> None:
         for ii, reader in enumerate(model.readers):
 
-            if self.log_data:
-                data = np.log10(model.scanned_count_rate)
-                data[np.isinf(data)] = 0  # protect against +-inf
-            else:
-                data = model.scanned_count_rate
-            data = np.array(data).T.tolist()
+            #if self.log_data:
+            #    data = np.log10(model.scanned_count_rate)
+            #    data[np.isinf(data)] = 0  # protect against +-inf
+            #else:
+            #    data = model.scanned_count_rate
+            #data = np.array(data).T.tolist()
+            y_data = []
+            for output in model.outputs:
+                y_scan = output[reader]
+                if isinstance(y_scan[0], list) or isinstance(y_scan[0], np.ndarray):
+                    for jj, ydatum in enumerate(y_scan):
+                        y_scan[jj] = np.mean(np.array(ydatum))
+                y_data.append(y_scan)
 
-            artist = self.ax.imshow(data, plt.subplot(grid[0, ii]), cmap=self.cmap)
-                                   # , extent=[model.current_frame + model.raster_line_pause,
-                                   #                                    0,
-                                   #                                    model.vstart,
-                                   #                                    model.vend + model.step_size]
+            ax = self.fig.add_subplot(grid[0, ii])
+            artist = ax.imshow(y_data, cmap=self.cmap
+                                    , extent=[model.current_frame + model.wavelength_controller.settling_time_in_seconds,
+                                                                       0.0,
+                                                                       model.get_start,
+                                                                       model.get_end + model.step_size])
             if self.cbar is None:
                 self.cbar = self.fig.colorbar(artist, ax=self.ax)
             else:
@@ -94,9 +103,10 @@ class ScanImage:
     def update_plot(self, model, grid) -> None:
 
         for ii, reader in enumerate(model.readers):
-            y_data = model.readers[reader]
-            x_control = model.scanned_control
-            self.ax.plot(x_control, y_data, plt.subplot(grid[1, ii]), color='k', linewidth=1.5)
+            y_data = model.outputs[model.current_frame-1][reader]
+            x_control = model.scanned_control[model.current_frame-1]
+            ax = self.fig.add_subplot(grid[1, ii])
+            ax.plot(x_control, y_data, color='k', linewidth=1.5)
 
     def reset(self) -> None:
         self.ax.cla()
@@ -159,8 +169,8 @@ class SidePanel():
         tk.Label(frame, text="Mode").grid(row=row, column=0)
         clicked = tk.StringVar()
         clicked.set("Discrete")
-        self.scan_mode= tk.OptionMenu(frame, clicked, *SCAN_OPTIONS)
-        self.scan_mode.pack()
+        #self.scan_mode= tk.OptionMenu(frame, clicked, *SCAN_OPTIONS)
+        #self.scan_mode.pack()
 
         row += 1
         tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
@@ -208,7 +218,7 @@ class SidePanel():
 
 
 class MainApplicationView():
-    def __init__(self, main_frame, scan_range=[-3, 5]) -> None:
+    def __init__(self, main_frame, scan_range=[0, 2]) -> None:
         frame = tk.Frame(main_frame.root)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -281,7 +291,7 @@ class MainTkApplication():
         args.append(n_scans)
 
         settling_time = sweep_time_entry / n_sample_size
-        self.application_controller.wavelength_controller.settling_time_in_seconds = settling_time
+        #self.application_controller.wavelength_controller.settling_time_in_seconds = settling_time
 
         self.scan_thread = Thread(target=self.scan_thread_function, args=args)
         self.scan_thread.start()
@@ -404,7 +414,8 @@ class MainTkApplication():
                 cls = getattr(module, wm_reader_config['class_name'])
                 self.data_acquisition_models[wm_reader] = cls(logger.level)
                 self.data_acquisition_models[wm_reader].configure(wm_reader_config['configure'])
-        daq_controller_config = config[CONFIG_FILE_APPLICATION_NAME]
+        daq_controller_name = config[CONFIG_FILE_APPLICATION_NAME]['ApplicationController']['configure']['controller']
+        daq_controller_config = config[CONFIG_FILE_APPLICATION_NAME][daq_controller_name]
         if daq_controller_config is not None:
             module = importlib.import_module(daq_controller_config['import_path'])
             logger.debug(f"loading {daq_controller_config['import_path']}")
@@ -428,12 +439,14 @@ class MainTkApplication():
     def disable_buttons(self):
         self.view.sidepanel.start_button['state'] = 'disabled'
         self.view.sidepanel.goto_button['state'] = 'disabled'
+        self.view.sidepanel.goto_slow_button['state'] = 'disabled'
         self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
         self.view.sidepanel.save_scan_button.config(state=tk.DISABLED)
 
     def enable_buttons(self):
         self.view.sidepanel.start_button['state'] = 'normal'
         self.view.sidepanel.goto_button['state'] = 'normal'
+        self.view.sidepanel.goto_slow_button['state'] = 'normal'
         self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
         self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
 

@@ -67,7 +67,7 @@ class PleScanner:
         """
         self.current_wl_point = self._start
         if self.wavelength_controller:
-            self.wavelength_controller.go_to(v=self._start)
+            self.go_to(wl_point=self._start)
 
     def close(self) -> None:
         """
@@ -121,7 +121,7 @@ class PleScanner:
         self.current_wl_point += self._step_size
         if self.wavelength_controller and self.current_wl_point <= self._end:
             try:
-                self.wavelength_controller.go_to(v=self.current_wl_point)
+                self.wavelength_controller.go_to(wl_point=self.current_wl_point)
             except ValueError as e:
                 logger.info(f'out of range\n\n{e}')
 
@@ -151,31 +151,37 @@ class PleScanner:
             values = output of scan
         As well as an array of the points associated with the scan
         """
-        output = {key: [] for key in self.readers.keys}
-        self.wavelength_controller.go_to_wl_point(**{axis: min})
-        self.scanned_control.append(self.wavelength_controller.geta_current_wl_point())
-        for reader in self.readers:
-            if isinstance(reader, QT3ScanNIDAQEdgeCounterController ):
-                self.rate_counters.append(self.readers[reader])
-                raw_counts = []
-                _raw_counts = self.sample_counts(self.readers[reader])
-                raw_counts.append(_raw_counts)
-                logger.info(f'raw counts, total clock samples: {_raw_counts}')
-                if self.wavelength_controller:
-                    logger.info(f'current {self.axis_name}: {self.wavelength_controller.get_current_wl_point()}')
-                raw_counts.append(_raw_counts)
-                output[reader].append(self.sample_count_rate(raw_counts))
-            if isinstance(reader, WavemeterController):
-                _wm_reading = self.read_wavemeter(self.readers[reader])
-                output[reader].append(_wm_reading)
-                if self.wavelength_controller:
-                    logger.info(f'current {self.axis_name}: {self.wavelength_controller.get_current_wl_point()}')
-            if isinstance(reader, VControl):
-                v_reading = self.readers[reader].get_current_wl_point()
-                output[reader].append(v_reading)
-            if isinstance(reader, Lockin):
-                signal_reading = self.readers[reader].read()
-
+        output = {key: [] for key in self.readers.keys()}
+        scanned_control = []
+        self.set_to_start()
+        for val in np.arange(min, max, step_size):
+            if self.wavelength_controller:
+                logger.info(f'go to {axis}: {val:.2f}')
+                self.go_to(wl_point=val)
+            scanned_control.append(self.wavelength_controller.get_current_wl_point())
+            for reader in self.readers:
+                if isinstance(self.readers[reader], QT3ScanNIDAQEdgeCounterController ):
+                    self.rate_counters.append(self.readers[reader])
+                    raw_counts = []
+                    _raw_counts = self.sample_counts(self.readers[reader])
+                    raw_counts.append(_raw_counts)
+                    logger.info(f'raw counts, total clock samples: {_raw_counts}')
+                    if self.wavelength_controller:
+                        logger.info(f'current {self.axis_name}: {self.wavelength_controller.get_current_wl_point()}')
+                    raw_counts.append(_raw_counts)
+                    output[reader].append(self.sample_count_rate(raw_counts))
+                if isinstance(self.readers[reader], WavemeterController):
+                    _wm_reading = self.read_wavemeter(self.readers[reader])
+                    output[reader].append(_wm_reading)
+                    if self.wavelength_controller:
+                        logger.info(f'current {self.axis_name}: {self.wavelength_controller.get_current_wl_point()}')
+                if isinstance(self.readers[reader], VControl):
+                    v_reading = self.readers[reader].get_current_wl_point()
+                    output[reader].append(v_reading)
+                if isinstance(self.readers[reader], Lockin):
+                    signal_reading = self.readers[reader].read()
+                    output[reader].append(signal_reading)
+        self.scanned_control.append(scanned_control)
         return output
 
     def sample_counts(self, reader) -> np.ndarray:
@@ -196,14 +202,6 @@ class PleScanner:
         """
         pass
 
-    @property
-    def step_size(self):
-        return self._step_size
-
-    @step_size.setter
-    def step_size(self, value: float):
-        self._step_size = value
-
     def sample_count_rate(self, rate_counter, data_counts=None) -> np.floating:
         """
         Sum the counts in a batch
@@ -217,5 +215,22 @@ class PleScanner:
         Returns the reading from the wavemeter
         """
         return wm_reader.read_wavemeter()
+
+    @property
+    def step_size(self):
+        return self._step_size
+
+    @step_size.setter
+    def step_size(self, value: float):
+        self._step_size = value
+
+    @property
+    def get_start(self):
+        return self._start
+
+    @property
+    def get_end(self):
+        return self._end
+
 
 
