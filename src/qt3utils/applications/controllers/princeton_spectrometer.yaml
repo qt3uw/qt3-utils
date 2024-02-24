@@ -7,8 +7,8 @@ QT3Scan:
       center_wavelength : 700 # This is in nm
       sensor_temperature_set_point : -70 # This is in Celsius
       grating_selected : "[500nm,300][2][0]" # Varies based on spectrometer type
-      wave_start : 600
-      wave_end : 850
+      starting_wavelength : 600
+      ending_wavelength : 850
       experiment_name: "LF_Control"
 
   PositionController:

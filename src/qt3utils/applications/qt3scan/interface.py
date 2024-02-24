@@ -71,7 +71,7 @@ class QT3ScanDAQControllerInterface(Protocol):
 
     def start(self) -> None:
         """
-        Implenentations should do necessary steps to prepare DAQ hardware to acquire data.
+        Implementations should do necessary steps to prepare DAQ hardware to acquire data.
         """
         pass
 
