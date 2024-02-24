@@ -12,34 +12,22 @@ QT3PLE:
           wm_reader : WavemeterDllController
 
   DAQReader:
-    import_path : qt3utils.nidaq.customcontrollers
-    class_name  : VControl
-    configure :
-      daq_name : Silicon_DAQ  # NI DAQ Device Name
-      write_channels : ao3 # NI DAQ analog output channels to use for writing position
-      read_channels : ai3  # NI DAQ analog input channels to use for reading position
-      min_position: -10  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
-      max_position: 10  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
-      scale_nm_per_volt: 1  # microns
-
-  DAQReader2:
-    import_path : qt3utils.nidaq.customcontrollers
-    class_name  : VControl
+    import_path : qt3utils.applications.controllers.lockin_controller
+    class_name  : Lockin
     configure :
       daq_name : Silicon_DAQ # NI DAQ Device Name
-      write_channels : ao2 # NI DAQ analog output channels to use for writing position
-      read_channels : ai2  # NI DAQ analog input channels to use for reading position
-      min_position: -10  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
-      max_position: 10  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
-      scale_nm_per_volt: 1  # microns
+      signal_channels : ai21  # NI DAQ analog input channels to use for reading position
+      sample_number: 20  # Specifies the sampling rate in samples per channel per second
+      rate: 20.0  #Specifies the number of samples to acquire or generate for each channel in the task
+      timeout: 20  # Specifies the amount of time in seconds to wait for samples to become available
 
   VoltageController:
     import_path : qt3utils.nidaq.customcontrollers
     class_name  : VControl
     configure :
       daq_name : Silicon_DAQ # NI DAQ Device Name
-      write_channels : ao0 # NI DAQ analog output channels to use for writing position
-      read_channels : ai0  # NI DAQ analog input channels to use for reading position
+      write_channels : ao3 # NI DAQ analog output channels to use for writing position
+      read_channels : ai3  # NI DAQ analog input channels to use for reading position
       min_position: -10  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
       max_position: 10  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
       scale_nm_per_volt: 1  # microns

@@ -41,6 +41,8 @@ CONTROLLER_PATH = 'qt3utils.applications.controller'
 STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAMES[0] : 'nidaq_rate_counter.yaml',
                         NIDAQ_DEVICE_NAMES[1] : 'nidaq_wm_ple.yaml'}
 
+SCAN_OPTIONS = ["Discrete", "Batches"]
+
 class ScanImage:
     def __init__(self, mplcolormap='gray') -> None:
         self.fig = plt.figure()
@@ -148,16 +150,37 @@ class SidePanel():
         self.sweep_time_entry.grid(row=row, column=1)
 
         row += 1
+        tk.Label(frame, text="Downsweep Time").grid(row=row, column=0)
+        self.downsweep_time_entry = tk.Entry(frame, width=10)
+        self.downsweep_time_entry.insert(10, 1)
+        self.downsweep_time_entry.grid(row=row, column=1)
+
+        row += 1
+        tk.Label(frame, text="Mode").grid(row=row, column=0)
+        clicked = tk.StringVar()
+        clicked.set("Discrete")
+        self.scan_mode= tk.OptionMenu(frame, clicked, *SCAN_OPTIONS)
+        self.scan_mode.pack()
+
+        row += 1
         tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
 
         row += 1
         self.goto_button = tk.Button(frame, text="Go To Voltage")
         self.goto_button.grid(row=row, column=0)
+        self.goto_slow_button = tk.Button(frame, text="Slowly go to Voltage")
+        self.goto_slow_button.grid(row=row, column=1)
         row += 1
         tk.Label(frame, text="Voltage (V)").grid(row=row, column=0)
         self.voltage_entry = tk.Entry(frame, width=10)
         self.voltage_entry.insert(10, 0)
         self.voltage_entry.grid(row=row, column=1)
+
+        row += 1
+        self.get_button = tk.Button(frame, text="Get current Voltage")
+        self.get_button.grid(row=row, column=0)
+        self.voltage_show=tk.Label(frame, text='None')
+        self.voltage_show.grid(row=row, column=2)
 
         row += 1
         tk.Label(frame, text="Voltage Limits (V)").grid(row=row, column=0)
@@ -215,14 +238,32 @@ class MainTkApplication():
         self.view.sidepanel.start_button.bind("<Button>", self.start_scan)
         self.view.sidepanel.save_scan_button.bind("<Button>", self.save_scan)
         self.view.sidepanel.stop_button.bind("<Button>", self.stop_scan)
-        self.view.sidepanel.goto_button.bind("<Button>", self.go_to_voltage)
+        self.view.sidepanel.goto_button.bind("<Button>", self.go_to)
+        self.view.sidepanel.goto_slow_button.bind("<Button>", self.go_to_slowly)
+        self.view.sidepanel.get_button.bind("<Button>", self.update_voltage_show)
         self.view.sidepanel.hardware_config_from_yaml_button.bind("<Button>", lambda e: self.configure_from_yaml())
         self.root.protocol("WM_DELETE_WINDOWwait_visibility()", self.on_closing)
 
-    def go_to_voltage(self, event=None) -> None:
+    def go_to(self, event=None) -> None:
         self.disable_buttons()
-        self.application_controller.go_to_voltage(float(self.view.sidepanel.voltage_entry.get()))
+        controller_speed = self.application_controller.wavelength_controller.speed
+        self.application_controller.wavelength_controller.speed = "fast"
+        self.application_controller.go_to(float(self.view.sidepanel.voltage_entry.get()))
+        self.application_controller.wavelength_controller.speed = controller_speed
         self.enable_buttons()
+
+    def go_to_slowly(self, event=None) -> None:
+        self.disable_buttons()
+        controller_speed = self.application_controller.wavelength_controller.speed
+        self.application_controller.wavelength_controller.speed = "slow"
+        self.application_controller.go_to(float(self.view.sidepanel.voltage_entry.get()))
+        self.application_controller.wavelength_controller.speed = controller_speed
+        self.enable_buttons()
+
+    def update_voltage_show(self, event=None) -> None:
+        read = self.application_controller.wavelength_controller.last_write_value
+        l = self.view.sidepanel.voltage_show
+        l.config(text=read)
 
     def start_scan(self, event=None) -> None:
         self.disable_buttons()
@@ -230,6 +271,7 @@ class MainTkApplication():
         n_sample_size = int(self.view.sidepanel.num_pixels.get())
         n_scans = int(self.view.sidepanel.scan_num_entry.get())
         sweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
+        downsweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
         vstart= float(self.view.sidepanel.voltage_start_entry.get())
         vend = float(self.view.sidepanel.voltage_end_entry.get())
         step_size = (vend - vstart) / float(n_sample_size)
@@ -274,7 +316,7 @@ class MainTkApplication():
         try:
             self.application_controller.reset()  # clears the data
             self.application_controller.start()  # starts the DAQ
-            self.application_controller.set_to_starting_voltage()  # moves the stage to starting voltage
+            self.application_controller.set_to_start()  # moves the stage to starting voltage
 
             while self.application_controller.still_scanning():
                 self.application_controller.scan_wavelengths()

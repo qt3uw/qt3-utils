@@ -7,6 +7,7 @@ import numpy as np
 
 from qt3utils.applications.controllers.nidaqedgecounter import QT3ScanNIDAQEdgeCounterController
 from qt3utils.applications.controllers.wavemeter_controller import WavemeterController
+from qt3utils.applications.controllers.lockin_controller import Lockin
 from qt3utils.nidaq.customcontrollers import VControl
 
 logger = logging.getLogger(__name__)
@@ -172,6 +173,9 @@ class PleScanner:
             if isinstance(reader, VControl):
                 v_reading = self.readers[reader].get_current_wl_point()
                 output[reader].append(v_reading)
+            if isinstance(reader, Lockin):
+                signal_reading = self.readers[reader].read()
+
         return output
 
     def sample_counts(self, reader) -> np.ndarray:
@@ -213,3 +217,5 @@ class PleScanner:
         Returns the reading from the wavemeter
         """
         return wm_reader.read_wavemeter()
+
+
