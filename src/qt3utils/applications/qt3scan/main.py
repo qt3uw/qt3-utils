@@ -77,13 +77,15 @@ class ScanImage:
         self.fig, self.ax = plt.subplots()
         self.cbar = None
         self.cmap = mplcolormap
-        self.cid = self.fig.canvas.mpl_connect('button_press_event', self.onclick)
+        self.fig.canvas.mpl_connect('button_press_event', self.onclick)
         self.ax.set_xlabel('x position (um)')
         self.ax.set_ylabel('y position (um)')
         self.log_data = False
         self.pointer_line2d = None
         self.position_line2d = None
         self.app_controller_step_size = 0
+        self.xmin = None
+        self.ymin = None
 
     def update(self, app_controller: QT3ScanApplicationControllerInterface) -> None:
 
@@ -125,6 +127,9 @@ class ScanImage:
         self.ax.cla()
         self.pointer_line2d = None
         self.position_line2d = None
+        self.app_controller_step_size = 0
+        self.xmin = None
+        self.ymin = None
 
     def set_onclick_callback(self, func: Callable) -> None:
         """
@@ -169,7 +174,17 @@ class ScanImage:
             self.position_line2d = self.ax.plot(x_position, y_position, 'ro', label='pos')
 
     def onclick(self, event: MouseEvent) -> None:
+        if event.inaxes != self.ax:
+            return
+
         logger.debug(f"Button {event.button} click at: ({event.xdata} microns, {event.ydata}) microns")
+
+        if event.xdata is None or event.ydata is None:
+            logger.debug("Button click outside of scan")
+            return
+        if self.xmin is None or self.ymin is None:
+            logger.debug("No data to display")
+            return
 
         dist_x = event.xdata + self.app_controller_step_size / 2 - self.xmin  # we have to subtract step_size / 2 because the GUI shifts the view.
         dist_y = event.ydata + self.app_controller_step_size / 2 - self.ymin
@@ -178,13 +193,11 @@ class ScanImage:
         index_y = int(dist_y / self.app_controller_step_size)
 
         if event.button == 3:  # Right click
-            if event.inaxes is self.ax:
-                self.rightclick_callback(event, index_x, index_y)
+            self.rightclick_callback(event, index_x, index_y)
         elif event.button == 1:  # Left click
-            if event.inaxes is self.ax:
-                self.onclick_callback(event, index_x, index_y)
-                self.update_pointer_indicator(event.xdata, event.ydata)
-                self.fig.canvas.draw()
+            self.onclick_callback(event, index_x, index_y)
+            self.update_pointer_indicator(event.xdata, event.ydata)
+            self.fig.canvas.draw()
 
 
 class SidePanel():
