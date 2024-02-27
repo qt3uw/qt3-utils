@@ -122,7 +122,7 @@ class VControlV(VControlBase):
         Sets the voltage
         raises ValueError if try to set voltage out of bounds.
         '''
-        if self.speed == "fast":
+        if self.speed == "normal" or self.speed == "fast":
             self.go_to_voltage(wl_point)
         else:
             self.go_to_voltage_slowly(wl_point)
@@ -141,7 +141,8 @@ class VControlV(VControlBase):
                 self.last_write_value = v
             debug_string.append(f'v: {v:.2f}')
         logger.info(f'go to voltage {" ".join(debug_string)}')
-        time.sleep(self.settling_time_in_seconds) #wait to ensure piezo actuator has settled into position.
+        if not self.speed == "fast":
+            time.sleep(self.settling_time_in_seconds) #wait to ensure voltage has settled into position.
         logger.debug(f'last write: {self.last_write_value}')
 
     def go_to_voltage_slowly(self, v: float = None) -> None:

@@ -160,17 +160,26 @@ class SidePanel():
         self.sweep_time_entry.grid(row=row, column=1)
 
         row += 1
+        self.do_downsweep = tk.IntVar(value=0)
         tk.Label(frame, text="Downsweep Time").grid(row=row, column=0)
         self.downsweep_time_entry = tk.Entry(frame, width=10)
         self.downsweep_time_entry.insert(10, 1)
         self.downsweep_time_entry.grid(row=row, column=1)
+        self.downsweep_time_entry.config(state=tk.DISABLED)
+        self.downsweep_button = tk.Checkbutton(frame, text="Downsweep", onvalue=1, offvalue=0,
+                                               variable=self.do_downsweep, command=self.display_downsweep_time)
+        self.downsweep_button.grid(row=row, column=2)
 
         row += 1
         tk.Label(frame, text="Mode").grid(row=row, column=0)
-        clicked = tk.StringVar()
-        clicked.set("Discrete")
-        #self.scan_mode= tk.OptionMenu(frame, clicked, *SCAN_OPTIONS)
-        #self.scan_mode.pack()
+        self.scan_mode = tk.StringVar()
+        self.scan_mode.set("Discrete")
+        self.scan_options = tk.OptionMenu(frame, self.scan_mode, *SCAN_OPTIONS, command=self.display_batch_entry)
+        self.scan_options.grid(row=row, column=1)
+        self.batch_entry = tk.Entry(frame, width=10)
+        self.batch_entry.insert(10, 1)
+        self.batch_entry.grid(row=row, column=2)
+        self.batch_entry.config(state=tk.DISABLED)
 
         row += 1
         tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
@@ -190,7 +199,7 @@ class SidePanel():
         self.get_button = tk.Button(frame, text="Get current Voltage")
         self.get_button.grid(row=row, column=0)
         self.voltage_show=tk.Label(frame, text='None')
-        self.voltage_show.grid(row=row, column=2)
+        self.voltage_show.grid(row=row, column=1)
 
         row += 1
         tk.Label(frame, text="Voltage Limits (V)").grid(row=row, column=0)
@@ -215,6 +224,19 @@ class SidePanel():
         row += 1
         self.hardware_config_from_yaml_button = tk.Button(frame, text="Load YAML Config")
         self.hardware_config_from_yaml_button.grid(row=row, column=0, columnspan=3)
+
+    def display_batch_entry(self, scan_mode):
+        if scan_mode == "Batches":
+            self.batch_entry.config(state=tk.NORMAL)
+        else:
+            self.batch_entry.config(state=tk.DISABLED)
+
+    def display_downsweep_time(self):
+        if self.do_downsweep.get() == 1:
+            self.downsweep_time_entry.config(state=tk.NORMAL)
+        else:
+            self.downsweep_time_entry.config(state=tk.DISABLED)
+
 
 
 class MainApplicationView():
@@ -277,11 +299,15 @@ class MainTkApplication():
 
     def start_scan(self, event=None) -> None:
         self.disable_buttons()
-
+        scan_mode = str(self.view.sidepanel.scan_mode.get())
+        batch_size = int(self.view.sidepanel.batch_entry.get())
         n_sample_size = int(self.view.sidepanel.num_pixels.get())
         n_scans = int(self.view.sidepanel.scan_num_entry.get())
         sweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
-        downsweep_time_entry = float(self.view.sidepanel.sweep_time_entry.get())
+        do_downsweep = bool(self.view.sidepanel.do_downsweep.get())
+        downsweep_time = float(self.view.sidepanel.sweep_time_entry.get())
+        if not do_downsweep:
+            downsweep_time_entry = None
         vstart= float(self.view.sidepanel.voltage_start_entry.get())
         vend = float(self.view.sidepanel.voltage_end_entry.get())
         step_size = (vend - vstart) / float(n_sample_size)
@@ -289,9 +315,13 @@ class MainTkApplication():
         args.append(step_size)
         args.append(n_sample_size)
         args.append(n_scans)
+        args.append(scan_mode)
+        args.append(batch_size)
 
         settling_time = sweep_time_entry / n_sample_size
-        #self.application_controller.wavelength_controller.settling_time_in_seconds = settling_time
+        downsweep_settling_time = downsweep_time / n_sample_size
+        self.application_controller.settling_time_in_seconds = settling_time
+        self.application_controller.downsweep_settling_time_in_seconds = downsweep_settling_time
 
         self.scan_thread = Thread(target=self.scan_thread_function, args=args)
         self.scan_thread.start()
@@ -313,13 +343,25 @@ class MainTkApplication():
             logger.debug(e)
             pass
 
-    def scan_thread_function(self, vstart: float, vend: float, step_size: float, n_sample_size: int, n_scans: int) -> None:
+    def scan_thread_function(self,
+                             vstart: float,
+                             vend: float,
+                             step_size: float,
+                             n_sample_size: int,
+                             n_scans: int,
+                             scan_mode: str,
+                             batch_size: int,
+                             downsweep_time: float) -> None:
         """
         Function to be called in background thread
         Scans the voltage from vstart to vend in increments of step_size
-        for a total of n_sample_size data points n_scans number of times
+        for a total of n_sample_size data points n_scans number of times.
+        If the scan_mode is "Batches", it will aggregate (average) some
+        batch_size number of points in between data points instead.
         """
-
+        self.application_controller.set_scan_mode(scan_mode)
+        self.application_controller.discrete_batch_size = batch_size
+        self.application_controller.downsweep_time
         self.application_controller.set_scan_range(vstart, vend)
         self.application_controller.step_size = step_size
         self.application_controller.tmax = n_scans
