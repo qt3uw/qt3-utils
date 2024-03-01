@@ -1,14 +1,39 @@
 import logging
 import threading
 from dataclasses import dataclass, field
-from typing import List, Dict, Union, Set
+from typing import List, Dict, Union, Set, Callable, Any
 
 import numpy as np
 
 from datagenerators.spectrometers.spectrometer import SpectrometerConfig, SpectrometerDataAcquisition
 
 
-class AndorAPI:
+def prevent_none_set(func: Callable[[Any, Any], None]) -> Union[Callable[[Any, Any], None], None]:
+    """
+    A decorator that prevents the wrapped method from running if the input argument is None.
+
+    This decorator targets property setters that take a single input argument.
+
+    Parameters
+    ----------
+    func: Callable[[Any, Any], None]
+        The property setter to be decorated.
+        The first argument is self, the second is new value.
+
+    Returns
+    -------
+    Callable[[Any, Any], None] | None
+        None if the given argument was None, the original method otherwise.
+    """
+    def wrapper(self, value):
+        if value is not None:
+            return func(self, value)
+        return None
+
+    return wrapper
+
+
+class AndorAPI(object):
     """
     A class for interfacing with the Andor API.
 
@@ -35,28 +60,28 @@ class AndorAPI:
         self._ccd_import_succeeded, self._spg_import_succeeded = self._import_libraries()
         self._lock = threading.RLock()
 
-    def __getattribute__(self, item):
-        """
-        Assures the user is properly notified that calling the object's attribute failed
-        because the Andor packages were not properly imported.
-
-        Raises
-        ------
-        AttributeError
-            when either or both pyAndorSDK2 and pyAndorSpectrograph were not properly imported.
-        """
-        if self._ccd_import_succeeded and self._spg_import_succeeded:
-            return super().__getattribute__(item)
-
-        if not self._ccd_import_succeeded and not self._spg_import_succeeded:
-            failed_imports = "pyAndorSDK2 and pyAndorSpectrograph"
-        elif not self._ccd_import_succeeded:
-            failed_imports = "pyAndorSDK2"
-        else:
-            failed_imports = "pyAndorSpectrograph"
-
-        self.logger.error(f"Importing {failed_imports} was not successful, hence, {item} was not properly defined.")
-        raise AttributeError(f'{failed_imports} were not found to properly define {item}.')
+    # def __getattribute__(self, item):
+    #     """
+    #     Assures the user is properly notified that calling the object's attribute failed
+    #     because the Andor packages were not properly imported.
+    #
+    #     Raises
+    #     ------
+    #     AttributeError
+    #         when either or both pyAndorSDK2 and pyAndorSpectrograph were not properly imported.
+    #     """
+    #     if self._ccd_import_succeeded and self._spg_import_succeeded:
+    #         return object.__getattribute__(self, item)
+    #
+    #     if not self._ccd_import_succeeded and not self._spg_import_succeeded:
+    #         failed_imports = "pyAndorSDK2 and pyAndorSpectrograph"
+    #     elif not self._ccd_import_succeeded:
+    #         failed_imports = "pyAndorSDK2"
+    #     else:
+    #         failed_imports = "pyAndorSpectrograph"
+    #
+    #     self.logger.error(f"Importing {failed_imports} was not successful, hence, {item} was not properly defined.")
+    #     raise AttributeError(f'{failed_imports} were not found to properly define {item}.')
 
     def _import_libraries(self):
         """
@@ -259,6 +284,7 @@ class GratingInfo:
         _andor_api.log_spg_response(f"Getting grating information for device '{self.device_index}'"
                                     f" and grating '{self.grating_index}'", status)
 
+    @property
     def short_description(self) -> str:
         return f"{self.grating_index}: {self.lines:.1f}, {self.blaze}"
 
@@ -330,8 +356,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         self._spg_device_index = spg_device_index
 
         with _andor_api.lock:
-            self._spg_number_of_devices = _andor_api.spg.GetNumberDevices()
-            self._ccd_number_of_devices = _andor_api.ccd.GetNumberDevices()
+            _, self._spg_number_of_devices = _andor_api.spg.GetNumberDevices()
+            _, self._ccd_number_of_devices = _andor_api.ccd.GetNumberDevices()
 
         self._spg_device_list = list(range(self._spg_number_of_devices))
         self._ccd_device_list = list(range(self._ccd_number_of_devices))
@@ -443,6 +469,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         return ccd_device_index
 
     @ccd_device_index.setter
+    @prevent_none_set
     def ccd_device_index(self, value: int):
         """ To change the current CCD, we need to close the connection with the previous CCD first. """
         if value == self.ccd_device_index:
@@ -480,6 +507,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         return self._spg_device_index
 
     @spg_device_index.setter
+    @prevent_none_set
     def spg_device_index(self, value: int):
         if value == self.spg_device_index:
             return
@@ -513,26 +541,45 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         grating_info_values: List[GratingInfo] = list(self.spg_info.grating_info_dictionary.values())
 
-        return [gi.short_description() for gi in grating_info_values]
+        return [gi.short_description for gi in grating_info_values]
 
     @property
-    def current_grating(self) -> str:
+    def current_grating_index(self) -> int:
         """
-        Current spectrometer grating.
+        Current spectrometer grating index.
         """
         with _andor_api.lock:
             status, current_grating = _andor_api.spg.GetGrating(self.spg_device_index)
         _andor_api.log_spg_response("Getting current grating", status)
         return current_grating
 
-    @current_grating.setter
-    def current_grating(self, value: int) -> None:
+    @current_grating_index.setter
+    @prevent_none_set
+    def current_grating_index(self, value: int) -> None:
         """
-        Set the spectrometer grating.
+        Set the spectrometer grating index.
         """
         with _andor_api.lock:
             status = _andor_api.spg.SetGrating(self.spg_device_index, value)
         _andor_api.log_spg_response("Setting current grating", status)
+
+    @property
+    def current_grating(self) -> str:
+        """
+        Current spectrometer grating.
+        """
+        current_grating_index = self.current_grating_index
+        grating_list = self.grating_list
+
+        return grating_list[current_grating_index - 1] if len(grating_list) > 0 else "None"
+
+    @current_grating.setter
+    @prevent_none_set
+    def current_grating(self, value: str) -> None:
+        """
+        Set the spectrometer grating.
+        """
+        pass
 
     @property
     def center_wavelength(self) -> float:
@@ -545,6 +592,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         return center_wavelength
 
     @center_wavelength.setter
+    @prevent_none_set
     def center_wavelength(self, nanometers: float) -> None:
         """
         Sets the grating center wavelength.
@@ -558,9 +606,10 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         The Step and Glue starting wavelength.
         """
-        pass
+        return np.nan
 
     @starting_wavelength.setter
+    @prevent_none_set
     def starting_wavelength(self, lambda_min: float) -> None:
         """
         Sets the Step and Glue starting wavelength.
@@ -572,9 +621,10 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         The Step and Glue ending wavelength.
         """
-        pass
+        return np.nan
 
     @ending_wavelength.setter
+    @prevent_none_set
     def ending_wavelength(self, lambda_max: float) -> None:
         """
         Sets the Step and Glue ending wavelength.
@@ -598,7 +648,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         pass
 
     @property
-    def sensor_temperature_set_point(self) -> float:
+    def sensor_temperature_set_point(self) -> int:
         """
         The sensor set-point temperature in Celsius.
         """
@@ -608,7 +658,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         return temperature
 
     @sensor_temperature_set_point.setter
-    def sensor_temperature_set_point(self, deg_celsius: float) -> None:
+    @prevent_none_set
+    def sensor_temperature_set_point(self, deg_celsius: int) -> None:
         """
         Sets the sensor target temperature in Celsius.
         """
@@ -628,6 +679,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         return np.nan
 
     @exposure_time.setter
+    @prevent_none_set
     def exposure_time(self, secs: float) -> None:
         """
         Sets the single frame exposure time in seconds.
