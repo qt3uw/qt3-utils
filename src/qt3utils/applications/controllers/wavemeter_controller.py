@@ -1,7 +1,9 @@
+import abc
 import ctypes
 import logging
 
-class WavemeterController:
+
+class WavemeterController(abc.ABC):
     """
     Base class for other types of wavemeter controllers to inherit from
     """
@@ -9,29 +11,34 @@ class WavemeterController:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
+    @abc.abstractmethod
     def open(self):
         """
         Override this method to open and initialize wavemeter
         """
         pass
 
+    @abc.abstractmethod
     def read_wavemeter(self):
         """
         Override this method to read the value from the wavemeter
         """
         pass
 
+    @abc.abstractmethod
     def close_wavemeter(self):
         """
         Override this method to close the connection to the wavemeter
         """
         pass
 
+    @abc.abstractmethod
     def configure(self):
         """
         Override this method to configure the wavemeter from a dict set via yaml file
         """
         pass
+
 
 class WavemeterDllController(WavemeterController):
     """

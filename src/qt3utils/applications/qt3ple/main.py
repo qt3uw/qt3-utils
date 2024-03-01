@@ -1,12 +1,11 @@
 import argparse
-import h5py
 import importlib
 import importlib.resources
 import logging
+import pickle
 from threading import Thread
 
 import matplotlib
-from matplotlib import gridspec
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 import matplotlib.pyplot as plt
 import nidaqmx
@@ -84,18 +83,16 @@ class ScanImage:
                 y_data.append(y_scan)
 
             ax = self.fig.add_subplot(grid[0, ii])
+            y_data = np.array(y_data).T
             artist = ax.imshow(y_data, cmap=self.cmap
                                     , extent=[model.current_frame + model.wavelength_controller.settling_time_in_seconds,
                                                                        0.0,
                                                                        model.get_start,
                                                                        model.get_end + model.step_size])
-            if self.cbar is None:
-                self.cbar = self.fig.colorbar(artist, ax=self.ax)
-            else:
-                self.cbar.update_normal(artist)
+            cbar = self.fig.colorbar(artist, ax=ax)
 
-            if self.log_data is False:
-                self.cbar.formatter.set_powerlimits((0, 3))
+            #if self.log_data is False:
+            #    cbar.formatter.set_powerlimits((0, 3))
 
             self.ax.set_xlabel('Pixels')
             self.ax.set_ylabel('Voltage (V)')
@@ -210,6 +207,9 @@ class SidePanel():
         self.voltage_lmin_entry.grid(row=row, column=1)
         self.voltage_lmax_entry.grid(row=row, column=2)
 
+        row += 1
+        tk.Label(frame, text="Hardware Configuration", font='Helvetica 16').grid(row=row, column=0, pady=10)
+
         row+=1
         self.controller_option = tk.StringVar(frame)
         self.controller_option.set(DEFAULT_DAQ_DEVICE_NAME)  # setting the default value
@@ -265,7 +265,9 @@ class MainTkApplication():
         self.view.controller_option = controller_name
         # data acquisition model that is used to acquire data
         self.data_acquisition_models = {}
-        self.controller_models = {}
+        self.controller_model = None
+        self.meta_configs = None
+        self.app_meta_data = None
         # load the data acquisition model
         self.view.sidepanel.start_button.bind("<Button>", self.start_scan)
         self.view.sidepanel.save_scan_button.bind("<Button>", self.save_scan)
@@ -323,6 +325,7 @@ class MainTkApplication():
         self.application_controller.settling_time_in_seconds = settling_time
         self.application_controller.downsweep_settling_time_in_seconds = downsweep_settling_time
 
+        self.app_meta_data = args
         self.scan_thread = Thread(target=self.scan_thread_function, args=args)
         self.scan_thread.start()
 
@@ -350,8 +353,7 @@ class MainTkApplication():
                              n_sample_size: int,
                              n_scans: int,
                              scan_mode: str,
-                             batch_size: int,
-                             downsweep_time: float) -> None:
+                             batch_size: int) -> None:
         """
         Function to be called in background thread
         Scans the voltage from vstart to vend in increments of step_size
@@ -361,7 +363,6 @@ class MainTkApplication():
         """
         self.application_controller.set_scan_mode(scan_mode)
         self.application_controller.discrete_batch_size = batch_size
-        self.application_controller.downsweep_time
         self.application_controller.set_scan_range(vstart, vend)
         self.application_controller.step_size = step_size
         self.application_controller.tmax = n_scans
@@ -385,32 +386,29 @@ class MainTkApplication():
         self.enable_buttons()
 
     def save_scan(self, event = None):
-        myformats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
-        afile = tk.filedialog.asksaveasfilename(filetypes=myformats, defaultextension='.npz')
+        myformats = [('Pickle', '*.pkl')]
+        afile = tk.filedialog.asksaveasfilename(filetypes=myformats, defaultextension='.pkl')
         logger.info(afile)
         file_type = afile.split('.')[-1]
         if afile is None or afile == '':
             return # selection was canceled.
+        data = {}
+        data["Data"] = {}
+        if self.application_controller is not None:
+            for ii, scan_data in enumerate(self.application_controller.outputs):
+                data["Data"][f"Scan{ii}"] = {}
+                for reader in self.application_controller.readers:
+                    data["Data"][f"Scan{ii}"][reader] = scan_data[reader]
+        data["Metadata"] = []
+        if self.meta_configs is not None:
+            for meta_config in self.meta_configs:
+                data["Metadata"].append(meta_config)
+        if self.app_meta_data is not None:
+            data["ApplicationController"] = self.app_meta_data
 
-        data = dict(
-            raw_counts=self.application_controller.scanned_raw_counts,
-            count_rate=self.application_controller.scanned_count_rate,
-            scan_range=self.application_controller.get_completed_scan_range(),
-            step_size=self.application_controller.step_size,
-            daq_clock_rate=self.application_controller.rate_counter.clock_rate,
-        )
-
-        if file_type == 'npy':
-            np.save(afile, data['count_rate'])
-
-        if file_type == 'npz':
-            np.savez_compressed(afile, **data)
-
-        elif file_type == 'h5':
-            h5file = h5py.File(afile, 'w')
-            for key, value in data.items():
-                h5file.create_dataset(key, data=value)
-            h5file.close()
+        if file_type == 'pkl':
+            with open(afile, 'wb') as f:
+                pickle.dump(data, f)
 
     def configure_from_yaml(self, afile=None) -> None:
         """
@@ -437,36 +435,40 @@ class MainTkApplication():
         self.app_config = self.app_controller_config["configure"]
         logger.info("load settings from yaml")
         daq_readers = self.app_config["readers"]["daq_readers"]
+        self.meta_configs = []
         if daq_readers is not None:
             for daq_reader in daq_readers:
                 daq_reader_name = daq_readers[daq_reader]
                 daq_reader_config = config[CONFIG_FILE_APPLICATION_NAME][daq_reader_name]
+                self.meta_configs.append(daq_reader_config)
                 module = importlib.import_module(daq_reader_config['import_path'])
                 logger.debug(f"loading {daq_reader_config['import_path']}")
                 cls = getattr(module, daq_reader_config['class_name'])
-                self.data_acquisition_models[daq_reader] = cls(logger.level)
-                self.data_acquisition_models[daq_reader].configure(daq_reader_config['configure'])
+                self.data_acquisition_models[daq_reader_name] = cls(logger.level)
+                self.data_acquisition_models[daq_reader_name].configure(daq_reader_config['configure'])
         wm_readers = self.app_config["readers"]["wm_readers"]
         if wm_readers is not None:
             for wm_reader in wm_readers:
                 wm_reader_name = wm_readers[wm_reader]
                 wm_reader_config = config[CONFIG_FILE_APPLICATION_NAME][wm_reader_name]
+                self.meta_configs.append(wm_reader_config)
                 module = importlib.import_module(wm_reader_config['import_path'])
                 logger.debug(f"loading {wm_reader_config['import_path']}")
                 cls = getattr(module, wm_reader_config['class_name'])
-                self.data_acquisition_models[wm_reader] = cls(logger.level)
-                self.data_acquisition_models[wm_reader].configure(wm_reader_config['configure'])
+                self.data_acquisition_models[wm_reader_name] = cls(logger.level)
+                self.data_acquisition_models[wm_reader_name].configure(wm_reader_config['configure'])
         daq_controller_name = config[CONFIG_FILE_APPLICATION_NAME]['ApplicationController']['configure']['controller']
         daq_controller_config = config[CONFIG_FILE_APPLICATION_NAME][daq_controller_name]
+        self.meta_configs.append(daq_controller_config)
         if daq_controller_config is not None:
             module = importlib.import_module(daq_controller_config['import_path'])
             logger.debug(f"loading {daq_controller_config['import_path']}")
             cls = getattr(module, daq_controller_config['class_name'])
-            controller_model = cls(logger.level)
-            controller_model.configure(daq_controller_config['configure'])
+            self.controller_model = cls(logger.level)
+            self.controller_model.configure(daq_controller_config['configure'])
         else:
            raise Exception("Yaml configuration file must have a controller for PLE scan.")
-        self.application_controller = plescanner.PleScanner(self.data_acquisition_models, controller_model)
+        self.application_controller = plescanner.PleScanner(self.data_acquisition_models, self.controller_model)
 
     def load_controller_from_name(self, application_controller_name: str) -> None:
         """

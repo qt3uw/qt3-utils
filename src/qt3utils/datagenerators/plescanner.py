@@ -40,7 +40,7 @@ class PleScanner:
         self.rate_counters = []
         self.scanned_control = []
         self.scan_mode = ""
-        self.discrete_batch_size = 1
+        self._discrete_batch_size = 1
         if isinstance(self.wavelength_controller, VControl):
             self.axis_name = "Voltage"
         else:
@@ -110,7 +110,7 @@ class PleScanner:
         if self.running == False:  # this allows external process to stop scan
             return False
 
-        if self.current_frame <= self.tmax:  # stops scan when reaches final position
+        if self.current_frame < self.tmax:  # stops scan when reaches final position
             return True
         else:
             self.running = False
@@ -157,14 +157,17 @@ class PleScanner:
         output = {key: [] for key in self.readers.keys()}
         scanned_control = []
         self.set_to_start()
-        val_array = np.arange(min, max, step_size)
+        val_array = np.arange(min, max + step_size, step_size)
         for ii, val in enumerate(val_array):
             if self.scan_mode == "Discrete":
                 batch_vals = [val]
             elif self.scan_mode == "Batches":
                 self.wavelength_controller.speed = "fast"
                 time.sleep(self.wavelength_controller.settling_time_in_seconds)
-                batch_vals = np.arange(val, val_array[ii+1])
+                if ii < len(val_array)-1:
+                    batch_vals = np.arange(val, val_array[ii+1])
+                else:
+                    continue
             for batch_val in batch_vals:
                 logger.info(f'go to {axis}: {val:.2f}')
                 self.go_to(wl_point=batch_val)
@@ -237,8 +240,11 @@ class PleScanner:
         self.scan_mode = scan_mode
 
     @property
+    def discrete_batch_size(self):
+        return self._discrete_batch_size
+    @discrete_batch_size.setter
     def discrete_batch_size(self, batch_size: int) -> None:
-        self.discrete_batch_size = batch_size
+        self._discrete_batch_size = batch_size
 
     @property
     def step_size(self):

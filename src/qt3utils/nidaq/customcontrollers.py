@@ -7,7 +7,7 @@ import time
 logger = logging.getLogger(__name__)
 
 
-class VControlBase(abc.ABC):
+class WavelengthControlBase(abc.ABC):
 
     def __init__(self, device_name: str,
                  write_channel: str = 'ao0',
@@ -67,6 +67,7 @@ class VControlBase(abc.ABC):
         if voltage > self.maximum_allowed_position:
             raise ValueError(f'value {voltage} is greater than {self.maximum_allowed_position: .3f}.')
 
+    @abc.abstractmethod
     def go_to(self, wl_point: float = None) -> None:
         '''
         Sets the voltage
@@ -82,7 +83,7 @@ class VControlBase(abc.ABC):
         self._settling_time_in_seconds = val
 
 
-class VControl(VControlBase):
+class VControl(WavelengthControlBase):
 
     def go_to(self, wl_point: float = None) -> None:
         '''
@@ -115,7 +116,7 @@ class VControl(VControlBase):
         return self.scale_nm_per_volt * volts
 
 
-class VControlV(VControlBase):
+class VControlWavelength(WavelengthControlBase):
 
     def go_to(self, wl_point: float = None) -> None:
         '''
