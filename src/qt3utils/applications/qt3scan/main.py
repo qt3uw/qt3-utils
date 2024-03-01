@@ -47,20 +47,34 @@ if args.verbose == 2:
 NIDAQ_DAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
 RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Counter'
 PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
+ANDOR_SPECTROMETER_DAQ_DEVICE_NAME = 'Andor Spectrometer'
 RANDOM_SPECTROMETER_DAQ_DEVICE_NAME = 'Random Spectrometer'
 
 DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DAQ_DEVICE_NAME
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
-STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml',
-                        'application_controller_class': QT3ScanConfocalApplicationController},
-                        PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml': 'princeton_spectrometer.yaml',
-                        'application_controller_class': QT3ScanHyperSpectralApplicationController},
-                        RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
-                        'application_controller_class': QT3ScanConfocalApplicationController},
-                        RANDOM_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml': 'random_spectrometer.yaml',
-                        'application_controller_class': QT3ScanHyperSpectralApplicationController}
-                        }
+STANDARD_CONTROLLERS = {
+    NIDAQ_DAQ_DEVICE_NAME: {
+        'yaml': 'nidaq_edge_counter.yaml',
+        'application_controller_class': QT3ScanConfocalApplicationController
+    },
+    PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {
+        'yaml': 'princeton_spectrometer.yaml',
+        'application_controller_class': QT3ScanHyperSpectralApplicationController
+    },
+    ANDOR_SPECTROMETER_DAQ_DEVICE_NAME: {
+        'yaml': 'andor_spectrometer.yaml',
+        'application_controller_class': QT3ScanHyperSpectralApplicationController
+    },
+    RANDOM_DATA_DAQ_DEVICE_NAME: {
+        'yaml': 'random_data_generator.yaml',
+        'application_controller_class': QT3ScanConfocalApplicationController
+    },
+    RANDOM_SPECTROMETER_DAQ_DEVICE_NAME: {
+        'yaml': 'random_spectrometer.yaml',
+        'application_controller_class': QT3ScanHyperSpectralApplicationController
+    }
+}
 
 # Hyper Spectral Imaging would add the following to STANDARD_CONTROLLERS
 # PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
