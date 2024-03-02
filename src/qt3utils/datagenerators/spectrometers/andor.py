@@ -37,34 +37,6 @@ def prevent_none_set(func: Callable[[Any, Any], None]) -> Union[Callable[[Any, A
     return wrapper
 
 
-class LazyCaseAgnosticIntEnum(enum.IntEnum):
-    """
-    This case-insensitive IntEnum enables the user to easily
-    retrieve values and names via a "titled" member name.
-    Makes it easy to interact with a GUI where the appearance
-    of the member name maybe different from the actual name
-    (e.g. "Fast Kinetics" vs. "FAST_KINETICS").
-    It is called lazy because it does not make sure all the
-    member names are unique after becoming case-insensitive.
-    """
-
-    @classmethod
-    def get_value(cls, name: str) -> int:
-        new_name = name.upper().replace(' ', '_')
-        member_upper_names = np.array([name.upper() for name in cls._member_names_])
-        name_index_list = np.where(name.upper() == member_upper_names)[0]
-        if len(name_index_list):
-            name_index = name_index_list[0]
-            return cls[cls._member_names_[name_index]].value
-
-        raise KeyError(f"{name}, processed as {new_name}, is not a member "
-                       f"of the case-insensitive IntEnum {cls.__name__}.")
-
-    @classmethod
-    def get_titled_name(cls, value: int) -> str:
-        return cls(value).name.title().replace('_', ' ')
-
-
 class AndorAPI(object):
     """
     A class for interfacing with the Andor API.
@@ -464,33 +436,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
     DEVICE_NAME: str = 'Andor Spectrometer'
 
-    class SpectrographFlipperMirrorPort(LazyCaseAgnosticIntEnum):
+    class SpectrographFlipperMirrorPort(enum.IntEnum):
         DIRECT = _andor_api.spg.DIRECT
         SIDE = _andor_api.spg.SIDE
-
-    class CCDAcquisitionMode(LazyCaseAgnosticIntEnum):
-        SINGLE_SCAN = _andor_api.ccd_codes.Acquisition_Mode.SINGLE_SCAN
-        ACCUMULATE = _andor_api.ccd_codes.Acquisition_Mode.ACCUMULATE
-        KINETICS = _andor_api.ccd_codes.Acquisition_Mode.KINETICS
-        FAST_KINETICS = _andor_api.ccd_codes.Acquisition_Mode.FAST_KINETICS
-        RUN_TILL_ABORT = _andor_api.ccd_codes.Acquisition_Mode.RUN_TILL_ABORT
-
-    class CCDReadMode(LazyCaseAgnosticIntEnum):
-        FULL_VERTICAL_BINNING = _andor_api.ccd_codes.Read_Mode.FULL_VERTICAL_BINNING
-        MULTI_TRACK = _andor_api.ccd_codes.Read_Mode.MULTI_TRACK
-        RANDOM_TRACK = _andor_api.ccd_codes.Read_Mode.RANDOM_TRACK
-        SINGLE_TRACK = _andor_api.ccd_codes.Read_Mode.SINGLE_TRACK
-        IMAGE = _andor_api.ccd_codes.Read_Mode.IMAGE
-
-    class CCDTriggerMode(LazyCaseAgnosticIntEnum):
-        INTERNAL = _andor_api.ccd_codes.Trigger_Mode.INTERNAL
-        EXTERNAL = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL
-        EXTERNAL_START = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL_START
-        # The below modes are not available for CCD Newton 920, but may be for newer CCD models
-        EXTERNAL_EXPOSURE_BULB = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL_EXPOSURE_BULB
-        EXTERNAL_FVB_EM = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL_FVB_EM
-        SOFTWARE_TRIGGER = _andor_api.ccd_codes.Trigger_Mode.SOFTWARE_TRIGGER
-        EXTERNAL_CHARGE_SHIFTING = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL_CHARGE_SHIFTING
 
     DEFAULT_NUMBER_OF_ACCUMULATIONS: int = 2
     """
@@ -508,6 +456,24 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     the Andor Solis software. We use this value to ensure the temperature stays
     low when we first initialize the CCD when the user has not set a preferred 
     temperature yet.
+    """
+    DEFAULT_READ_MODE: str = _andor_api.ccd_codes.Read_Mode.FULL_VERTICAL_BINNING.name
+    """
+    There is no getter for read mode in the Andor API, so we choose full vertical
+    binning (FVB) as the default value. Feel free to change the default value prior
+    to initialization, or the actual read mode value after initialization.
+    """
+    DEFAULT_ACQUISITION_MODE: str = _andor_api.ccd_codes.Acquisition_Mode.SINGLE_SCAN.name
+    """
+    There is no getter for acquisition mode in the Andor API, so we choose single
+    scan as the default value. Feel free to change the default value prior to
+    initialization, or the actual acquisition mode value after initialization.
+    """
+    DEFAULT_TRIGGER_MODE: str = _andor_api.ccd_codes.Trigger_Mode.INTERNAL.name
+    """
+    There is no getter for trigger mode in the Andor API, so we choose internal
+    as the default value. Feel free to change the default value prior to 
+    initialization, or the actual trigger mode value after initialization.
     """
 
     def __init__(self, spg_device_index: int = 0):
@@ -528,6 +494,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         # do not have a Getter method implemented in the Andor API
         self._number_of_accumulations: int = self.DEFAULT_NUMBER_OF_ACCUMULATIONS
         self._cooler_persistence_mode: bool = self.DEFAULT_COOLER_PERSISTENCE_MODE
+        self._read_mode: str = self.DEFAULT_READ_MODE
+        self._acquisition_mode: str = self.DEFAULT_ACQUISITION_MODE
+        self._trigger_mode: str = self.DEFAULT_TRIGGER_MODE
 
     def open(self) -> None:
         """
@@ -790,7 +759,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             status, input_flipper_mirror = _andor_api.spg.GetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.INPUT_FLIPPER.value)
         _andor_api.log_spg_response("Getting input port", status)
-        return self.SpectrographFlipperMirrorPort.get_titled_name(input_flipper_mirror)
+        return self.SpectrographFlipperMirrorPort(input_flipper_mirror).name
 
     @input_port.setter
     @prevent_none_set
@@ -798,7 +767,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Set the input port (input flipper mirror).
         """
-        setter_value: int = self.SpectrographFlipperMirrorPort.get_value(name)
+        setter_value: int = self.SpectrographFlipperMirrorPort[name].value
         with _andor_api.lock:
             status = _andor_api.spg.SetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.INPUT_FLIPPER.value, setter_value)
@@ -813,7 +782,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             status, output_flipper_mirror = _andor_api.spg.GetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER.value)
         _andor_api.log_spg_response("Getting output port", status)
-        return str(self.SpectrographFlipperMirrorPort(output_flipper_mirror)).title()
+        return self.SpectrographFlipperMirrorPort(output_flipper_mirror).name
 
     @output_port.setter
     @prevent_none_set
@@ -821,7 +790,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Set the output port (output flipper mirror).
         """
-        setter_value: int = self.SpectrographFlipperMirrorPort.get_value(name)
+        setter_value: int = self.SpectrographFlipperMirrorPort[name].value
         with _andor_api.lock:
             status = _andor_api.spg.SetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER.value, setter_value)
@@ -1029,10 +998,60 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Returns the current acquisition mode.
         """
-        # with _andor_api.lock:
-        #     status, acquisition_mode = _andor_api.ccd.GetAcquisitionMode()
-        # _andor_api.log_ccd_response("Getting acquisition mode", status)
-        # return _andor_api.ccd_acquisition_modes.get(acquisition_mode, 'unknown')
+        return self._acquisition_mode
+
+    @acquisition_mode.setter
+    @prevent_none_set
+    def acquisition_mode(self, mode_name: str):
+        """
+        Sets the acquisition mode.
+        """
+        mode_value = _andor_api.ccd_codes.Acquisition_Mode[mode_name].value
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetAcquisitionMode(mode_value)
+        _andor_api.log_ccd_response("Setting acquisition mode", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._acquisition_mode = mode_name
+
+    @property
+    def read_mode(self) -> str:
+        """
+        Returns the current read mode.
+        """
+        return self._read_mode
+
+    @read_mode.setter
+    @prevent_none_set
+    def read_mode(self, mode_name: str):
+        """
+        Sets the read mode.
+        """
+        mode_value = _andor_api.ccd_codes.Read_Mode[mode_name].value
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetReadMode(mode_value)
+        _andor_api.log_ccd_response("Setting read mode", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._read_mode = mode_name
+
+    @property
+    def trigger_mode(self) -> str:
+        """
+        Returns the current trigger mode.
+        """
+        return self._trigger_mode
+
+    @trigger_mode.setter
+    @prevent_none_set
+    def trigger_mode(self, mode_name: str):
+        """
+        Sets the trigger mode.
+        """
+        mode_value = _andor_api.ccd_codes.Trigger_Mode[mode_name].value
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetTriggerMode(mode_value)
+        _andor_api.log_ccd_response("Setting trigger mode", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._trigger_mode = mode_name
 
 
 class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
