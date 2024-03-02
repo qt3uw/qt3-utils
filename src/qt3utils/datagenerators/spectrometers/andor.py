@@ -1,3 +1,4 @@
+import enum
 import logging
 import threading
 from dataclasses import dataclass, field
@@ -435,6 +436,32 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
     DEVICE_NAME: str = 'Andor Spectrometer'
 
+    class FlipperMirrorPort(enum.IntEnum):
+        DIRECT = _andor_api.spg.DIRECT
+        SIDE = _andor_api.spg.SIDE
+
+    class CoolerPersistenceModes(enum.IntEnum):
+        OFF = 0
+        ON = 1
+
+    DEFAULT_NUMBER_OF_ACCUMULATIONS: int = 2
+    """
+    There is no getter for number of accumulations in the Andor API, 
+    so to initialize the spectrometer configuration we use a default value. 
+    """
+    DEFAULT_COOLER_PERSISTENCE_MODE: CoolerPersistenceModes = CoolerPersistenceModes.ON
+    """
+    There is no getter for cooler mode in the Andor API, so to initialize
+    the spectrometer configuration we use a default value.
+    """
+    DEFAULT_SET_TEMPERATURE: int = -70
+    """
+    Some times the CCD does not remember the target temperature that was set with
+    the Andor Solis software. We use this value to ensure the temperature stays
+    low when we first initialize the CCD when the user has not set a preferred 
+    temperature yet.
+    """
+
     def __init__(self, spg_device_index: int = 0):
         super().__init__()
         self._spg_device_index = spg_device_index
@@ -448,6 +475,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
         self._spg_info: Union[SpectrographInfo, None] = None
         self._ccd_info: Union[CCDInfo, None] = None
+
+        self._number_of_accumulations = self.DEFAULT_NUMBER_OF_ACCUMULATIONS
+        self._cooler_persistence_mode = self.DEFAULT_COOLER_PERSISTENCE_MODE
 
     def open(self) -> None:
         """
@@ -467,6 +497,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
                 _andor_api.log_ccd_response('CCD initialization', status)
                 status = _andor_api.ccd.CoolerON()
                 _andor_api.log_ccd_response('CCD cooler turn-on', status)
+                self.sensor_temperature_set_point = self.DEFAULT_SET_TEMPERATURE
+                self.cooler_persistence_mode = self._cooler_persistence_mode
             else:
                 _andor_api.logger.debug('CCD is already initialized.')
 
@@ -507,9 +539,6 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             if _andor_api.is_ccd_initialized():
-                status = _andor_api.ccd.CoolerOFF()
-                _andor_api.log_spg_response('CCD cooler turn-off', status)
-
                 status = _andor_api.ccd.ShutDown()
                 _andor_api.log_spg_response('CCD shutdown', status)
             else:
@@ -679,6 +708,52 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         _andor_api.log_spg_response("Setting current grating", status)
 
     @property
+    def input_port(self) -> str:
+        """
+        Get the input port (input flipper mirror).
+        """
+        with _andor_api.lock:
+            status, input_flipper_mirror = _andor_api.spg.GetFlipperMirror(
+                self.spg_device_index, _andor_api.spg.INPUT_FLIPPER.value)
+        _andor_api.log_spg_response("Getting input port", status)
+        return str(self.FlipperMirrorPort(input_flipper_mirror)).title()
+
+    @input_port.setter
+    @prevent_none_set
+    def input_port(self, value: str) -> None:
+        """
+        Set the input port (input flipper mirror).
+        """
+        setter_value: int = self.FlipperMirrorPort[value.capitalize()].value
+        with _andor_api.lock:
+            status = _andor_api.spg.SetFlipperMirror(
+                self.spg_device_index, _andor_api.spg.INPUT_FLIPPER.value, setter_value)
+        _andor_api.log_spg_response("Setting input port", status)
+
+    @property
+    def output_port(self) -> str:
+        """
+        Get the output port (output flipper mirror).
+        """
+        with _andor_api.lock:
+            status, output_flipper_mirror = _andor_api.spg.GetFlipperMirror(
+                self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER.value)
+        _andor_api.log_spg_response("Getting output port", status)
+        return str(self.FlipperMirrorPort(output_flipper_mirror)).title()
+
+    @output_port.setter
+    @prevent_none_set
+    def output_port(self, value: str) -> None:
+        """
+        Set the output port (output flipper mirror).
+        """
+        setter_value: int = self.FlipperMirrorPort[value.capitalize()].value
+        with _andor_api.lock:
+            status = _andor_api.spg.SetFlipperMirror(
+                self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER.value, setter_value)
+        _andor_api.log_spg_response("Setting output port", status)
+
+    @property
     def center_wavelength(self) -> float:
         """
         The grating center wavelength.
@@ -745,13 +820,45 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         pass
 
     @property
+    def cooler_persistence_mode(self) -> str:
+        """
+        The cooler persistence mode.
+
+        If the cooler persistence mode is on, it means that
+        the CCD cooler will not turn off when it the CCD
+        shuts down.
+        """
+        return self._cooler_persistence_mode.name.title()
+
+    @cooler_persistence_mode.setter
+    @prevent_none_set
+    def cooler_persistence_mode(self, value: str) -> None:
+        mode_value = self.CoolerPersistenceModes[value.capitalize()].value
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetCoolerMode(mode_value)
+        _andor_api.log_ccd_response("Setting cooler persistence mode", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._cooler_persistence_mode = self.CoolerPersistenceModes[value]
+
+    @property
+    def sensor_temperature(self) -> float:
+        """
+        The current sensor temperature in Celsius.
+        """
+        with _andor_api.lock:
+            # We could have used `_andor_api.ccd.GetTemperature()`, but that returns an integer
+            status, temperature, _, _, _ = _andor_api.ccd.GetTemperatureStatus()
+        _andor_api.log_ccd_response("Getting CCD current temperature", status)
+        return temperature
+
+    @property
     def sensor_temperature_set_point(self) -> int:
         """
         The sensor set-point temperature in Celsius.
         """
         with _andor_api.lock:
-            status, temperature = _andor_api.ccd.GetTemperature()
-        _andor_api.log_ccd_response("Getting CCD temperature", status)
+            status, _, temperature, _, _ = _andor_api.ccd.GetTemperatureStatus()
+        _andor_api.log_ccd_response("Getting CCD target temperature", status)
         return temperature
 
     @sensor_temperature_set_point.setter
@@ -761,7 +868,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         Sets the sensor target temperature in Celsius.
         """
         with _andor_api.lock:
-            status = _andor_api.ccd.SetTemperature(deg_celsius)
+            status = _andor_api.ccd.SetTemperature(int(deg_celsius))
         _andor_api.log_ccd_response("Setting CCD temperature", status)
 
     @property
@@ -785,8 +892,64 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             status = _andor_api.ccd.SetExposureTime(secs)
         _andor_api.log_ccd_response("Setting exposure time", status)
 
-    def __del__(self):
-        self.close()
+    @property
+    def remove_cosmic_rays(self) -> bool:
+        """
+        Returns whether the CCD is configured to remove cosmic rays in accumulation mode.
+        """
+        with _andor_api.lock:
+            status, remove_cosmic_rays = _andor_api.ccd.GetFilterMode()
+        _andor_api.log_ccd_response("Getting filter mode (cosmic ray removal)", status)
+        return bool(remove_cosmic_rays)
+
+    @remove_cosmic_rays.setter
+    @prevent_none_set
+    def remove_cosmic_rays(self, value: bool):
+        """
+        Sets whether the CCD is configured to remove cosmic rays in accumulation mode.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetFilterMode(int(value) * 2)
+        _andor_api.log_ccd_response("Setting filter mode (cosmic ray removal)", status)
+
+    @property
+    def baseline_clamp(self) -> bool:
+        """
+        Returns whether the CCD is configured to clamp the baseline counts.
+        """
+        with _andor_api.lock:
+            status, baseline_clamp = _andor_api.ccd.GetBaselineClamp()
+        _andor_api.log_ccd_response("Getting baseline clamp", status)
+        return bool(baseline_clamp)
+
+    @baseline_clamp.setter
+    @prevent_none_set
+    def baseline_clamp(self, value: bool):
+        """
+        Sets whether the CCD is configured to clamp the baseline counts.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetBaselineClamp(int(value))
+        _andor_api.log_ccd_response("Setting baseline clamp", status)
+
+    @property
+    def number_of_accumulations(self) -> int:
+        """
+        Returns the number of accumulations (only used in accumulation or kinetic series mode).
+        """
+        return self._number_of_accumulations
+
+    @number_of_accumulations.setter
+    @prevent_none_set
+    def number_of_accumulations(self, value: int):
+        """
+        Sets the number of accumulations (only used in accumulation or kinetic series mode).
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetNumberAccumulations(value)
+        _andor_api.log_ccd_response("Setting number of accumulations", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._number_of_accumulations = value
 
 
 class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
