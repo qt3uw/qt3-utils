@@ -13,6 +13,9 @@ def prevent_none_set(func: Callable[[Any, Any], None]) -> Union[Callable[[Any, A
     A decorator that prevents the wrapped method from running if the input argument is None.
 
     This decorator targets property setters that take a single input argument.
+    It will allow the user to configure the spectrometer via a yaml file without
+    resetting any properties they want to keep unchanged during controller
+    initialization.
 
     Parameters
     ----------
@@ -60,28 +63,31 @@ class AndorAPI(object):
         self._ccd_import_succeeded, self._spg_import_succeeded = self._import_libraries()
         self._lock = threading.RLock()
 
-    # def __getattribute__(self, item):
-    #     """
-    #     Assures the user is properly notified that calling the object's attribute failed
-    #     because the Andor packages were not properly imported.
-    #
-    #     Raises
-    #     ------
-    #     AttributeError
-    #         when either or both pyAndorSDK2 and pyAndorSpectrograph were not properly imported.
-    #     """
-    #     if self._ccd_import_succeeded and self._spg_import_succeeded:
-    #         return object.__getattribute__(self, item)
-    #
-    #     if not self._ccd_import_succeeded and not self._spg_import_succeeded:
-    #         failed_imports = "pyAndorSDK2 and pyAndorSpectrograph"
-    #     elif not self._ccd_import_succeeded:
-    #         failed_imports = "pyAndorSDK2"
-    #     else:
-    #         failed_imports = "pyAndorSpectrograph"
-    #
-    #     self.logger.error(f"Importing {failed_imports} was not successful, hence, {item} was not properly defined.")
-    #     raise AttributeError(f'{failed_imports} were not found to properly define {item}.')
+    def __getattribute__(self, item: str):
+        """
+        Assures the user is properly notified that calling the object's attribute failed
+        because the Andor packages were not properly imported.
+
+        Raises
+        ------
+        AttributeError
+            when either or both pyAndorSDK2 and pyAndorSpectrograph were not properly imported.
+        """
+        if item.startswith('_'):
+            return super().__getattribute__(item)
+
+        if self._ccd_import_succeeded and self._spg_import_succeeded:
+            return super().__getattribute__(item)
+
+        if not self._ccd_import_succeeded and not self._spg_import_succeeded:
+            failed_imports = "pyAndorSDK2 and pyAndorSpectrograph"
+        elif not self._ccd_import_succeeded:
+            failed_imports = "pyAndorSDK2"
+        else:
+            failed_imports = "pyAndorSpectrograph"
+
+        self.logger.error(f"Importing {failed_imports} was not successful, hence, {item} was not properly defined.")
+        raise AttributeError(f'{failed_imports} were not found to properly define {item}.')
 
     def _import_libraries(self):
         """
@@ -264,6 +270,23 @@ _andor_api = AndorAPI()
 
 @dataclass
 class GratingInfo:
+    """
+    A dataclass to hold information for a single grating.
+    The information this class holds are the ones that should
+    not be changed after the proper installation of the grating.
+
+    The grating can be found with a spectrograph `device_index`
+    and a `grating_index`.
+    Some intrinsic characteristics of the grating Andor stores
+    are the number of `lines` in grooves/mm, and the `blaze`
+    wavelength, usually derived by the groove angle.
+
+    When a user installs a grating on a turret, they must calibrate
+    the relevant position of the grating on the turret.
+    By setting the `home` and `offset` parameters, the spectrograph
+    can calculate how to position the grating when trying to go to a
+    specific central wavelength.
+    """
     device_index: int
     grating_index: int
 
@@ -278,6 +301,10 @@ class GratingInfo:
         self._get_info()
 
     def _get_info(self):
+        """
+        Retrieves the grating information via the Andor API.
+        Stores the information in the corresponding dataclass fields.
+        """
         with _andor_api.lock:
             status, self.lines, self.blaze, self.home, self.offset = _andor_api.spg.GetGratingInfo(
                 self.device_index, self.grating_index, self.MAX_BLAZE_STRING_LENGTH)
@@ -286,11 +313,26 @@ class GratingInfo:
 
     @property
     def short_description(self) -> str:
+        """
+        A short description of the grating.
+        Includes the grating index, number of grooves and the blaze wavelength.
+        """
         return f"{self.grating_index}: {self.lines:.1f}, {self.blaze}"
 
 
 @dataclass
 class SpectrographInfo:
+    """
+    A dataclass to hold information for a specific spectrograph
+    (since multiple may be connected to a single computer at once).
+    The information this class holds are the ones that should
+    not be changed after the proper installation of the grating
+    turret and the rest of the spectrometer components.
+
+    The spectrometer can be found with a give `device_index`, which
+    is the handle integer Andor API gives to the spectrograph.
+    This class holds information regarding gratings.
+    """
     device_index: int
     number_of_gratings: int = field(init=False)
     grating_index_list: List[int] = field(init=False)
@@ -301,15 +343,20 @@ class SpectrographInfo:
         self.grating_index_list = list(range(1, self.number_of_gratings + 1))
         self._get_grating_info_dictionary()
 
-    def __getitem__(self, item) -> GratingInfo:
-        return self.grating_info_dictionary[item]
-
     def _get_number_of_gratings(self):
+        """
+        Retrieves the number of gratings installed
+        in the spectrometer turret via the Andor API.
+        """
         with _andor_api.lock:
             status, self.number_of_gratings = _andor_api.spg.GetNumberGratings(self.device_index)
         _andor_api.log_spg_response(f"Getting number of gratings for spectrograph device '{self.device_index}'", status)
 
     def _get_grating_info_dictionary(self):
+        """
+        Retrieves information regarding all the
+        installed gratings via the Andor API.
+        """
         self.grating_info_dictionary = {
             grating_index: GratingInfo(self.device_index, grating_index)
             for grating_index in self.grating_index_list
@@ -318,6 +365,18 @@ class SpectrographInfo:
 
 @dataclass
 class CCDInfo:
+    """
+    A dataclass to hold information for a specific CCD
+    (since multiple may be connected to a single computer at once).
+    The information this class holds are the ones that should
+    not be changed after the proper installation of the CCD
+    and the rest of the spectrometer components.
+
+    The CCD can be found with a given `device_index`, which
+    is the handle integer Andor API gives to the CCD.
+    This class holds information regarding the CCD's pixel
+    size and number.
+    """
     ccd_index: int
 
     number_of_pixels_horizontally: int = field(init=False)
@@ -330,11 +389,19 @@ class CCDInfo:
         self._get_pixel_size()
 
     def _get_pixel_size(self):
+        """
+        Retrieves the width and height of each pixel on
+        the CCD via the Andor API.
+        """
         with _andor_api.lock:
             status, self.pixel_width, self.pixel_height = _andor_api.ccd.GetPixelSize()
         _andor_api.log_ccd_response("Getting pixel size", status)
 
     def _get_number_of_pixels(self):
+        """
+        Retrieving the number of pixels in the horizontal
+        and vertical axis of the CCD via the Andor API.
+        """
         with _andor_api.lock:
             status, self.number_of_pixels_horizontally, self.number_of_pixels_vertically = _andor_api.ccd.GetDetector()
         _andor_api.log_ccd_response("Getting number of pixels", status)
@@ -344,9 +411,26 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     """
     Configuration class for the Andor Spectrometer.
 
-    This class controls all the spectrometer settings prior to data acquisition.
-    For controlling the data acquisition, refer to the `AndorSpectrometerDataAcquisition` class.
+    This class controls all the spectrometer settings
+    prior to data acquisition.
+    For controlling the data acquisition, refer to the
+    `AndorSpectrometerDataAcquisition` class.
 
+    Notes
+    -----
+    Curiously, while the spectrograph device number
+    does not need to be set prior to the spectrograph
+    initialization, the CCD device number does.
+    Hence, the spectrograph device can be changed without
+    reinitializing the devices (you can access all of them
+    at once) but the CCD does.
+
+    Since you usually have one spectrograph and one CCD
+    that go together, this class follows the CCD
+    initialization logic.
+    This means we only manipulate a single spectrograph
+    at any given time, determined via the `spg_device_index`
+    attribute.
     """
 
     DEVICE_NAME: str = 'Andor Spectrometer'
@@ -458,6 +542,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
     @property
     def ccd_info(self):
+        """ Returns the dataclass object holding the invariable information of the CCD. """
         return self._ccd_info
 
     @property
@@ -499,6 +584,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
     @property
     def spg_info(self):
+        """ Returns the dataclass object holding the invariable information of the Spectrograph. """
         return self._spg_info
 
     @property
@@ -546,7 +632,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     @property
     def current_grating_index(self) -> int:
         """
-        Current spectrometer grating index.
+        Current spectrometer-grating index.
         """
         with _andor_api.lock:
             status, current_grating = _andor_api.spg.GetGrating(self.spg_device_index)
@@ -579,7 +665,18 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Set the spectrometer grating.
         """
-        pass
+        grating_list = self.grating_list
+        if value not in grating_list:
+            _andor_api.logger.warning(
+                f"Grating '{value}' is not in the grating list {grating_list}. "
+                f"Grating remains as is: {self.current_grating}"
+            )
+            return
+
+        grating_index = np.argwhere(np.array(grating_list) == value)[0][0] + 1
+        with _andor_api.lock:
+            status = _andor_api.spg.SetGrating(self.spg_device_index, grating_index)
+        _andor_api.log_spg_response("Setting current grating", status)
 
     @property
     def center_wavelength(self) -> float:
