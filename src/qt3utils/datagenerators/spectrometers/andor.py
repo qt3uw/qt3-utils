@@ -37,6 +37,34 @@ def prevent_none_set(func: Callable[[Any, Any], None]) -> Union[Callable[[Any, A
     return wrapper
 
 
+class LazyCaseAgnosticIntEnum(enum.IntEnum):
+    """
+    This case-insensitive IntEnum enables the user to easily
+    retrieve values and names via a "titled" member name.
+    Makes it easy to interact with a GUI where the appearance
+    of the member name maybe different from the actual name
+    (e.g. "Fast Kinetics" vs. "FAST_KINETICS").
+    It is called lazy because it does not make sure all the
+    member names are unique after becoming case-insensitive.
+    """
+
+    @classmethod
+    def get_value(cls, name: str) -> int:
+        new_name = name.upper().replace(' ', '_')
+        member_upper_names = np.array([name.upper() for name in cls._member_names_])
+        name_index_list = np.where(name.upper() == member_upper_names)[0]
+        if len(name_index_list):
+            name_index = name_index_list[0]
+            return cls[cls._member_names_[name_index]].value
+
+        raise KeyError(f"{name}, processed as {new_name}, is not a member "
+                       f"of the case-insensitive IntEnum {cls.__name__}.")
+
+    @classmethod
+    def get_titled_name(cls, value: int) -> str:
+        return cls(value).name.title().replace('_', ' ')
+
+
 class AndorAPI(object):
     """
     A class for interfacing with the Andor API.
@@ -436,20 +464,40 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
     DEVICE_NAME: str = 'Andor Spectrometer'
 
-    class FlipperMirrorPort(enum.IntEnum):
+    class SpectrographFlipperMirrorPort(LazyCaseAgnosticIntEnum):
         DIRECT = _andor_api.spg.DIRECT
         SIDE = _andor_api.spg.SIDE
 
-    class CoolerPersistenceModes(enum.IntEnum):
-        OFF = 0
-        ON = 1
+    class CCDAcquisitionMode(LazyCaseAgnosticIntEnum):
+        SINGLE_SCAN = _andor_api.ccd_codes.Acquisition_Mode.SINGLE_SCAN
+        ACCUMULATE = _andor_api.ccd_codes.Acquisition_Mode.ACCUMULATE
+        KINETICS = _andor_api.ccd_codes.Acquisition_Mode.KINETICS
+        FAST_KINETICS = _andor_api.ccd_codes.Acquisition_Mode.FAST_KINETICS
+        RUN_TILL_ABORT = _andor_api.ccd_codes.Acquisition_Mode.RUN_TILL_ABORT
+
+    class CCDReadMode(LazyCaseAgnosticIntEnum):
+        FULL_VERTICAL_BINNING = _andor_api.ccd_codes.Read_Mode.FULL_VERTICAL_BINNING
+        MULTI_TRACK = _andor_api.ccd_codes.Read_Mode.MULTI_TRACK
+        RANDOM_TRACK = _andor_api.ccd_codes.Read_Mode.RANDOM_TRACK
+        SINGLE_TRACK = _andor_api.ccd_codes.Read_Mode.SINGLE_TRACK
+        IMAGE = _andor_api.ccd_codes.Read_Mode.IMAGE
+
+    class CCDTriggerMode(LazyCaseAgnosticIntEnum):
+        INTERNAL = _andor_api.ccd_codes.Trigger_Mode.INTERNAL
+        EXTERNAL = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL
+        EXTERNAL_START = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL_START
+        # The below modes are not available for CCD Newton 920, but may be for newer CCD models
+        EXTERNAL_EXPOSURE_BULB = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL_EXPOSURE_BULB
+        EXTERNAL_FVB_EM = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL_FVB_EM
+        SOFTWARE_TRIGGER = _andor_api.ccd_codes.Trigger_Mode.SOFTWARE_TRIGGER
+        EXTERNAL_CHARGE_SHIFTING = _andor_api.ccd_codes.Trigger_Mode.EXTERNAL_CHARGE_SHIFTING
 
     DEFAULT_NUMBER_OF_ACCUMULATIONS: int = 2
     """
     There is no getter for number of accumulations in the Andor API, 
     so to initialize the spectrometer configuration we use a default value. 
     """
-    DEFAULT_COOLER_PERSISTENCE_MODE: CoolerPersistenceModes = CoolerPersistenceModes.ON
+    DEFAULT_COOLER_PERSISTENCE_MODE: bool = True
     """
     There is no getter for cooler mode in the Andor API, so to initialize
     the spectrometer configuration we use a default value.
@@ -476,12 +524,26 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         self._spg_info: Union[SpectrographInfo, None] = None
         self._ccd_info: Union[CCDInfo, None] = None
 
-        self._number_of_accumulations = self.DEFAULT_NUMBER_OF_ACCUMULATIONS
-        self._cooler_persistence_mode = self.DEFAULT_COOLER_PERSISTENCE_MODE
+        # Setting all the internal-use attributes for attributes that
+        # do not have a Getter method implemented in the Andor API
+        self._number_of_accumulations: int = self.DEFAULT_NUMBER_OF_ACCUMULATIONS
+        self._cooler_persistence_mode: bool = self.DEFAULT_COOLER_PERSISTENCE_MODE
 
     def open(self) -> None:
         """
         Initializes the connection to the CCD and the spectrograph.
+
+        This method will automatically set the sensor target temperature to `DEFAULT_SET_TEMPERATURE`.
+        If that needs to change for a specific CCD initialization, make sure to change it after the CCD is on.
+
+        >>> spectrometer_config = AndorSpectrometerConfig()
+        >>> spectrometer_config.open()
+        >>> spectrometer_config.sensor_temperature_set_point = -65  # In degC
+
+        If you want to change the default temperature for all initializations, do so before opening the devices:
+
+        >>> spectrometer_config = AndorSpectrometerConfig()
+        >>> spectrometer_config.DEFAULT_SET_TEMPERATURE = -65  # in degC
         """
         with _andor_api.lock:
             self._open_ccd()
@@ -490,6 +552,18 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     def _open_ccd(self):
         """
         Initializes the connection to the CCD and turns on the cooler.
+
+        This method will automatically set the sensor target temperature to `DEFAULT_SET_TEMPERATURE`.
+        If that needs to change for a specific CCD initialization, make sure to change it after the CCD is on.
+
+        >>> spectrometer_config = AndorSpectrometerConfig()
+        >>> spectrometer_config.open()
+        >>> spectrometer_config.sensor_temperature_set_point = -65  # In degC
+
+        If you want to change the default temperature for all initializations, do so before opening the devices:
+
+        >>> spectrometer_config = AndorSpectrometerConfig()
+        >>> spectrometer_config.DEFAULT_SET_TEMPERATURE = -65  # in degC
         """
         with _andor_api.lock:
             if not _andor_api.is_ccd_initialized():
@@ -716,15 +790,15 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             status, input_flipper_mirror = _andor_api.spg.GetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.INPUT_FLIPPER.value)
         _andor_api.log_spg_response("Getting input port", status)
-        return str(self.FlipperMirrorPort(input_flipper_mirror)).title()
+        return self.SpectrographFlipperMirrorPort.get_titled_name(input_flipper_mirror)
 
     @input_port.setter
     @prevent_none_set
-    def input_port(self, value: str) -> None:
+    def input_port(self, name: str) -> None:
         """
         Set the input port (input flipper mirror).
         """
-        setter_value: int = self.FlipperMirrorPort[value.capitalize()].value
+        setter_value: int = self.SpectrographFlipperMirrorPort.get_value(name)
         with _andor_api.lock:
             status = _andor_api.spg.SetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.INPUT_FLIPPER.value, setter_value)
@@ -739,15 +813,15 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             status, output_flipper_mirror = _andor_api.spg.GetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER.value)
         _andor_api.log_spg_response("Getting output port", status)
-        return str(self.FlipperMirrorPort(output_flipper_mirror)).title()
+        return str(self.SpectrographFlipperMirrorPort(output_flipper_mirror)).title()
 
     @output_port.setter
     @prevent_none_set
-    def output_port(self, value: str) -> None:
+    def output_port(self, name: str) -> None:
         """
         Set the output port (output flipper mirror).
         """
-        setter_value: int = self.FlipperMirrorPort[value.capitalize()].value
+        setter_value: int = self.SpectrographFlipperMirrorPort.get_value(name)
         with _andor_api.lock:
             status = _andor_api.spg.SetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER.value, setter_value)
@@ -820,25 +894,24 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         pass
 
     @property
-    def cooler_persistence_mode(self) -> str:
+    def cooler_persistence_mode(self) -> bool:
         """
         The cooler persistence mode.
 
         If the cooler persistence mode is on, it means that
-        the CCD cooler will not turn off when it the CCD
+        the CCD cooler will not turn off when the CCD
         shuts down.
         """
-        return self._cooler_persistence_mode.name.title()
+        return self._cooler_persistence_mode
 
     @cooler_persistence_mode.setter
     @prevent_none_set
-    def cooler_persistence_mode(self, value: str) -> None:
-        mode_value = self.CoolerPersistenceModes[value.capitalize()].value
+    def cooler_persistence_mode(self, value: bool) -> None:
         with _andor_api.lock:
-            status = _andor_api.ccd.SetCoolerMode(mode_value)
+            status = _andor_api.ccd.SetCoolerMode(int(value))
         _andor_api.log_ccd_response("Setting cooler persistence mode", status)
         if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
-            self._cooler_persistence_mode = self.CoolerPersistenceModes[value]
+            self._cooler_persistence_mode = value
 
     @property
     def sensor_temperature(self) -> float:
@@ -950,6 +1023,16 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         _andor_api.log_ccd_response("Setting number of accumulations", status)
         if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
             self._number_of_accumulations = value
+
+    @property
+    def acquisition_mode(self) -> str:
+        """
+        Returns the current acquisition mode.
+        """
+        # with _andor_api.lock:
+        #     status, acquisition_mode = _andor_api.ccd.GetAcquisitionMode()
+        # _andor_api.log_ccd_response("Getting acquisition mode", status)
+        # return _andor_api.ccd_acquisition_modes.get(acquisition_mode, 'unknown')
 
 
 class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
