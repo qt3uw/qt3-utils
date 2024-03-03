@@ -2,7 +2,7 @@ import enum
 import logging
 import threading
 from dataclasses import dataclass, field
-from typing import List, Dict, Union, Set, Callable, Any, Tuple
+from typing import List, Dict, Union, Set, Callable, Any, Tuple, Literal
 
 import numpy as np
 
@@ -426,7 +426,10 @@ class SingleTrackReadModeParameters:
         of the single track read mode outside the spectrometer
         configuration class.
         """
-        raise AttributeError("SingleTrackReadModeParameters objects are immutable.")
+        if hasattr(self, key):
+            raise AttributeError("SingleTrackReadModeParameters objects are immutable.")
+        else:
+            super().__setattr__(key, value)
 
 
 class AndorSpectrometerConfig(SpectrometerConfig):
@@ -461,30 +464,41 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         DIRECT = _andor_api.spg.DIRECT
         SIDE = _andor_api.spg.SIDE
 
-    ReadMode = _andor_api.ccd_codes.Read_Mode
+    class ReadMode(enum.IntEnum):
+        FVB = 0
+        MULTI_TRACK = 1
+        RANDOM_TRACK = 2
+        SINGLE_TRACK = 3
+        IMAGE = 4
+
     AcquisitionMode = _andor_api.ccd_codes.Acquisition_Mode
     TriggerMode = _andor_api.ccd_codes.Trigger_Mode
 
-    SUPPORTED_READ_MODES: Tuple[str] = (ReadMode.FULL_VERTICAL_BINNING.name, ReadMode.SINGLE_TRACK.name)
+    SUPPORTED_READ_MODES: Tuple[str, ...] = (ReadMode.FVB.name, ReadMode.SINGLE_TRACK.name)
     """
     These modes represent all the read modes this class supports right now. 
     If you want to limit the supported modes in your application, change 
     the tuple of supported modes before initializing the CCD.
     """
-    SUPPORTED_ACQUISITION_MODES: Tuple[str] = tuple(AcquisitionMode._member_names_)
+    SUPPORTED_ACQUISITION_MODES: Tuple[str, ...] = (
+            AcquisitionMode.SINGLE_SCAN.name,
+            AcquisitionMode.ACCUMULATE.name,
+            AcquisitionMode.KINETICS.name,
+            AcquisitionMode.RUN_TILL_ABORT.name
+        )
     """
     These modes represent all the acquisition modes this class supports right now. 
     If you want to limit the supported modes in your application, change 
     the tuple of supported modes before initializing the CCD.
     """
-    SUPPORTED_TRIGGER_MODES: Tuple[str] = (TriggerMode.INTERNAL.name, TriggerMode.EXTERNAL.name)
+    SUPPORTED_TRIGGER_MODES: Tuple[str, ...] = (TriggerMode.INTERNAL.name, TriggerMode.EXTERNAL.name)
     """
     These modes represent all the trigger modes this class supports right now. 
     If you want to limit the supported modes in your application, change 
     the tuple of supported modes before initializing the CCD.
     """
 
-    DEFAULT_READ_MODE: str = ReadMode.FULL_VERTICAL_BINNING.name
+    DEFAULT_READ_MODE: str = ReadMode.FVB.name
     """
     There is no getter for read mode in the Andor API, so we choose full vertical
     binning (FVB) as the default value. Feel free to change the default value prior
@@ -527,17 +541,24 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     low when we first initialize the CCD when the user has not set a preferred 
     temperature yet.
     """
+    DEFAULT_SPG_DEVICE_INDEX: int = 0
+    """
+    The default spectrograph device index is 0.
+    If you have more than one spectrograph connected to the computer,
+    you can either change the default value to the index of the spectrograph,
+    or change the `spg_device_index` attribute after initialization of the 
+    AndorSpectrometerConfig object (in order to do that, you will first have to 
+    """
 
-    def __init__(self, spg_device_index: int = 0):
+    def __init__(self):
         super().__init__()
-        self._spg_device_index = spg_device_index
+        self._spg_device_index = self.DEFAULT_SPG_DEVICE_INDEX
 
+        # We can get the number of available cameras prior to initializing the CCD, but not for the spectrograph.
+        self._spg_number_of_devices: int = 0
         with _andor_api.lock:
-            _, self._spg_number_of_devices = _andor_api.spg.GetNumberDevices()
-            _, self._ccd_number_of_devices = _andor_api.ccd.GetNumberDevices()
-
-        self._spg_device_list = list(range(self._spg_number_of_devices))
-        self._ccd_device_list = list(range(self._ccd_number_of_devices))
+            status, self._ccd_number_of_devices = _andor_api.ccd.GetAvailableCameras()
+        _andor_api.log_ccd_response("Getting number of CCD devices", status)
 
         self._spg_info: Union[SpectrographInfo, None] = None
         self._ccd_info: Union[CCDInfo, None] = None
@@ -616,6 +637,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
                 status = _andor_api.spg.Initialize("")
                 _andor_api.log_spg_response('Spectrograph initialization', status)
 
+                status, self._spg_number_of_devices = _andor_api.spg.GetNumberDevices()
+                _andor_api.log_spg_response('Getting number of spectrograph devices', status)
+
                 status = _andor_api.spg.SetPixelWidth(self.spg_device_index, self.ccd_info.pixel_width)
                 _andor_api.log_spg_response('Setting spectrograph pixel width', status)
 
@@ -677,7 +701,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     @property
     def ccd_device_list(self) -> List[int]:
         """ An index list of all available CCDs."""
-        return self._ccd_device_list
+        return list(range(self._ccd_number_of_devices))
 
     @property
     def ccd_info(self):
@@ -690,7 +714,10 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         with _andor_api.lock:
             status, ccd_device_index = _andor_api.ccd.GetCurrentCamera()
         _andor_api.log_ccd_response('Getting current camera', status)
-        return ccd_device_index
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS and self.ccd_number_of_devices > 0:
+            return ccd_device_index
+
+        return -1
 
     @ccd_device_index.setter
     @prevent_none_set
@@ -719,7 +746,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     @property
     def spg_device_list(self) -> List[int]:
         """ An index list of all available Spectrographs. """
-        return self._spg_device_list
+        return list(range(self._spg_number_of_devices))
 
     @property
     def spg_info(self):
@@ -729,7 +756,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     @property
     def spg_device_index(self) -> int:
         """ The index corresponding to the selected spectrometer device. """
-        return self._spg_device_index
+        return self._spg_device_index if self._spg_number_of_devices > 0 else -1
 
     @spg_device_index.setter
     @prevent_none_set
@@ -737,8 +764,23 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         if value == self.spg_device_index:
             return
 
+        if not _andor_api.is_spg_initialized():
+            self._spg_device_index = value
+            self.logger.debug(f'Spectrograph device index set to {value} while the device was not initialized.'
+                              'This may result in trying to access a spectrograph that does not exist.')
+            return
+
         if value in self.spg_device_list:
             self._spg_device_index = value
+
+            status = _andor_api.spg.SetPixelWidth(self.spg_device_index, self.ccd_info.pixel_width)
+            _andor_api.log_spg_response('Setting spectrograph pixel width', status)
+
+            status = _andor_api.spg.SetNumberPixels(
+                self.spg_device_index, self.ccd_info.number_of_pixels_horizontally)
+            _andor_api.log_spg_response('Setting spectrograph number of pixels', status)
+
+            self._spg_info = SpectrographInfo(self.spg_device_index)
         else:
             _andor_api.logger.warning(
                 f"Spectrograph device index '{value}' is not in the device index list {self.spg_device_list}. "
@@ -784,6 +826,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Set the spectrometer grating index.
         """
+        if value == self.current_grating:
+            return
+
         with _andor_api.lock:
             status = _andor_api.spg.SetGrating(self.spg_device_index, value)
         _andor_api.log_spg_response("Setting current grating", status)
@@ -824,7 +869,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             status, input_flipper_mirror = _andor_api.spg.GetFlipperMirror(
-                self.spg_device_index, _andor_api.spg.INPUT_FLIPPER.value)
+                self.spg_device_index, _andor_api.spg.INPUT_FLIPPER)
         _andor_api.log_spg_response("Getting input port", status)
         return self.SpectrographFlipperMirrorPort(input_flipper_mirror).name
 
@@ -834,10 +879,12 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Set the input port (input flipper mirror).
         """
+        if name == self.input_port:
+            return
         setter_value: int = self.SpectrographFlipperMirrorPort[name].value
         with _andor_api.lock:
             status = _andor_api.spg.SetFlipperMirror(
-                self.spg_device_index, _andor_api.spg.INPUT_FLIPPER.value, setter_value)
+                self.spg_device_index, _andor_api.spg.INPUT_FLIPPER, setter_value)
         _andor_api.log_spg_response("Setting input port", status)
 
     @property
@@ -847,7 +894,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             status, output_flipper_mirror = _andor_api.spg.GetFlipperMirror(
-                self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER.value)
+                self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER)
         _andor_api.log_spg_response("Getting output port", status)
         return self.SpectrographFlipperMirrorPort(output_flipper_mirror).name
 
@@ -857,10 +904,13 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Set the output port (output flipper mirror).
         """
+        if name == self.output_port:
+            return
+
         setter_value: int = self.SpectrographFlipperMirrorPort[name].value
         with _andor_api.lock:
             status = _andor_api.spg.SetFlipperMirror(
-                self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER.value, setter_value)
+                self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER, setter_value)
         _andor_api.log_spg_response("Setting output port", status)
 
     @property
@@ -879,6 +929,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Sets the grating center wavelength.
         """
+        if nanometers == self.center_wavelength:
+            return
+
         with _andor_api.lock:
             status = _andor_api.spg.SetWavelength(self.spg_device_index, nanometers)
         _andor_api.log_spg_response("Setting center wavelength", status)
@@ -1252,8 +1305,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         mode_value = self.AcquisitionMode[mode_name].value
 
-        if mode_value not in self.SUPPORTED_ACQUISITION_MODES:
-            error_message = f"Unsupported acquisition mode: {mode_name}"
+        if mode_name not in self.SUPPORTED_ACQUISITION_MODES:
+            error_message = (f"Unsupported acquisition mode: {mode_name}. "
+                             f"Supported modes are {self.SUPPORTED_ACQUISITION_MODES}.")
             self.logger.error(error_message)
             raise ValueError(error_message)
 
@@ -1278,8 +1332,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         mode_value = self.ReadMode[mode_name].value
 
-        if mode_value not in self.SUPPORTED_READ_MODES:
-            error_message = f"Unsupported read mode: {mode_name}"
+        if mode_name not in self.SUPPORTED_READ_MODES:
+            error_message = (f"Unsupported read mode: {mode_name}. "
+                             f"Supported modes are {self.SUPPORTED_READ_MODES}.")
             self.logger.error(error_message)
             raise ValueError(error_message)
 
@@ -1304,8 +1359,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         mode_value = self.TriggerMode[mode_name].value
 
-        if mode_value not in self.SUPPORTED_TRIGGER_MODES:
-            error_message = f"Unsupported trigger mode: {mode_name}"
+        if mode_name not in self.SUPPORTED_TRIGGER_MODES:
+            error_message = (f"Unsupported trigger mode: {mode_name}. "
+                             f"Supported modes are {self.SUPPORTED_TRIGGER_MODES}")
             self.logger.error(error_message)
             raise ValueError(error_message)
 
@@ -1350,12 +1406,14 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         regarding that mode, and store it in an internal class attribute.
         See the single track implementation as an example.
         """
-        if self.read_mode in [self.ReadMode.FULL_VERTICAL_BINNING.name, self.ReadMode.SINGLE_TRACK.name]:
+        if self.read_mode in [self.ReadMode.FVB.name, self.ReadMode.SINGLE_TRACK.name]:
             return self.ccd_info.number_of_pixels_horizontally
 
         error_message = f"Read mode {self.read_mode} is not supported."
         self.logger.error(error_message)
         raise NotImplementedError(error_message)
+
+    # TODO: Add speeds, enable keep cleans (for external trigger), data flip, 
 
 
 class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
@@ -1422,6 +1480,10 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
             data.fill(np.nan)
 
         return data, self.spectrometer_config.get_wavelengths()
+
+    def acquire(self, acquisition_mode: Literal['single', 'kinetic series', 'accumulation'], **kwargs) \
+            -> Union[Tuple[np.ndarray, np.ndarray], None]:
+        return super().acquire(acquisition_mode, **kwargs)
 
     def single_acquisition(self) -> Tuple[np.ndarray, np.ndarray]:
         self._base_acquisition_method()
