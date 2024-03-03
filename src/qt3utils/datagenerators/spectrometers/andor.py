@@ -2,7 +2,7 @@ import enum
 import logging
 import threading
 from dataclasses import dataclass, field
-from typing import List, Dict, Union, Set, Callable, Any
+from typing import List, Dict, Union, Set, Callable, Any, Tuple
 
 import numpy as np
 
@@ -29,6 +29,7 @@ def prevent_none_set(func: Callable[[Any, Any], None]) -> Union[Callable[[Any, A
     Callable[[Any, Any], None] | None
         None if the given argument was None, the original method otherwise.
     """
+
     def wrapper(self, value):
         if value is not None:
             return func(self, value)
@@ -408,6 +409,26 @@ class CCDInfo:
         _andor_api.log_ccd_response("Getting number of pixels", status)
 
 
+@dataclass
+class SingleTrackReadModeParameters:
+    """
+    A dataclass to hold parameters for the single track read mode.
+    """
+    track_center_row: int
+    track_height: int
+
+    def __setattr__(self, key, value):
+        """
+        This method is called whenever an attribute is set.
+        It raises an `AttributeError` to prevent the user from
+        changing the attributes of this class.
+        This is to prevent the user from changing the parameters
+        of the single track read mode outside the spectrometer
+        configuration class.
+        """
+        raise AttributeError("SingleTrackReadModeParameters objects are immutable.")
+
+
 class AndorSpectrometerConfig(SpectrometerConfig):
     """
     Configuration class for the Andor Spectrometer.
@@ -440,10 +461,59 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         DIRECT = _andor_api.spg.DIRECT
         SIDE = _andor_api.spg.SIDE
 
+    ReadMode = _andor_api.ccd_codes.Read_Mode
+    AcquisitionMode = _andor_api.ccd_codes.Acquisition_Mode
+    TriggerMode = _andor_api.ccd_codes.Trigger_Mode
+
+    SUPPORTED_READ_MODES: Tuple[str] = (ReadMode.FULL_VERTICAL_BINNING.name, ReadMode.SINGLE_TRACK.name)
+    """
+    These modes represent all the read modes this class supports right now. 
+    If you want to limit the supported modes in your application, change 
+    the tuple of supported modes before initializing the CCD.
+    """
+    SUPPORTED_ACQUISITION_MODES: Tuple[str] = tuple(AcquisitionMode._member_names_)
+    """
+    These modes represent all the acquisition modes this class supports right now. 
+    If you want to limit the supported modes in your application, change 
+    the tuple of supported modes before initializing the CCD.
+    """
+    SUPPORTED_TRIGGER_MODES: Tuple[str] = (TriggerMode.INTERNAL.name, TriggerMode.EXTERNAL.name)
+    """
+    These modes represent all the trigger modes this class supports right now. 
+    If you want to limit the supported modes in your application, change 
+    the tuple of supported modes before initializing the CCD.
+    """
+
+    DEFAULT_READ_MODE: str = ReadMode.FULL_VERTICAL_BINNING.name
+    """
+    There is no getter for read mode in the Andor API, so we choose full vertical
+    binning (FVB) as the default value. Feel free to change the default value prior
+    to initialization, or the actual read mode value after initialization.
+    """
+    DEFAULT_ACQUISITION_MODE: str = AcquisitionMode.SINGLE_SCAN.name
+    """
+    There is no getter for acquisition mode in the Andor API, so we choose single
+    scan as the default value. Feel free to change the default value prior to
+    initialization, or the actual acquisition mode value after initialization.
+    """
+    DEFAULT_TRIGGER_MODE: str = TriggerMode.INTERNAL.name
+    """
+    There is no getter for trigger mode in the Andor API, so we choose internal
+    as the default value. Feel free to change the default value prior to 
+    initialization, or the actual trigger mode value after initialization.
+    """
+
+    DEFAULT_SINGLE_TRACK_READ_MODE_PARAMETERS = SingleTrackReadModeParameters(1, 256)
+
     DEFAULT_NUMBER_OF_ACCUMULATIONS: int = 2
     """
     There is no getter for number of accumulations in the Andor API, 
     so to initialize the spectrometer configuration we use a default value. 
+    """
+    DEFAULT_NUMBER_OF_KINETICS: int = 1
+    """
+    There is no getter for number of kinetics in the Andor API,
+    so to initialize the spectrometer configuration we use a default value.
     """
     DEFAULT_COOLER_PERSISTENCE_MODE: bool = True
     """
@@ -456,24 +526,6 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     the Andor Solis software. We use this value to ensure the temperature stays
     low when we first initialize the CCD when the user has not set a preferred 
     temperature yet.
-    """
-    DEFAULT_READ_MODE: str = _andor_api.ccd_codes.Read_Mode.FULL_VERTICAL_BINNING.name
-    """
-    There is no getter for read mode in the Andor API, so we choose full vertical
-    binning (FVB) as the default value. Feel free to change the default value prior
-    to initialization, or the actual read mode value after initialization.
-    """
-    DEFAULT_ACQUISITION_MODE: str = _andor_api.ccd_codes.Acquisition_Mode.SINGLE_SCAN.name
-    """
-    There is no getter for acquisition mode in the Andor API, so we choose single
-    scan as the default value. Feel free to change the default value prior to
-    initialization, or the actual acquisition mode value after initialization.
-    """
-    DEFAULT_TRIGGER_MODE: str = _andor_api.ccd_codes.Trigger_Mode.INTERNAL.name
-    """
-    There is no getter for trigger mode in the Andor API, so we choose internal
-    as the default value. Feel free to change the default value prior to 
-    initialization, or the actual trigger mode value after initialization.
     """
 
     def __init__(self, spg_device_index: int = 0):
@@ -493,10 +545,14 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         # Setting all the internal-use attributes for attributes that
         # do not have a Getter method implemented in the Andor API
         self._number_of_accumulations: int = self.DEFAULT_NUMBER_OF_ACCUMULATIONS
+        self._number_of_kinetics: int = self.DEFAULT_NUMBER_OF_KINETICS
         self._cooler_persistence_mode: bool = self.DEFAULT_COOLER_PERSISTENCE_MODE
         self._read_mode: str = self.DEFAULT_READ_MODE
         self._acquisition_mode: str = self.DEFAULT_ACQUISITION_MODE
         self._trigger_mode: str = self.DEFAULT_TRIGGER_MODE
+        self._single_track_read_mode_parameters = self.DEFAULT_SINGLE_TRACK_READ_MODE_PARAMETERS
+        self._pixel_offset = 0.
+        self._wavelength_offset = 0.
 
     def open(self) -> None:
         """
@@ -550,11 +606,22 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     def _open_spg(self):
         """
         Initializes the connection to the spectrograph.
+
+        Must be called after the CCD is initialized, so that
+        we retrieve and set all the relevant information for the
+        spectrograph.
         """
         with _andor_api.lock:
             if not _andor_api.is_spg_initialized():
                 status = _andor_api.spg.Initialize("")
                 _andor_api.log_spg_response('Spectrograph initialization', status)
+
+                status = _andor_api.spg.SetPixelWidth(self.spg_device_index, self.ccd_info.pixel_width)
+                _andor_api.log_spg_response('Setting spectrograph pixel width', status)
+
+                status = _andor_api.spg.SetNumberPixels(
+                    self.spg_device_index, self.ccd_info.number_of_pixels_horizontally)
+                _andor_api.log_spg_response('Setting spectrograph number of pixels', status)
             else:
                 _andor_api.logger.debug('Spectrograph is already initialized.')
 
@@ -847,20 +914,139 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         pass
 
     @property
-    def get_wavelength_calibration_parameters(self) -> List[float]:
+    def pixel_offset(self) -> float:
         """
-        Returns the wavelength calibration for a single frame.
+        The pixel offset used in the Andor Solis software.
+        It is *subtracted* from the pixel numbers.
+
+        This pixel offset is used in the `get_wavelengths` and
+        `processed_wavelength_calibration_coefficients` methods.
+        """
+        return self._pixel_offset
+
+    @pixel_offset.setter
+    @prevent_none_set
+    def pixel_offset(self, value: float):
+        """
+        Sets the pixel offset used in the Andor Solis software.
+        It is *subtracted* from the pixel numbers.
+
+        This pixel offset is used in the `get_wavelengths` and
+        `processed_wavelength_calibration_coefficients` methods.
+        """
+        self._pixel_offset = value
+
+    @property
+    def wavelength_offset(self) -> float:
+        """
+        Returns the user-defined wavelength offset.
+        It is *added* to the calibrated wavelengths.
+
+        This wavelength offset is used in the `get_wavelengths` and
+        `processed_wavelength_calibration_coefficients` methods.
+        """
+        return self._wavelength_offset
+
+    @wavelength_offset.setter
+    @prevent_none_set
+    def wavelength_offset(self, value: float):
+        """
+        Sets the user-defined wavelength offset.
+        It is *added* to the calibrated wavelengths.
+
+        This wavelength offset is used in the `get_wavelengths` and
+        `processed_wavelength_calibration_coefficients` methods.
+        """
+        self._wavelength_offset = value
+
+    @property
+    def raw_wavelength_calibration_coefficients(self) -> Tuple[float, float, float, float]:
+        """
+        Returns the four wavelength calibration coefficients for a single frame.
+
+        To calculate the wavelength for each pixel, use the equation
+
+        $$ \lambda = \sum_{k=0}^3 c_k p^k . $$
+
+        In code:
+
+        >>> coefficients = ...
+        ... number_of_pixels = ...
+        ... pixels = np.linspace(1, number_of_pixels, number_of_pixels)
+        ... wavelengths = pixels * 0
+        ... for i, coefficient in enumerate(coefficients):
+        ...     wavelengths += pixels ** i * coefficient
+
+        However, the Andor Solis software provides the ability to add a
+        pixel offset, a parameter that is not accessible via the Andor API.
+        When taking data with Andor Solis, the saved sif file will
+        modify the coefficients if the pixel offset is not 0!!
+        We do not know exactly how Andor Solis modifies the coefficients,
+        or how it adds the pixel offset.
+        Albeit not exact, working through the calibration equations assuming
+        the pixel offset is just *subtracted* from the pixel numbers, we can get a
+        good approximation of the final coefficients and calibrated wavelengths.
+        This approximately yields calibrated wavelengths with
+        Δλ < Δp * 4e-5 nm from what Andor Solis coefficients give!
+        Here is how we estimate the new coefficients:
+
+        >>> coefficients = ...
+        ... pixel_offset = ...  # negative of the value given in Andor Solis or the implementation of this class.
+        ... a, b, c, d = coefficients
+        ... d_new = d
+        ... c_new = c + 3 * d * pixel_offset
+        ... b_new = b + 2 * c * pixel_offset + 3 * d * pixel_offset ** 2
+        ... a_new = a + b * pixel_offset + c * pixel_offset ** 2 + d * pixel_offset ** 3
+        ... new_coefficients = [a_new, b_new, c_new, d_new]
+
+        Then, you can use the first code snipet to get an array of
+        wavelengths for each pixel.
         """
         with _andor_api.lock:
             status, a, b, c, d = _andor_api.spg.GetPixelCalibrationCoefficients(self.spg_device_index)
         _andor_api.log_spg_response("Getting wavelength calibration parameters", status)
-        return [a, b, c, d]
+        return a, b, c, d
+
+    @property
+    def processed_wavelength_calibration_coefficients(self) -> Tuple[float, float, float, float]:
+        """
+        Returns the four wavelength calibration coefficients for a single frame.
+
+        These coefficients take into account the pixel and wavelength offsets.
+        See `raw_wavelength_calibration_coefficients` for more information.
+
+        """
+        coefficients = self.raw_wavelength_calibration_coefficients
+        pixel_offset = - self.pixel_offset  # negative of the value given in Andor Solis or in this class.
+        a, b, c, d = coefficients
+        d_new = d
+        c_new = c + 3 * d * pixel_offset
+        b_new = b + 2 * c * pixel_offset + 3 * d * pixel_offset ** 2
+        a_new = a + b * pixel_offset + c * pixel_offset ** 2 + d * pixel_offset ** 3 + self.wavelength_offset
+        return a_new, b_new, c_new, d_new
+
+    @property
+    def pixels(self):
+        number_of_pixels = self.ccd_info.number_of_pixels_horizontally
+        return np.linspace(1, number_of_pixels, number_of_pixels)
 
     def get_wavelengths(self) -> np.ndarray:
         """
         Returns the wavelength calibration for a single frame.
+
+        This is the equivalent of:
+
+        $$ \lambda = \Delta \lambda + \sum_{k=0}^3 c_k \left(p - \Delta p\right)^k $$
+
         """
-        pass
+        coefficients = self.processed_wavelength_calibration_coefficients
+        pixels = self.pixels
+        wavelengths = pixels * 0
+
+        for i, coefficient in enumerate(coefficients):
+            wavelengths += pixels ** i * coefficient
+
+        return wavelengths
 
     @property
     def cooler_persistence_mode(self) -> bool:
@@ -918,11 +1104,10 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Returns the single frame exposure time (in seconds).
         """
-        # TODO: check out which method I need to use, or if I can decide which method
-        #  to use after querying the active mode.
-        # with _andor_api.lock:
-        #     status, exposure_time = _andor_sdk.ccd.GetAcquisitionTimings()
-        return np.nan
+        with _andor_api.lock:
+            status, exposure_time, _, _ = _andor_api.ccd.GetAcquisitionTimings()
+        _andor_api.log_ccd_response("Getting exposure time", status)
+        return exposure_time
 
     @exposure_time.setter
     @prevent_none_set
@@ -933,6 +1118,84 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         with _andor_api.lock:
             status = _andor_api.ccd.SetExposureTime(secs)
         _andor_api.log_ccd_response("Setting exposure time", status)
+
+    @property
+    def accumulation_cycle_time(self) -> float:
+        """
+        Returns the accumulation cycle time (in seconds).
+        """
+        with _andor_api.lock:
+            status, _, accumulation_cycle_time, _ = _andor_api.ccd.GetAcquisitionTimings()
+        _andor_api.log_ccd_response("Getting accumulation cycle time", status)
+        return accumulation_cycle_time
+
+    @accumulation_cycle_time.setter
+    @prevent_none_set
+    def accumulation_cycle_time(self, secs: float) -> None:
+        """
+        Sets the accumulation cycle time in seconds.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetAccumulationCycleTime(secs)
+        _andor_api.log_ccd_response("Setting accumulation cycle time", status)
+
+    @property
+    def number_of_accumulations(self) -> int:
+        """
+        Returns the number of accumulations (only used in accumulation or kinetic series mode).
+        """
+        return self._number_of_accumulations
+
+    @number_of_accumulations.setter
+    @prevent_none_set
+    def number_of_accumulations(self, value: int):
+        """
+        Sets the number of accumulations (only used in accumulation or kinetic series mode).
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetNumberAccumulations(value)
+        _andor_api.log_ccd_response("Setting number of accumulations", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._number_of_accumulations = value
+
+    @property
+    def kinetic_cycle_time(self) -> float:
+        """
+        Returns the kinetic cycle time (in seconds).
+        """
+        with _andor_api.lock:
+            status, _, _, kinetic_cycle_time = _andor_api.ccd.GetAcquisitionTimings()
+        _andor_api.log_ccd_response("Getting kinetic cycle time", status)
+        return kinetic_cycle_time
+
+    @kinetic_cycle_time.setter
+    @prevent_none_set
+    def kinetic_cycle_time(self, secs: float) -> None:
+        """
+        Sets the kinetic cycle time in seconds.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetKineticCycleTime(secs)
+        _andor_api.log_ccd_response("Setting kinetic cycle time", status)
+
+    @property
+    def number_of_kinetics(self) -> int:
+        """
+        Returns the number of kinetic cycles (only used in kinetic series mode).
+        """
+        return self._number_of_kinetics
+
+    @number_of_kinetics.setter
+    @prevent_none_set
+    def number_of_kinetics(self, value: int):
+        """
+        Sets the number of kinetic cycles (only used in kinetic series mode).
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetNumberKinetics(value)
+        _andor_api.log_ccd_response("Setting number of kinetic cycles", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._number_of_kinetics = value
 
     @property
     def remove_cosmic_rays(self) -> bool:
@@ -975,25 +1238,6 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         _andor_api.log_ccd_response("Setting baseline clamp", status)
 
     @property
-    def number_of_accumulations(self) -> int:
-        """
-        Returns the number of accumulations (only used in accumulation or kinetic series mode).
-        """
-        return self._number_of_accumulations
-
-    @number_of_accumulations.setter
-    @prevent_none_set
-    def number_of_accumulations(self, value: int):
-        """
-        Sets the number of accumulations (only used in accumulation or kinetic series mode).
-        """
-        with _andor_api.lock:
-            status = _andor_api.ccd.SetNumberAccumulations(value)
-        _andor_api.log_ccd_response("Setting number of accumulations", status)
-        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
-            self._number_of_accumulations = value
-
-    @property
     def acquisition_mode(self) -> str:
         """
         Returns the current acquisition mode.
@@ -1006,7 +1250,13 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Sets the acquisition mode.
         """
-        mode_value = _andor_api.ccd_codes.Acquisition_Mode[mode_name].value
+        mode_value = self.AcquisitionMode[mode_name].value
+
+        if mode_value not in self.SUPPORTED_ACQUISITION_MODES:
+            error_message = f"Unsupported acquisition mode: {mode_name}"
+            self.logger.error(error_message)
+            raise ValueError(error_message)
+
         with _andor_api.lock:
             status = _andor_api.ccd.SetAcquisitionMode(mode_value)
         _andor_api.log_ccd_response("Setting acquisition mode", status)
@@ -1026,7 +1276,13 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Sets the read mode.
         """
-        mode_value = _andor_api.ccd_codes.Read_Mode[mode_name].value
+        mode_value = self.ReadMode[mode_name].value
+
+        if mode_value not in self.SUPPORTED_READ_MODES:
+            error_message = f"Unsupported read mode: {mode_name}"
+            self.logger.error(error_message)
+            raise ValueError(error_message)
+
         with _andor_api.lock:
             status = _andor_api.ccd.SetReadMode(mode_value)
         _andor_api.log_ccd_response("Setting read mode", status)
@@ -1046,12 +1302,60 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Sets the trigger mode.
         """
-        mode_value = _andor_api.ccd_codes.Trigger_Mode[mode_name].value
+        mode_value = self.TriggerMode[mode_name].value
+
+        if mode_value not in self.SUPPORTED_TRIGGER_MODES:
+            error_message = f"Unsupported trigger mode: {mode_name}"
+            self.logger.error(error_message)
+            raise ValueError(error_message)
+
         with _andor_api.lock:
             status = _andor_api.ccd.SetTriggerMode(mode_value)
         _andor_api.log_ccd_response("Setting trigger mode", status)
         if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
             self._trigger_mode = mode_name
+
+    @property
+    def single_track_read_mode_parameters(self):
+        return self._single_track_read_mode_parameters
+
+    @single_track_read_mode_parameters.setter
+    @prevent_none_set
+    def single_track_read_mode_parameters(self, single_track_read_mode_parameters: SingleTrackReadModeParameters):
+        """
+        Sets the single track parameters. Does not change the read mode.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetSingleTrack(
+                single_track_read_mode_parameters.track_center_row, single_track_read_mode_parameters.track_height)
+        _andor_api.log_ccd_response("Setting single track parameters", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._single_track_read_mode_parameters = single_track_read_mode_parameters
+
+    @property
+    def single_acquisition_data_size(self) -> int:
+        """
+        Returns the size of the data returned by a single acquisition.
+        This size is related to the read mode and the pixel number of the CCD.
+
+        As of now, only single-track and full vertical binning read-modes are supported.
+        This is because:
+            - These two modes produce 1-D arrays for single acquisition.
+            - The other modes require setting arbitrary parameters that result in
+            2-D arrays of various row and column numbers.
+            It would take too long to implement methods and attributes to track these
+            parameters, because the Andor API does not implement Getter methods for them
+            (I know - what a shocker).
+        If you want to support a new mode, define a dataclass with all the relevant info
+        regarding that mode, and store it in an internal class attribute.
+        See the single track implementation as an example.
+        """
+        if self.read_mode in [self.ReadMode.FULL_VERTICAL_BINNING.name, self.ReadMode.SINGLE_TRACK.name]:
+            return self.ccd_info.number_of_pixels_horizontally
+
+        error_message = f"Read mode {self.read_mode} is not supported."
+        self.logger.error(error_message)
+        raise NotImplementedError(error_message)
 
 
 class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
@@ -1059,13 +1363,35 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     ACQUISITION_MODES: Set[str] = {'single', 'kinetic series', 'accumulation'}
 
-    # def setup_acquisition(self, mode):
-    #     pass
+    def __init__(self, spectrometer_config: AndorSpectrometerConfig):
+        """
+        Parameters
+        ----------
+        spectrometer_config : AndorSpectrometerConfig, optional
+            The Andor spectrometer configuration object.
+            Used to set the appropriate acquisition settings when needed.
+        """
+        super().__init__(spectrometer_config)
+        self.spectrometer_config: AndorSpectrometerConfig
+
+    def single_acquisition(self, **kwargs) -> Tuple[np.ndarray, np.ndarray]:
+        _andor_api.ccd.StartAcquisition()
+        data_size = self.spectrometer_config.single_acquisition_data_size
+        wavelengths = self.spectrometer_config.get_wavelengths()
+        _andor_api.ccd.WaitForAcquisition()
+        status, data = _andor_api.ccd.GetAcquiredData(data_size)
+        if status != _andor_api.ccd_error_codes.DRV_SUCCESS:
+            data = np.empty(data_size)
+            data.fill(np.nan)
+
+        return data, wavelengths
 
     def stop_acquisition(self):
         """
         Stop the current acquisition.
+
+        Since the abort method will be used by a secondary thread,
+        we do not use the andor api lock in this method
         """
-        with _andor_api.lock:
-            status = _andor_api.ccd.AbortAcquisition()
+        status = _andor_api.ccd.AbortAcquisition()
         _andor_api.log_ccd_response("Aborting acquisition", status)
