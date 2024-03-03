@@ -1374,17 +1374,67 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         super().__init__(spectrometer_config)
         self.spectrometer_config: AndorSpectrometerConfig
 
-    def single_acquisition(self, **kwargs) -> Tuple[np.ndarray, np.ndarray]:
-        _andor_api.ccd.StartAcquisition()
-        data_size = self.spectrometer_config.single_acquisition_data_size
-        wavelengths = self.spectrometer_config.get_wavelengths()
-        _andor_api.ccd.WaitForAcquisition()
-        status, data = _andor_api.ccd.GetAcquiredData(data_size)
+    @staticmethod
+    def _base_acquisition_method() -> bool:
+        """
+        Base method that starts the acquisition and waits for it to finish.
+        This method is used by all the acquisition methods.
+        It is not meant to be called directly by the user.
+        It is meant to be called by the acquire method.
+
+        Returns
+        -------
+        bool
+            Whether the acquisition was successful and new data were created.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.StartAcquisition()
+            _andor_api.log_ccd_response("Starting acquisition", status)
+            status = _andor_api.ccd.WaitForAcquisition()
+            _andor_api.log_ccd_response("Waiting for acquisition", status)
+
+        return status == _andor_api.ccd_error_codes.DRV_SUCCESS
+
+    def _get_acquired_data(self, data_size: int):
+        """
+        Retrieves the acquired data from the CCD.
+
+        Parameters
+        ----------
+        data_size : int
+            The size of the data to be retrieved.
+            See `AndorSpectrometerConfig.single_acquisition_data_size`
+            for more information.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            The data array and the wavelengths corresponding to the data.
+            Data array is filled with np.nan if no data were acquired
+            (e.g. acquisition was aborted).
+        """
+        with _andor_api.lock:
+            status, data = _andor_api.ccd.GetAcquiredData(data_size)
+        _andor_api.log_ccd_response("Getting acquired data", status)
+
         if status != _andor_api.ccd_error_codes.DRV_SUCCESS:
             data = np.empty(data_size)
             data.fill(np.nan)
 
-        return data, wavelengths
+        return data, self.spectrometer_config.get_wavelengths()
+
+    def single_acquisition(self) -> Tuple[np.ndarray, np.ndarray]:
+        self._base_acquisition_method()
+        data_size = self.spectrometer_config.single_acquisition_data_size
+        return self._get_acquired_data(data_size)
+
+    def accumulation_acquisition(self) -> Tuple[np.ndarray, np.ndarray]:
+        return self.single_acquisition()
+
+    def kinetic_series_acquisition(self) -> Tuple[np.ndarray, np.ndarray]:
+        self._base_acquisition_method()
+        data_size = self.spectrometer_config.single_acquisition_data_size * self.spectrometer_config.number_of_kinetics
+        return self._get_acquired_data(data_size)
 
     def stop_acquisition(self):
         """
