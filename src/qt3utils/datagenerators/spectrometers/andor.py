@@ -26,7 +26,7 @@ def prevent_none_set(func: Callable[[Any, Any], None]) -> Union[Callable[[Any, A
 
     Returns
     -------
-    Callable[[Any, Any], None] | None
+    Union[Callable[[Any, Any], None], None]
         None if the given argument was None, the original method otherwise.
     """
 
@@ -297,7 +297,7 @@ class GratingInfo:
     home: int = field(init=False)
     offset: int = field(init=False)
 
-    MAX_BLAZE_STRING_LENGTH: int = 50
+    MAX_BLAZE_STRING_LENGTH: int = field(init=False, default=50)
 
     def __post_init__(self):
         self._get_info()
@@ -352,7 +352,8 @@ class SpectrographInfo:
         """
         with _andor_api.lock:
             status, self.number_of_gratings = _andor_api.spg.GetNumberGratings(self.device_index)
-        _andor_api.log_spg_response(f"Getting number of gratings for spectrograph device '{self.device_index}'", status)
+        _andor_api.log_spg_response(f"Getting number of gratings for "
+                                    f"spectrograph device '{self.device_index}'", status)
 
     def _get_grating_info_dictionary(self):
         """
@@ -386,9 +387,26 @@ class CCDInfo:
     pixel_width: float = field(init=False)
     pixel_height: float = field(init=False)
 
+    number_of_vertical_shift_speeds: int = field(init=False)
+    available_vertical_shift_speeds: List[float] = field(init=False)
+    fastest_recommended_vertical_shift_speed: Tuple[int, float] = field(init=False)
+
+    number_of_ad_channels: int = field(init=False)
+    number_of_output_amplifiers: int = field(init=False)
+    number_of_horizontal_shift_speeds: Dict[Tuple[int, int], int] = field(init=False)  # (A/D Ch, Amp): no_hss
+    available_horizontal_shift_speeds: Dict[Tuple[int, int], List[float]] = field(init=False)  # (A/D, Amp): [hss1, ...]
+
+    number_of_pre_amp_gains: int = field(init=False)
+    available_pre_amp_gains: List[float] = field(init=False)
+
+    MAX_PRE_AMP_GAIN_STRING_LENGTH: int = field(init=False, default=10)
+
     def __post_init__(self):
         self._get_number_of_pixels()
         self._get_pixel_size()
+        self._get_vertical_shift_speed_info()
+        self._get_vertical_shift_speed_info()
+        self._get_pre_amp_info()
 
     def _get_pixel_size(self):
         """
@@ -408,14 +426,69 @@ class CCDInfo:
             status, self.number_of_pixels_horizontally, self.number_of_pixels_vertically = _andor_api.ccd.GetDetector()
         _andor_api.log_ccd_response("Getting number of pixels", status)
 
+    def _get_vertical_shift_speed_info(self):
+        """
+        Retrieves information regarding the vertical
+        shift speeds (total number and values)
+        available on the CCD via the Andor API.
+        """
+        with _andor_api.lock:
+            status, self.number_of_vertical_shift_speeds = _andor_api.ccd.GetNumberVSSpeeds()
+            _andor_api.log_ccd_response("Getting number of vertical shift speeds", status)
 
-@dataclass
-class SingleTrackReadModeParameters:
+            self.available_vertical_shift_speeds = [
+                np.round(_andor_api.ccd.GetVSSpeed(i)[1], 1)
+                for i in range(self.number_of_vertical_shift_speeds)
+            ]
+
+            status, *self.fastest_recommended_vertical_shift_speed = _andor_api.ccd.GetFastestRecommendedVSSpeed()
+            _andor_api.log_ccd_response("Getting fastest recommended vertical shift speed", status)
+
+    def _get_horizontal_shift_speed_info(self):
+        """
+        Retrieves information regarding the horizontal
+        shift speeds (number of A/D Channels, output
+        amplifiers, and horizontal speeds, and values)
+        available on the CCD via the Andor API.
+        """
+        with _andor_api.lock:
+            status, self.number_of_ad_channels = _andor_api.ccd.GetNumberADChannels()
+            _andor_api.log_ccd_response("Getting number of AD channels", status)
+
+            status, self.number_of_output_amplifiers = _andor_api.ccd.GetNumberAmp()
+            _andor_api.log_ccd_response("Getting number of amplifiers", status)
+
+            self.number_of_horizontal_shift_speeds = {}
+            self.available_horizontal_shift_speeds = {}
+            for ch in range(self.number_of_ad_channels):
+                for amp in range(self.number_of_output_amplifiers):
+                    number_of_hss = _andor_api.ccd.GetNumberHSSpeeds(ch, amp)[1]
+                    self.number_of_horizontal_shift_speeds[(ch, amp)] = number_of_hss
+                    self.available_horizontal_shift_speeds[(ch, amp)] = [
+                        _andor_api.ccd.GetHSSpeed(ch, amp, hss_idx)[1]
+                        for hss_idx in range(number_of_hss)
+                    ]
+
+    def _get_pre_amp_info(self):
+        """
+        Retrieves information regarding the pre-amplification
+        gains (total number and values)
+        available on the CCD via the Andor API.
+        """
+        with _andor_api.lock:
+            status, self.number_of_pre_amp_gains = _andor_api.ccd.GetNumberPreAmpGains()
+            _andor_api.log_ccd_response("Getting number of pre-amplification gains", status)
+
+            self.available_pre_amp_gains = [
+                _andor_api.ccd.GetPreAmpGain(i)[1]
+                for i in range(self.number_of_vertical_shift_speeds)
+            ]
+
+
+class ImmutableClass:
     """
-    A dataclass to hold parameters for the single track read mode.
+    A class whose attributes cannot be changed once defined.
     """
-    track_center_row: int
-    track_height: int
 
     def __setattr__(self, key, value):
         """
@@ -427,9 +500,17 @@ class SingleTrackReadModeParameters:
         configuration class.
         """
         if hasattr(self, key):
-            raise AttributeError("SingleTrackReadModeParameters objects are immutable.")
-        else:
-            super().__setattr__(key, value)
+            raise AttributeError(f"{self.__class__.__name__!r} objects are immutable.")
+        super().__setattr__(key, value)
+
+
+@dataclass
+class SingleTrackReadModeParameters(ImmutableClass):
+    """
+    A dataclass to hold parameters for the single track read mode.
+    """
+    track_center_row: int
+    track_height: int
 
 
 class AndorSpectrometerConfig(SpectrometerConfig):
@@ -518,6 +599,12 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     """
 
     DEFAULT_SINGLE_TRACK_READ_MODE_PARAMETERS = SingleTrackReadModeParameters(1, 256)
+    """
+    There is no getter for single track read mode parameters in the Andor API,
+    so we choose the default value. Feel free to change the default value
+    prior to initialization, or the actual single track read mode parameters
+    value after initialization.
+    """
 
     DEFAULT_NUMBER_OF_ACCUMULATIONS: int = 2
     """
@@ -547,12 +634,48 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     If you have more than one spectrograph connected to the computer,
     you can either change the default value to the index of the spectrograph,
     or change the `spg_device_index` attribute after initialization of the 
-    AndorSpectrometerConfig object (in order to do that, you will first have to 
+    AndorSpectrometerConfig object.
+    """
+    DEFAULT_VERTICAL_SHIFT_SPEED_INDEX: int = -1
+    """
+    If the default vertical shift speed index is -1, then the vertical shift will
+    be set to the fastest recommended speed by the software. 
+    If you want to change the vertical shift speed, change the default value
+    to the index of the vertical shift speed you want.
+    Alternatively, change it after the CCD is initialized.
+    """
+    DEFAULT_PRE_AMP_GAIN_INDEX: int = 0
+    """
+    The default pre-amplification gain index is 0, which is the lowest possible vaue.
+    If you want to change the pre-amplification gain, change the default value
+    to the index of the pre-amplification gain you want.
+    Alternatively, change it after the CCD is initialized.
+    """
+    DEFAULT_AD_CHANNEL: int = 0
+    """
+    The default A/D channel is first available channel.
+    Some CCDs support multiples.
+    """
+    DEFAULT_OUTPUT_AMPLIFIER: int = 0
+    """
+    The default output amplifier is first available amplifier.
+    Some CCDs support multiples.
+    """
+    DEFAULT_HORIZONTAL_SHIFT_SPEED_INDEX: int = 0
+    """
+    The default horizontal shift speed index is 0, which is the highest possible value.
+    """
+    DEFAULT_HORIZONTAL_BIN_SIZE: int = 1
+    """
+    The default horizontal bin size is 1 (no change in output data length if 1).
+    """
+    DEFAULT_KEEP_CLEAN_ON_EXTERNAL_TRIGGER: bool = True
+    """
+    Keeps cleaning CCD while it's waiting for an external trigger.
     """
 
     def __init__(self):
         super().__init__()
-        self._spg_device_index = self.DEFAULT_SPG_DEVICE_INDEX
 
         # We can get the number of available cameras prior to initializing the CCD, but not for the spectrograph.
         self._spg_number_of_devices: int = 0
@@ -565,15 +688,30 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
         # Setting all the internal-use attributes for attributes that
         # do not have a Getter method implemented in the Andor API
-        self._number_of_accumulations: int = self.DEFAULT_NUMBER_OF_ACCUMULATIONS
-        self._number_of_kinetics: int = self.DEFAULT_NUMBER_OF_KINETICS
-        self._cooler_persistence_mode: bool = self.DEFAULT_COOLER_PERSISTENCE_MODE
+
+        self._spg_device_index: int = self.DEFAULT_SPG_DEVICE_INDEX
+
+        self._pixel_offset: float = 0.
+        self._wavelength_offset: float = 0.
+
         self._read_mode: str = self.DEFAULT_READ_MODE
         self._acquisition_mode: str = self.DEFAULT_ACQUISITION_MODE
         self._trigger_mode: str = self.DEFAULT_TRIGGER_MODE
+
+        self._number_of_accumulations: int = self.DEFAULT_NUMBER_OF_ACCUMULATIONS
+        self._number_of_kinetics: int = self.DEFAULT_NUMBER_OF_KINETICS
+
+        self._horizontal_bin_size: int = self.DEFAULT_HORIZONTAL_BIN_SIZE
+        self._keep_clean_on_external_trigger: bool = self.DEFAULT_KEEP_CLEAN_ON_EXTERNAL_TRIGGER
         self._single_track_read_mode_parameters = self.DEFAULT_SINGLE_TRACK_READ_MODE_PARAMETERS
-        self._pixel_offset = 0.
-        self._wavelength_offset = 0.
+
+        self._vertical_shift_speed_index: int = self.DEFAULT_VERTICAL_SHIFT_SPEED_INDEX
+        self._pre_amp_gain_index: int = self.DEFAULT_PRE_AMP_GAIN_INDEX
+        self._ad_channel: int = self.DEFAULT_AD_CHANNEL
+        self._output_amplifier: int = self.DEFAULT_OUTPUT_AMPLIFIER
+        self._horizontal_shift_speed_index: int = self.DEFAULT_HORIZONTAL_SHIFT_SPEED_INDEX
+
+        self._cooler_persistence_mode: bool = self.DEFAULT_COOLER_PERSISTENCE_MODE
 
     def open(self) -> None:
         """
@@ -857,7 +995,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             )
             return
 
-        grating_index = np.argwhere(np.array(grating_list) == value)[0][0] + 1
+        grating_index = grating_list.index(value) + 1
         with _andor_api.lock:
             status = _andor_api.spg.SetGrating(self.spg_device_index, grating_index)
         _andor_api.log_spg_response("Setting current grating", status)
@@ -878,6 +1016,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     def input_port(self, name: str) -> None:
         """
         Set the input port (input flipper mirror).
+        Also, automatically adjusts CCD horizontal flip state.
         """
         if name == self.input_port:
             return
@@ -886,6 +1025,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             status = _andor_api.spg.SetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.INPUT_FLIPPER, setter_value)
         _andor_api.log_spg_response("Setting input port", status)
+
+        self.horizontal_image_flip = setter_value != self.output_port
 
     @property
     def output_port(self) -> str:
@@ -903,6 +1044,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     def output_port(self, name: str) -> None:
         """
         Set the output port (output flipper mirror).
+        Also, automatically adjusts CCD horizontal flip state.
         """
         if name == self.output_port:
             return
@@ -912,6 +1054,48 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             status = _andor_api.spg.SetFlipperMirror(
                 self.spg_device_index, _andor_api.spg.OUTPUT_FLIPPER, setter_value)
         _andor_api.log_spg_response("Setting output port", status)
+
+        self.horizontal_image_flip = setter_value != self.input_port
+
+    @property
+    def horizontal_image_flip(self) -> bool:
+        """
+        The horizontal image flip.
+        """
+        with _andor_api.lock:
+            status, horizontal_image_flip, _ = _andor_api.ccd.GetImageFlip()
+        _andor_api.log_ccd_response("Getting image flip", status)
+        return bool(horizontal_image_flip)
+
+    @horizontal_image_flip.setter
+    @prevent_none_set
+    def horizontal_image_flip(self, value: bool) -> None:
+        """
+        Set the horizontal image flip.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetImageFlip(int(value), int(self.vertical_image_flip))
+        _andor_api.log_ccd_response("Setting image flip", status)
+
+    @property
+    def vertical_image_flip(self) -> bool:
+        """
+        The vertical image flip.
+        """
+        with _andor_api.lock:
+            status, _, vertical_image_flip = _andor_api.ccd.GetImageFlip()
+        _andor_api.log_ccd_response("Getting vertical image flip", status)
+        return bool(vertical_image_flip)
+
+    @vertical_image_flip.setter
+    @prevent_none_set
+    def vertical_image_flip(self, value: bool) -> None:
+        """
+        Set the vertical image flip.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetImageFlip(int(self.horizontal_image_flip), int(value))
+        _andor_api.log_ccd_response("Setting vertical image flip", status)
 
     @property
     def center_wavelength(self) -> float:
@@ -1372,6 +1556,68 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             self._trigger_mode = mode_name
 
     @property
+    def horizontal_bin_size(self) -> int:
+        """
+        Returns the horizontal binning of the CCD.
+        """
+        return self._horizontal_bin_size
+
+    @horizontal_bin_size.setter
+    @prevent_none_set
+    def horizontal_bin_size(self, value: int):
+        """
+        Sets the horizontal binning of the CCD.
+        """
+        if value <= 0:
+            raise ValueError("Horizontal bin size must be a positive integer.")
+
+        if self.read_mode == self.ReadMode.FVB.name:
+            setting_bin_size_method: Callable[[int], int] = _andor_api.ccd.SetFVBHBin
+        elif self.read_mode == self.ReadMode.SINGLE_TRACK.name:
+            setting_bin_size_method: Callable[[int], int] = _andor_api.ccd.SetSingleTrackHBin
+        elif self.read_mode == self.ReadMode.MULTI_TRACK.name:
+            setting_bin_size_method: Callable[[int], int] = _andor_api.ccd.SetMultiTrackHBin
+        elif self.read_mode == self.ReadMode.RANDOM_TRACK.name:
+            setting_bin_size_method: Callable[[int], int] = _andor_api.ccd.SetCustomTrackHBin
+        else:
+            raise NotImplementedError(f"Horizontal binning is not supported for read mode {self.read_mode}.")
+
+        with _andor_api.lock:
+            status = setting_bin_size_method(value)
+        _andor_api.log_ccd_response("Setting horizontal bin size", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._horizontal_bin_size = value
+
+    @property
+    def keep_clean_on_external_trigger(self) -> bool:
+        """
+        Returns whether the CCD is configured to keep the clean buffer on external trigger.
+        """
+        return self._keep_clean_on_external_trigger
+
+    @keep_clean_on_external_trigger.setter
+    @prevent_none_set
+    def keep_clean_on_external_trigger(self, value: bool):
+        """
+        Sets whether the CCD is configured to keep the clean buffer on external trigger.
+        """
+        with _andor_api.lock:
+            status = _andor_api.ccd.EnableKeepCleans(int(value))
+        _andor_api.log_ccd_response("Setting keep clean on external trigger", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._keep_clean_on_external_trigger = value
+
+    @property
+    def keep_clean_time(self) -> int:
+        """
+        Returns the keep clean time of the CCD in seconds.
+        """
+        with _andor_api.lock:
+            status, keep_clean_time = _andor_api.ccd.GetKeepCleanTime()
+        _andor_api.log_ccd_response("Getting keep clean time", status)
+        return keep_clean_time
+
+    @property
     def single_track_read_mode_parameters(self):
         return self._single_track_read_mode_parameters
 
@@ -1407,13 +1653,129 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         See the single track implementation as an example.
         """
         if self.read_mode in [self.ReadMode.FVB.name, self.ReadMode.SINGLE_TRACK.name]:
-            return self.ccd_info.number_of_pixels_horizontally
+            return self.ccd_info.number_of_pixels_horizontally // self.horizontal_bin_size
 
         error_message = f"Read mode {self.read_mode} is not supported."
         self.logger.error(error_message)
         raise NotImplementedError(error_message)
 
-    # TODO: Add speeds, enable keep cleans (for external trigger), data flip, 
+    # TODO: for vertical voltage clock amplitudes: SetVSAmplitude, GetNumberVSAmplitudes, GetVSAmplitudeValue,
+    #  GetVSAmplitudeFromString, GetVSAmplitudeString
+
+    @property
+    def vertical_shift_speed(self) -> float:
+        """
+        Returns the vertical shift speed of the CCD (units of microseconds).
+        """
+        if self._vertical_shift_speed_index == -1:
+            return np.nan
+        return self.ccd_info.available_vertical_shift_speeds[self._vertical_shift_speed_index]
+
+    @vertical_shift_speed.setter
+    @prevent_none_set
+    def vertical_shift_speed(self, speed: float):
+        """
+        Sets the vertical shift speed of the CCD (units of microseconds).
+        """
+        target_speed_index = self.ccd_info.available_vertical_shift_speeds.index(speed)
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetVSSpeed(target_speed_index)
+        _andor_api.log_ccd_response("Setting vertical shift speed", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._vertical_shift_speed_index = target_speed_index
+
+    @property
+    def pre_amp_gain(self) -> float:
+        """
+        Returns the pre-amp gain of the CCD.
+        """
+        return self.ccd_info.available_pre_amp_gains[self._pre_amp_gain_index]
+
+    @pre_amp_gain.setter
+    @prevent_none_set
+    def pre_amp_gain(self, gain: float):
+        """
+        Sets the pre-amp gain of the CCD.
+        """
+        target_pre_amp_gain_index = self.ccd_info.available_pre_amp_gains.index(gain)
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetPreAmpGain(target_pre_amp_gain_index)
+        _andor_api.log_ccd_response("Setting pre-amp gain", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._pre_amp_gain_index = target_pre_amp_gain_index
+
+    @property
+    def ad_channel(self) -> int:
+        """
+        Returns the AD channel of the CCD.
+        """
+        return self._ad_channel
+
+    @ad_channel.setter
+    @prevent_none_set
+    def ad_channel(self, channel: int):
+        """
+        Sets the AD channel of the CCD.
+        """
+        if channel not in range(self.ccd_info.number_of_ad_channels):
+            error_message = (f"Unsupported A/D channel: {channel}. "
+                             f"Supported channel are {range(self.ccd_info.number_of_ad_channels)}")
+            self.logger.error(error_message)
+            raise ValueError(error_message)
+
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetADChannel(channel)
+        _andor_api.log_ccd_response("Setting A/D channel", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._ad_channel = channel
+
+    @property
+    def output_amplifier(self) -> int:
+        """
+        Returns the amplifier of the CCD.
+        """
+        return self._output_amplifier
+
+    @output_amplifier.setter
+    @prevent_none_set
+    def output_amplifier(self, output_amplifier: int):
+        """
+        Sets the amplifier of the CCD.
+        """
+        if output_amplifier not in range(self.ccd_info.number_of_output_amplifiers):
+            error_message = (f"Unsupported amplifier: {output_amplifier}. "
+                             f"Supported amplifiers are {range(self.ccd_info.number_of_output_amplifiers)}")
+            self.logger.error(error_message)
+            raise ValueError(error_message)
+
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetOutputAmplifier(output_amplifier)
+        _andor_api.log_ccd_response("Setting output amplifier", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._output_amplifier = output_amplifier
+
+    @property
+    def horizontal_shift_speed(self) -> float:
+        """
+        Returns the horizontal shift speed of the CCD (units of MHz).
+        """
+        key = (self.ad_channel, self.output_amplifier)
+        idx = self._horizontal_shift_speed_index
+        return self.ccd_info.available_horizontal_shift_speeds[key][idx]
+
+    @horizontal_shift_speed.setter
+    @prevent_none_set
+    def horizontal_shift_speed(self, speed: float):
+        """
+        Sets the horizontal shift speed of the CCD (units of MHz).
+        """
+        key = (self.ad_channel, self.output_amplifier)
+        target_speed_index = self.ccd_info.available_horizontal_shift_speeds[key].index(speed)
+        with _andor_api.lock:
+            status = _andor_api.ccd.SetHSSpeed(self.output_amplifier, target_speed_index)
+        _andor_api.log_ccd_response("Setting horizontal shift speed", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._horizontal_shift_speed_index = target_speed_index
 
 
 class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
@@ -1495,8 +1857,15 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     def kinetic_series_acquisition(self) -> Tuple[np.ndarray, np.ndarray]:
         self._base_acquisition_method()
-        data_size = self.spectrometer_config.single_acquisition_data_size * self.spectrometer_config.number_of_kinetics
-        return self._get_acquired_data(data_size)
+
+        single_acquisition_data_size = self.spectrometer_config.single_acquisition_data_size
+        number_of_kinetics = self.spectrometer_config.number_of_kinetics
+        data_size = single_acquisition_data_size * number_of_kinetics
+
+        data, wavelengths = self._get_acquired_data(data_size)
+        data = np.reshape(data, (number_of_kinetics, single_acquisition_data_size))
+
+        return data, wavelengths
 
     def stop_acquisition(self):
         """
