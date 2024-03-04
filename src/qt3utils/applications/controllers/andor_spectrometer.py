@@ -12,6 +12,7 @@ from qt3utils.applications.controllers.utils import (
     make_label_and_check_button,
     make_label_frame,
     make_separator,
+    make_tab_view,
     prepare_list_for_option_menu,
 )
 
@@ -132,6 +133,25 @@ class AndorSpectrometerController:
         self.spectrometer_config.single_track_read_mode_parameters = andor.SingleTrackReadModeParameters(
             single_track_center_row, single_track_height)
 
+        # Electronics Settings
+        self.spectrometer_config.vertical_shift_speed = config_dict.get(
+            'vertical_shift_speed', float(self.spectrometer_config.vertical_shift_speed))
+
+        # self.spectrometer_config.ad_channel = config_dict.get(
+        #     'ad_channel', int(self.spectrometer_config.ad_channel))
+        # self.spectrometer_config.output_amplifier = config_dict.get(
+        #     'output_amplifier', int(self.spectrometer_config.output_amplifier))
+
+        default_hss = str((
+            self.spectrometer_config.ad_channel,
+            self.spectrometer_config.output_amplifier,
+            self.spectrometer_config.horizontal_shift_speed
+        ))
+        hss_value = config_dict.get('horizontal_shift_speed', default_hss)[1:-1].replace(' ', '').split(',')
+        self.spectrometer_config.ad_channel = int(hss_value[0])
+        self.spectrometer_config.output_amplifier = int(hss_value[1])
+        self.spectrometer_config.horizontal_shift_speed = float(hss_value[2])
+
         # Temperature Settings
         self.spectrometer_config.sensor_temperature_set_point = config_dict.get(
             'target_sensor_temperature', self.spectrometer_config.sensor_temperature_set_point)
@@ -146,19 +166,32 @@ class AndorSpectrometerController:
         config_win = tk.Toplevel(gui_root)
         config_win.grab_set()
         config_win.title('Andor Spectrometer Settings')
-
         label_padx = 10
+
+        tab_view = make_tab_view(config_win, tab_pady=0)
+
+        device_tab = ttk.Frame(tab_view)
+        spectrograph_tab = ttk.Frame(tab_view)
+        acquisition_tab = ttk.Frame(tab_view)
+        electronics_tab = ttk.Frame(tab_view)
+        temperature_tab = ttk.Frame(tab_view)
+
+        tab_view.add(device_tab, text='Devices')
+        tab_view.add(spectrograph_tab, text='Spectrograph')
+        tab_view.add(acquisition_tab, text='Acquisition')
+        tab_view.add(electronics_tab, text='Electronics')
+        tab_view.add(temperature_tab, text='Temperature')
 
         # Device Settings
         row = 0
-        device_settings_frame = make_label_frame(config_win, 'Device Settings', row)
+        device_settings_frame = make_label_frame(device_tab, 'Device Index', row)
 
         frame_row = 0
         ccd_device_list = prepare_list_for_option_menu(self.spectrometer_config.ccd_device_list)
         ccd_device_value = str(self.spectrometer_config.ccd_device_index)
         ccd_device_value = ccd_device_value if ccd_device_value in ccd_device_list else 'None'
         _, _, ccd_device_index_var = make_label_and_option_menu(
-            device_settings_frame, 'CCD Device Index', frame_row,
+            device_settings_frame, 'CCD', frame_row,
             ccd_device_list, ccd_device_value, label_padx)
 
         frame_row += 1
@@ -166,137 +199,194 @@ class AndorSpectrometerController:
         spg_device_value = str(self.spectrometer_config.spg_device_index)
         spg_device_value = spg_device_value if spg_device_value in spg_device_list else 'None'
         _, _, spg_device_index_var = make_label_and_option_menu(
-            device_settings_frame, 'Spectrograph Device Index', frame_row,
+            device_settings_frame, 'Spectrograph', frame_row,
             spg_device_list, spg_device_value, label_padx)
 
         # Spectrograph Settings
-        row += 1
-        spg_settings_frame = make_label_frame(config_win, 'Spectrograph Settings', row)
+        row = 0
+        turret_frame = make_label_frame(spectrograph_tab, 'Turret', row)
 
         frame_row = 0
         grating_list = prepare_list_for_option_menu(self.spectrometer_config.grating_list)
         _, _, grating_var = make_label_and_option_menu(
-            spg_settings_frame, 'Grating', frame_row,
+            turret_frame, 'Grating', frame_row,
             grating_list, self.spectrometer_config.current_grating, label_padx)
 
         frame_row += 1
         _, _, center_wavelength_var = make_label_and_entry(
-            spg_settings_frame, 'Center Wavelength (nm)', frame_row,
+            turret_frame, 'Center Wavelength (nm)', frame_row,
             self.spectrometer_config.center_wavelength, tk.DoubleVar, label_padx)
 
-        frame_row += 1
-        make_separator(spg_settings_frame, frame_row)
+        row += 1
+        calibration_frame = make_label_frame(spectrograph_tab, 'Calibration', row)
 
-        frame_row += 1
+        frame_row = 0
         _, _, pixel_offset_var = make_label_and_entry(
-            spg_settings_frame, 'Calibration Pixel Offset', frame_row,
+            calibration_frame, 'Pixel Offset', frame_row,
             self.spectrometer_config.pixel_offset, tk.DoubleVar, label_padx)
 
         frame_row += 1
         _, _, wavelength_offset_var = make_label_and_entry(
-            spg_settings_frame, 'Calibration Wavelength Offset (nm)', frame_row,
+            calibration_frame, 'Wavelength Offset (nm)', frame_row,
             self.spectrometer_config.wavelength_offset, tk.DoubleVar, label_padx)
 
-        frame_row += 1
-        make_separator(spg_settings_frame, frame_row)
+        row += 1
+        port_frame = make_label_frame(spectrograph_tab, 'Ports', row)
 
-        frame_row += 1
+        frame_row = 0
         flipper_mirror_list = self.spectrometer_config.SpectrographFlipperMirrorPort._member_names_
         _, _, input_port_var = make_label_and_option_menu(
-            spg_settings_frame, 'Input Port', frame_row,
+            port_frame, 'Input', frame_row,
             flipper_mirror_list, self.spectrometer_config.input_port, label_padx)
 
         frame_row += 1
         _, _, output_port_var = make_label_and_option_menu(
-            spg_settings_frame, 'Output Port', frame_row,
+            port_frame, 'Output', frame_row,
             flipper_mirror_list, self.spectrometer_config.output_port, label_padx)
 
         # Acquisition Settings
-        row += 1
-        acq_settings_frame = make_label_frame(config_win, 'Acquisition Settings', row)
+        row = 0
+        modes_frame = make_label_frame(acquisition_tab, 'Modes', row)
 
         frame_row = 0
         _, _, read_mode_var = make_label_and_option_menu(
-            acq_settings_frame, 'Read Mode', frame_row,
+            modes_frame, 'Read', frame_row,
             self.spectrometer_config.SUPPORTED_READ_MODES, self.spectrometer_config.read_mode, label_padx)
 
         frame_row += 1
         _, _, acquisition_mode_var = make_label_and_option_menu(
-            acq_settings_frame, 'Acquisition Mode', frame_row,
+            modes_frame, 'Acquisition', frame_row,
             self.spectrometer_config.SUPPORTED_ACQUISITION_MODES, self.spectrometer_config.acquisition_mode, label_padx)
 
         frame_row += 1
         _, _, trigger_mode_var = make_label_and_option_menu(
-            acq_settings_frame, 'Trigger Mode', frame_row,
+            modes_frame, 'Trigger', frame_row,
             self.spectrometer_config.SUPPORTED_TRIGGER_MODES, self.spectrometer_config.trigger_mode, label_padx)
 
-        frame_row += 1
-        make_separator(acq_settings_frame, frame_row)
+        row += 1
+        timing_frame = make_label_frame(acquisition_tab, 'Timing', row)
 
-        frame_row += 1
+        frame_row = 0
         _, _, exposure_time_var = make_label_and_entry(
-            acq_settings_frame, 'Exposure Time (seconds)', frame_row,
+            timing_frame, 'Exposure (s)', frame_row,
             self.spectrometer_config.exposure_time, tk.DoubleVar, label_padx)
 
         frame_row += 1
         _, _, no_of_accumulations_var = make_label_and_entry(
-            acq_settings_frame,  'No. of Accumulations', frame_row,
+            timing_frame,  'No. of Accumulations', frame_row,
             self.spectrometer_config.number_of_accumulations, tk.IntVar, label_padx)
 
         frame_row += 1
         _, _, accumulation_cycle_time_var = make_label_and_entry(
-            acq_settings_frame, 'Accumulation Cycle Time (seconds)', frame_row,
+            timing_frame, 'Accumulation Cycle (s)', frame_row,
             self.spectrometer_config.accumulation_cycle_time, tk.DoubleVar, label_padx)
 
         frame_row += 1
         _, _, no_of_kinetics_var = make_label_and_entry(
-            acq_settings_frame, 'No. of Kinetics', frame_row,
+            timing_frame, 'No. of Kinetics', frame_row,
             self.spectrometer_config.number_of_kinetics, tk.IntVar, label_padx)
 
         frame_row += 1
         _, _, kinetic_cycle_time_var = make_label_and_entry(
-            acq_settings_frame, 'Kinetic Cycle Time (seconds)', frame_row,
+            timing_frame, 'Kinetic Cycle (s)', frame_row,
             self.spectrometer_config.kinetic_cycle_time, tk.DoubleVar, label_padx)
 
-        frame_row += 1
-        make_separator(acq_settings_frame, frame_row)
+        row += 1
+        data_pre_processing_frame = make_label_frame(acquisition_tab, 'Data Pre-processing', row)
 
-        frame_row += 1
+        frame_row = 0
         _, _, baseline_clamp_var = make_label_and_check_button(
-            acq_settings_frame, 'Clamp Baseline', frame_row,
+            data_pre_processing_frame, 'Clamp Baseline', frame_row,
             self.spectrometer_config.baseline_clamp, label_padx)
 
         frame_row += 1
         _, _, cosmic_ray_removal_var = make_label_and_check_button(
-            acq_settings_frame, 'Cosmic Ray Removal', frame_row,
+            data_pre_processing_frame, 'Cosmic Ray Removal', frame_row,
             self.spectrometer_config.remove_cosmic_rays, label_padx)
 
-        frame_row += 1
-        make_separator(acq_settings_frame, frame_row)
+        row += 1
+        single_track_mode_frame = make_label_frame(acquisition_tab, 'Single Track Setup', row)
 
-        frame_row += 1
-        label_text = f'Single Track Center Row [1, {self.spectrometer_config.ccd_info.number_of_pixels_vertically}]'
+        frame_row = 0
+        label_text = f'Center Row [1, {self.spectrometer_config.ccd_info.number_of_pixels_vertically}]'
         _, _, single_track_center_row_var = make_label_and_entry(
-            acq_settings_frame, label_text, frame_row,
+            single_track_mode_frame, label_text, frame_row,
             self.spectrometer_config.single_track_read_mode_parameters.track_center_row, tk.IntVar, label_padx)
 
         frame_row += 1
         _, _, single_track_height_var = make_label_and_entry(
-            acq_settings_frame, 'Single Track Height', frame_row,
+            single_track_mode_frame, 'Height', frame_row,
             self.spectrometer_config.single_track_read_mode_parameters.track_height, tk.IntVar, label_padx)
 
-        # Temperature Settings
+        # Electronics Settings
+        row = 0
+        vertical_shift_frame = make_label_frame(electronics_tab, 'Vertical Shift', row)
+
+        frame_row = 0
+        vertical_shift_speed_options = prepare_list_for_option_menu(
+            self.spectrometer_config.ccd_info.available_vertical_shift_speeds)
+        vss_value = str(self.spectrometer_config.vertical_shift_speed)
+        vss_value = vss_value if vss_value in vertical_shift_speed_options else 'None'
+        _, _, vertical_speed_var = make_label_and_option_menu(
+            vertical_shift_frame, 'Speed (μs)', frame_row,
+            vertical_shift_speed_options, vss_value, label_padx)
+
         row += 1
-        temp_settings_frame = make_label_frame(config_win, 'Temperature Settings', row)
+        horizontal_shift_frame = make_label_frame(electronics_tab, 'Horizontal Shift', row)
+
+        frame_row = 0
+        # ad_channel_list = prepare_list_for_option_menu(
+        #     range(self.spectrometer_config.ccd_info.number_of_ad_channels))
+        # ad_value = str(self.spectrometer_config.ad_channel)
+        # ad_value = ad_value if ad_value in ad_channel_list else 'None'
+        # _, _, ad_channel_var = make_label_and_option_menu(
+        #     horizontal_shift_frame, 'A/D Channel', frame_row,
+        #     ad_channel_list, ad_value, label_padx)
+        #
+        # frame_row += 1
+        # amp_channel_list = prepare_list_for_option_menu(
+        #     range(self.spectrometer_config.ccd_info.number_of_output_amplifiers))
+        # amp_value = str(self.spectrometer_config.output_amplifier)
+        # amp_value = amp_value if amp_value in amp_channel_list else 'None'
+        # _, _, amp_var = make_label_and_option_menu(
+        #     horizontal_shift_frame, 'Output Amplifier', frame_row,
+        #     amp_channel_list, amp_value, label_padx)
+
+        frame_row += 1
+        hss_list = [(ad, amp, hss)
+                    for ad, amp in self.spectrometer_config.ccd_info.available_horizontal_shift_speeds
+                    for hss in self.spectrometer_config.ccd_info.available_horizontal_shift_speeds[(ad, amp)]]
+        horizontal_shift_speed_options = prepare_list_for_option_menu(hss_list)
+        hss_value = str(self.spectrometer_config.horizontal_shift_speed)
+        hss_value = hss_value if hss_value in horizontal_shift_speed_options else 'None'
+        _, _, vertical_speed_var = make_label_and_option_menu(
+            horizontal_shift_frame, '       A/D Channel\n   Output Amplifier\nReadout Rate (MHz)', frame_row,
+            horizontal_shift_speed_options, hss_value, label_padx)
+
+        frame_row += 1
+        pre_amp_gain_list = prepare_list_for_option_menu(
+            self.spectrometer_config.ccd_info.available_pre_amp_gains)
+        pre_amp_gain_value = str(self.spectrometer_config.pre_amp_gain)
+        pre_amp_gain_value = pre_amp_gain_value if pre_amp_gain_value in pre_amp_gain_list else 'None'
+        _, _, pre_amp_gain_var = make_label_and_option_menu(
+            horizontal_shift_frame, 'Pre-Amplifier Gain', frame_row,
+            pre_amp_gain_list, pre_amp_gain_value, label_padx)
+
+        # Temperature Settings
+        row = 0
+        temperature_set_point_frame = make_label_frame(temperature_tab, 'Set Point', row)
 
         frame_row = 0
         _, _, target_sensor_temperature_var = make_label_and_entry(
-            temp_settings_frame, 'Target Sensor Temperature (°C)', frame_row,
+            temperature_set_point_frame, 'Target Temperature (°C)', frame_row,
             self.spectrometer_config.sensor_temperature_set_point, tk.IntVar, label_padx)
 
-        frame_row += 1
+        row += 1
+        cooler_frame = make_label_frame(temperature_tab, 'Cooler', row)
+
+        frame_row = 0
         _, _, cooler_persistence_var = make_label_and_check_button(
-            temp_settings_frame, 'Cooler Persistence', frame_row,
+            cooler_frame, 'Persistent Cooling', frame_row,
             self.spectrometer_config.cooler_persistence_mode, label_padx)
 
         # Pack variables into a dictionary to pass to the _set_from_gui method
@@ -329,14 +419,22 @@ class AndorSpectrometerController:
             # -------------------------------
             'single_track_center_row': single_track_center_row_var,
             'single_track_height': single_track_height_var,
+            # Electronics Settings
+            'vertical_shift_speed': vertical_speed_var,
+            # 'ad_channel': ad_channel_var,
+            # 'output_amplifier': amp_var,
+            'horizontal_shift_speed': vertical_speed_var,
+            'pre_amp_gain': pre_amp_gain_var,
             # Temperature Settings
             'target_sensor_temperature': target_sensor_temperature_var,
             'cooler_persistence': cooler_persistence_var,
         }
 
-        row += 1
-        ttk.Button(config_win, text='Set', command=lambda: self._set_from_gui(gui_info)).grid(row=row, column=0)
-        ttk.Button(config_win, text='Close', command=config_win.destroy).grid(row=row, column=1)
+        row = 1
+        ttk.Button(config_win, text='Set', command=lambda: self._set_from_gui(gui_info)).grid(row=row, column=0, pady=5)
+        ttk.Button(config_win, text='Close', command=config_win.destroy).grid(row=row, column=1, pady=5)
+
+        tab_view.select(2)
 
     def _set_from_gui(self, gui_vars: dict) -> None:
         """

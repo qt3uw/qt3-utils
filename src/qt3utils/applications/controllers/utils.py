@@ -4,20 +4,74 @@ from typing import Any, List, Tuple, Type, Union, Literal, Sequence
 
 _DEFAULT_PADX = 10
 _DEFAULT_WIDGET_WIDTH = 10
-_DEFAULT_COLUMN_1_SIZE = 250
-_DEFAULT_COLUMN_2_SIZE = 150
+_DEFAULT_COLUMN_1_SIZE = 180
+_DEFAULT_COLUMN_2_SIZE = 140
+
+
+def make_tab_view(
+        parent: Union[tk.Toplevel, ttk.Widget],
+        tab_padx: int = _DEFAULT_PADX,
+        tab_pady: int = _DEFAULT_PADX,
+        tab_sticky: str = tk.NSEW,
+        tab_row: int = 0,
+        tab_column: int = 0,
+        tab_columnspan: int = 2,
+        tab_rowspan: int = 1,
+        tab_ipadx: int = 0,
+        tab_ipady: int = 0,
+) -> ttk.Notebook:
+    """
+    This helper method creates a tab view.
+
+    Parameters
+    ----------
+    parent: Union[tk.Toplevel, ttk.Widget]
+        The parent window the tab view will be inserted in.
+    tab_padx: int
+        The padding of the tabs.
+    tab_pady: int
+        The padding of the tabs.
+    tab_sticky: str
+        The sticky of the tabs.
+    tab_row: int
+        The row of the tab view in the window.
+    tab_column: int
+        The column of the tab view in the window.
+    tab_columnspan: int
+        The column span of the tab view in the window.
+    tab_rowspan: int
+        The row span of the tab view in the window.
+    tab_ipadx: int
+        The internal padding of the tab view in the window.
+    tab_ipady: int
+        The internal padding of the tab view in the window.
+
+    Returns
+    -------
+    ttk.Notebook
+        The generated tab view.
+    """
+    tab_view = ttk.Notebook(parent)
+    tab_view.grid(
+        row=tab_row, column=tab_column, padx=tab_padx, pady=tab_pady,
+        columnspan=tab_columnspan, rowspan=tab_rowspan,
+        sticky=tab_sticky,
+        ipadx=tab_ipadx, ipady=tab_ipady,
+    )
+
+    return tab_view
 
 
 def make_label_frame(
-        parent: Union[tk.Toplevel, ttk.Widget],
+        parent: Union[tk.Toplevel, ttk.Widget, ttk.Frame],
         label_text: str,
         row: int,
-        label_padx: int = 2 * _DEFAULT_PADX + 5,
+        padx: int = _DEFAULT_PADX,
+        pady: int = 5,
         column_span: int = 2,
         column_minsizes: List[int] = None,
-        sticky: str = tk.NSEW,
+        sticky: str = '',
 ):
-    
     """
     This helper method creates a label frame.
 
@@ -29,8 +83,10 @@ def make_label_frame(
         The text of the label.
     row: int
         The row of label frame in the window.
-    label_padx: int
-        The padding of the label.
+    padx: int
+        The x padding of the label frame.
+    pady: int
+        The y padding of the label frame.
     column_span: int
         The label_frame_column_span. Default is 2.
     column_minsizes: List[int]
@@ -47,7 +103,7 @@ def make_label_frame(
         column_minsizes = [_DEFAULT_COLUMN_1_SIZE, _DEFAULT_COLUMN_2_SIZE]
 
     label_frame = ttk.LabelFrame(parent, text=label_text)
-    label_frame.grid(row=row, column=0, padx=label_padx, columnspan=column_span, sticky=sticky)
+    label_frame.grid(row=row, column=0, padx=padx, pady=pady, columnspan=column_span, sticky=sticky)
     for i in range(len(column_minsizes)):
         label_frame.columnconfigure(i, minsize=column_minsizes[i])
     return label_frame

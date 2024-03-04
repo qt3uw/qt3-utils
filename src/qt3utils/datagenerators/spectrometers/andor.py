@@ -31,10 +31,14 @@ def prevent_none_set(func: Callable[[Any, Any], None]) -> Union[Callable[[Any, A
     """
 
     def wrapper(self, value):
-        if value is not None:
-            return func(self, value)
-        return None
-
+        if value is None:
+            return
+        try:
+            if np.isnan(value):
+                return
+        except TypeError:
+            pass
+        return func(self, value)
     return wrapper
 
 
@@ -405,7 +409,7 @@ class CCDInfo:
         self._get_number_of_pixels()
         self._get_pixel_size()
         self._get_vertical_shift_speed_info()
-        self._get_vertical_shift_speed_info()
+        self._get_horizontal_shift_speed_info()
         self._get_pre_amp_info()
 
     def _get_pixel_size(self):
@@ -1493,7 +1497,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             error_message = (f"Unsupported acquisition mode: {mode_name}. "
                              f"Supported modes are {self.SUPPORTED_ACQUISITION_MODES}.")
             self.logger.error(error_message)
-            raise ValueError(error_message)
+            # raise ValueError(error_message)
+            return
 
         with _andor_api.lock:
             status = _andor_api.ccd.SetAcquisitionMode(mode_value)
@@ -1520,7 +1525,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             error_message = (f"Unsupported read mode: {mode_name}. "
                              f"Supported modes are {self.SUPPORTED_READ_MODES}.")
             self.logger.error(error_message)
-            raise ValueError(error_message)
+            # raise ValueError(error_message)
+            return
 
         with _andor_api.lock:
             status = _andor_api.ccd.SetReadMode(mode_value)
@@ -1547,7 +1553,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             error_message = (f"Unsupported trigger mode: {mode_name}. "
                              f"Supported modes are {self.SUPPORTED_TRIGGER_MODES}")
             self.logger.error(error_message)
-            raise ValueError(error_message)
+            # raise ValueError(error_message)
+            return
 
         with _andor_api.lock:
             status = _andor_api.ccd.SetTriggerMode(mode_value)
@@ -1569,7 +1576,10 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         Sets the horizontal binning of the CCD.
         """
         if value <= 0:
-            raise ValueError("Horizontal bin size must be a positive integer.")
+            error_message = f"Horizontal bin size must be a positive integer. Got {value}."
+            self.logger.error(error_message)
+            # raise ValueError(error_message)
+            return
 
         if self.read_mode == self.ReadMode.FVB.name:
             setting_bin_size_method: Callable[[int], int] = _andor_api.ccd.SetFVBHBin
@@ -1689,7 +1699,10 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Returns the pre-amp gain of the CCD.
         """
-        return self.ccd_info.available_pre_amp_gains[self._pre_amp_gain_index]
+        if self._pre_amp_gain_index in self.ccd_info.available_pre_amp_gains:
+            return self.ccd_info.available_pre_amp_gains[self._pre_amp_gain_index]
+
+        return np.nan
 
     @pre_amp_gain.setter
     @prevent_none_set
@@ -1721,7 +1734,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             error_message = (f"Unsupported A/D channel: {channel}. "
                              f"Supported channel are {range(self.ccd_info.number_of_ad_channels)}")
             self.logger.error(error_message)
-            raise ValueError(error_message)
+            # raise ValueError(error_message)
+            return
 
         with _andor_api.lock:
             status = _andor_api.ccd.SetADChannel(channel)
@@ -1746,7 +1760,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             error_message = (f"Unsupported amplifier: {output_amplifier}. "
                              f"Supported amplifiers are {range(self.ccd_info.number_of_output_amplifiers)}")
             self.logger.error(error_message)
-            raise ValueError(error_message)
+            # raise ValueError(error_message)
 
         with _andor_api.lock:
             status = _andor_api.ccd.SetOutputAmplifier(output_amplifier)
@@ -1761,7 +1775,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         key = (self.ad_channel, self.output_amplifier)
         idx = self._horizontal_shift_speed_index
-        return self.ccd_info.available_horizontal_shift_speeds[key][idx]
+        if key in self.ccd_info.available_horizontal_shift_speeds:
+            return self.ccd_info.available_horizontal_shift_speeds[key][idx]
+        return np.nan
 
     @horizontal_shift_speed.setter
     @prevent_none_set
