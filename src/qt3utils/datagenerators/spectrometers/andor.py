@@ -755,8 +755,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             if not _andor_api.is_ccd_initialized():
-                status = _andor_api.ccd.Initialize("")
-                _andor_api.log_ccd_response('CCD initialization', status)
+                # status = _andor_api.ccd.Initialize("")
+                # _andor_api.log_ccd_response('CCD initialization', status)
                 status = _andor_api.ccd.CoolerON()
                 _andor_api.log_ccd_response('CCD cooler turn-on', status)
                 self.sensor_temperature_set_point = self.DEFAULT_SET_TEMPERATURE
@@ -776,8 +776,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             if not _andor_api.is_spg_initialized():
-                status = _andor_api.spg.Initialize("")
-                _andor_api.log_spg_response('Spectrograph initialization', status)
+                # status = _andor_api.spg.Initialize("")
+                # _andor_api.log_spg_response('Spectrograph initialization', status)
 
                 status, self._spg_number_of_devices = _andor_api.spg.GetNumberDevices()
                 _andor_api.log_spg_response('Getting number of spectrograph devices', status)
@@ -1637,6 +1637,11 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Sets the single track parameters. Does not change the read mode.
         """
+        if single_track_read_mode_parameters.track_height is None:
+            return
+        if single_track_read_mode_parameters.track_center_row is None:
+            return
+
         with _andor_api.lock:
             status = _andor_api.ccd.SetSingleTrack(
                 single_track_read_mode_parameters.track_center_row, single_track_read_mode_parameters.track_height)

@@ -11,7 +11,6 @@ from qt3utils.applications.controllers.utils import (
     make_label_and_option_menu,
     make_label_and_check_button,
     make_label_frame,
-    make_separator,
     make_tab_view,
     prepare_list_for_option_menu,
 )
@@ -147,7 +146,10 @@ class AndorSpectrometerController:
             self.spectrometer_config.output_amplifier,
             self.spectrometer_config.horizontal_shift_speed
         ))
-        hss_value = config_dict.get('horizontal_shift_speed', default_hss)[1:-1].replace(' ', '').split(',')
+        hss_value = config_dict.get('horizontal_shift_speed', default_hss)
+        if hss_value is None:
+            hss_value = default_hss
+        hss_value = hss_value[1:-1].replace(' ', '').split(',')
         self.spectrometer_config.ad_channel = int(hss_value[0])
         self.spectrometer_config.output_amplifier = int(hss_value[1])
         self.spectrometer_config.horizontal_shift_speed = float(hss_value[2])
@@ -162,7 +164,6 @@ class AndorSpectrometerController:
         """
         This method launches a GUI window to configure the data controller.
         """
-        # TODO: Consider putting in Tab Widget (ttk.Notebook)
         config_win = tk.Toplevel(gui_root)
         config_win.grab_set()
         config_win.title('Andor Spectrometer Settings')
@@ -391,42 +392,49 @@ class AndorSpectrometerController:
 
         # Pack variables into a dictionary to pass to the _set_from_gui method
         gui_info = {
-            # Device Settings
+            # Devices
+            # - Device Index
             'ccd_device_index': ccd_device_index_var,
             'spg_device_index': spg_device_index_var,
-            # Spectrograph Settings
+            # Spectrograph
+            # - Turret
             'grating': grating_var,
             'center_wavelength': center_wavelength_var,
-            # -------------------------------
+            # - Calibration
             'pixel_offset': pixel_offset_var,
             'wavelength_offset': wavelength_offset_var,
-            # -------------------------------
+            # - Ports
             'input_port': input_port_var,
             'output_port': output_port_var,
-            # Acquisition Settings
+            # Acquisition
+            # - Modes
             'read_mode': read_mode_var,
             'acquisition_mode': acquisition_mode_var,
             'trigger_mode': trigger_mode_var,
-            # -------------------------------
+            # - Timing
             'exposure_time': exposure_time_var,
             'no_of_accumulations': no_of_accumulations_var,
             'accumulation_cycle_time': accumulation_cycle_time_var,
             'no_of_kinetics': no_of_kinetics_var,
             'kinetic_cycle_time': kinetic_cycle_time_var,
-            # -------------------------------
+            # - Data-Pre-Processing
             'baseline_clamp': baseline_clamp_var,
             'cosmic_ray_removal': cosmic_ray_removal_var,
-            # -------------------------------
+            # - Single Track Setup
             'single_track_center_row': single_track_center_row_var,
             'single_track_height': single_track_height_var,
-            # Electronics Settings
+            # Electronics
+            # - Vertical Shift
             'vertical_shift_speed': vertical_speed_var,
+            # - Horizontal Shift
             # 'ad_channel': ad_channel_var,
             # 'output_amplifier': amp_var,
             'horizontal_shift_speed': vertical_speed_var,
             'pre_amp_gain': pre_amp_gain_var,
-            # Temperature Settings
+            # Temperature
+            # - Set Point
             'target_sensor_temperature': target_sensor_temperature_var,
+            # - Cooler
             'cooler_persistence': cooler_persistence_var,
         }
 

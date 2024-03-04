@@ -3,10 +3,49 @@ QT3Scan:
     import_path : qt3utils.applications.controllers.andor_spectrometer
     class_name  : AndorSpectrometerController
     configure :
-      exposure_time : 1 # This is in seconds
-      center_wavelength : 370 # This is in nm
-      sensor_temperature_set_point : -70 # This is in Celsius
-      grating_selected : null
+      # Devices
+      # - Device Index
+      ccd_device_index: 0
+      spg_device_index: 0
+      # Spectrograph
+      # - Turret
+      grating: null
+      center_wavelength: null  # nm
+      # - Calibration
+      pixel_offset: 0.
+      wavelength_offset: 0.  # nm
+      # - Ports
+      input_port: SIDE  # or DIRECT
+      output_port: DIRECT  # or SIDE
+      # Acquisition
+      # - Modes
+      read_mode: FVB  # or SINGLE_TRACK
+      acquisition_mode: ACCUMULATE  # or SINGLE_SCAN or KINETICS
+      trigger_mode: INTERNAL  # or EXTERNAL
+      # - Timing
+      exposure_time: 1  # seconds
+      no_of_accumulations: 2
+      accumulation_cycle_time: 1  # seconds - will always end up higher than exposure time
+      no_of_kinetics: 10
+      kinetic_cycle_time: 1  # seconds - will always end up higher than accumulation cycle time
+      # - Data-Pre-Processing
+      baseline_clamp: true  # or false - will keep the electronic noise floor to the same level
+      cosmic_ray_removal: true  # or false - in accumulation mode, will remove peaks that look like cosmic rays
+      # - Single Track Setup
+      single_track_center_row: null  # number in [1, 256]
+      single_track_height: null  # number that does not exceed the above limits if added or subtracted to the center
+      # Electronics
+      # - Vertical Shift
+      vertical_shift_speed: null  # μs - must be string - find other options in the drop-down menu on the GUI.
+      # - Horizontal Shift
+      horizontal_shift_speed: null  # MHz - must be string - find other options in the drop-down menu on the GUI.
+      pre_amp_gain: null  # must be string - find other options in the drop-down menu on the GUI.
+      # Temperature
+      # - Set Point
+      target_sensor_temperature: -70
+      # - Cooler
+      cooler_persistence: true  # or false - will keep the CCD cold even after the program ends, as long as Andor Solis does not open
+
 
   PositionController:
     import_path : qt3utils.applications.controllers.nidaqpiezocontroller
