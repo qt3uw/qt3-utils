@@ -1368,7 +1368,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             # We could have used `_andor_api.ccd.GetTemperature()`, but that returns an integer
             status, temperature, _, _, _ = _andor_api.ccd.GetTemperatureStatus()
         _andor_api.log_ccd_response("Getting CCD current temperature", status)
-        return temperature
+        return np.round(temperature, 1)
 
     @property
     def sensor_temperature_set_point(self) -> int:
@@ -1378,7 +1378,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         with _andor_api.lock:
             status, _, temperature, _, _ = _andor_api.ccd.GetTemperatureStatus()
         _andor_api.log_ccd_response("Getting CCD target temperature", status)
-        return temperature
+        return int(np.round(temperature, 0))
 
     @sensor_temperature_set_point.setter
     @prevent_none_set
@@ -1634,6 +1634,15 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     def trigger_mode(self, mode_name: str):
         """
         Sets the trigger mode.
+
+        The Andor API EnableKeepCleans method is only
+        accessible with specific trigger modes (external
+        and external start).
+        It does not even like being disabled when the
+        trigger is not one of these two...
+        We make sure to update the setting with the
+        internal keep cleans value if the trigger mode
+        is appropriate.
         """
         mode_value = self.TriggerMode[mode_name].value
 
@@ -1649,6 +1658,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         _andor_api.log_ccd_response("Setting trigger mode", status)
         if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
             self._trigger_mode = mode_name
+            if mode_name in [self.TriggerMode.EXTERNAL.name, self.TriggerMode.EXTERNAL_START.name]:
+                self.keep_clean_on_external_trigger = self._keep_clean_on_external_trigger
 
     @property
     def horizontal_bin_size(self) -> int:
@@ -1697,8 +1708,27 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     @prevent_none_set
     def keep_clean_on_external_trigger(self, value: bool):
         """
-        Sets whether the CCD is configured to keep the clean buffer on external trigger.
+        Sets whether the CCD is configured to keep the
+        clean buffer on external trigger.
+
+        The Andor API EnableKeepCleans method is only
+        accessible with specific trigger modes (external
+        and external start).
+        It does not even like being disabled when the
+        trigger is not one of these two...
+
         """
+        allowed_modes = [
+            self.TriggerMode.EXTERNAL.name,
+            self.TriggerMode.EXTERNAL_START.name,
+        ]
+        if value and self.trigger_mode not in allowed_modes:
+            _andor_api.logger.info(f'Enabling/Disabling keep cleans'
+                                      f' is not allowed in {self.trigger_mode}.'
+                                      f'The value is stored internally for future use.')
+            self._keep_clean_on_external_trigger = value
+            return
+
         with _andor_api.lock:
             status = _andor_api.ccd.EnableKeepCleans(int(value))
         _andor_api.log_ccd_response("Setting keep clean on external trigger", status)

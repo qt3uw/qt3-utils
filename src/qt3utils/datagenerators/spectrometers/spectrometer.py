@@ -33,9 +33,9 @@ class SpectrometerConfig(abc.ABC):
     """ The name of the device used for logging purposes. """
 
     def __init__(self):
-        logging.basicConfig(level=logging.NOTSET)
         logger_name = f'{self.DEVICE_NAME} Config' if self.DEVICE_NAME != '' else self.__class__.__name__
         self.logger = logging.getLogger(logger_name)
+        self.logger.setLevel(logging.DEBUG)
 
     @abc.abstractmethod
     def open(self) -> None:
@@ -225,9 +225,9 @@ class SpectrometerDataAcquisition(abc.ABC):
             Used in case the acquisition requires using methods defined in the configuration object.
             Defaults to None.
         """
-        logging.basicConfig(level=logging.NOTSET)
         logger_name = f'{self.DEVICE_NAME} Data Acquisition' if self.DEVICE_NAME != '' else self.__class__.__name__
         self.logger = logging.getLogger(logger_name)
+        self.logger.setLevel(logging.DEBUG)
         self.spectrometer_config = spectrometer_config
 
     def acquire(
