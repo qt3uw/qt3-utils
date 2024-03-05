@@ -61,16 +61,17 @@ class AndorSpectrometerController:
         self.logger.debug('Stopping controller.')
 
     def close(self) -> None:
-        # self.spectrometer_config.close()
+        self.spectrometer_config.close()
         pass
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
+        self.logger.debug('Sampling Spectrum')
         acq_mode = self.spectrometer_config.acquisition_mode
-        if acq_mode == self.spectrometer_config.AcquisitionMode.SINGLE_SCAN:
+        if acq_mode == self.spectrometer_config.AcquisitionMode.SINGLE_SCAN.name:
             return self.spectrometer_daq.acquire('single')
-        elif acq_mode == self.spectrometer_config.AcquisitionMode.ACCUMULATE:
+        elif acq_mode == self.spectrometer_config.AcquisitionMode.ACCUMULATE.name:
             return self.spectrometer_daq.acquire('accumulation')
-        elif acq_mode == self.spectrometer_config.AcquisitionMode.KINETIC_SERIES:
+        elif acq_mode == self.spectrometer_config.AcquisitionMode.KINETICS.name:
             return self.spectrometer_daq.acquire('kinetic series')
 
     def configure(self, config_dict: dict) -> None:
@@ -133,8 +134,11 @@ class AndorSpectrometerController:
             single_track_center_row, single_track_height)
 
         # Electronics Settings
-        self.spectrometer_config.vertical_shift_speed = config_dict.get(
-            'vertical_shift_speed', float(self.spectrometer_config.vertical_shift_speed))
+        vss_value = config_dict.get(
+            'vertical_shift_speed', self.spectrometer_config.vertical_shift_speed)
+        if isinstance(vss_value, str):
+            vss_value = float(vss_value)
+        self.spectrometer_config.vertical_shift_speed = vss_value
 
         # self.spectrometer_config.ad_channel = config_dict.get(
         #     'ad_channel', int(self.spectrometer_config.ad_channel))
@@ -210,7 +214,7 @@ class AndorSpectrometerController:
         frame_row = 0
         grating_list = prepare_list_for_option_menu(self.spectrometer_config.grating_list)
         _, _, grating_var = make_label_and_option_menu(
-            turret_frame, 'Grating', frame_row,
+            turret_frame, 'Grating (Idx: Grooves, Blaze)', frame_row,
             grating_list, self.spectrometer_config.current_grating, label_padx)
 
         frame_row += 1
@@ -358,9 +362,13 @@ class AndorSpectrometerController:
                     for ad, amp in self.spectrometer_config.ccd_info.available_horizontal_shift_speeds
                     for hss in self.spectrometer_config.ccd_info.available_horizontal_shift_speeds[(ad, amp)]]
         horizontal_shift_speed_options = prepare_list_for_option_menu(hss_list)
-        hss_value = str(self.spectrometer_config.horizontal_shift_speed)
+        hss_value = str((
+            self.spectrometer_config.ad_channel,
+            self.spectrometer_config.output_amplifier,
+            self.spectrometer_config.horizontal_shift_speed
+        ))
         hss_value = hss_value if hss_value in horizontal_shift_speed_options else 'None'
-        _, _, vertical_speed_var = make_label_and_option_menu(
+        _, _, horizontal_speed_var = make_label_and_option_menu(
             horizontal_shift_frame, '       A/D Channel\n   Output Amplifier\nReadout Rate (MHz)', frame_row,
             horizontal_shift_speed_options, hss_value, label_padx)
 
@@ -429,7 +437,7 @@ class AndorSpectrometerController:
             # - Horizontal Shift
             # 'ad_channel': ad_channel_var,
             # 'output_amplifier': amp_var,
-            'horizontal_shift_speed': vertical_speed_var,
+            'horizontal_shift_speed': horizontal_speed_var,
             'pre_amp_gain': pre_amp_gain_var,
             # Temperature
             # - Set Point
@@ -459,3 +467,6 @@ class AndorSpectrometerController:
         for key in self.last_config_dict:
             print(key, ':', self.last_config_dict[key])
         print("-------------------------")
+
+    def __del__(self):
+        self.close()

@@ -6,7 +6,7 @@ from typing import List, Dict, Union, Set, Callable, Any, Tuple, Literal
 
 import numpy as np
 
-from datagenerators.spectrometers.spectrometer import SpectrometerConfig, SpectrometerDataAcquisition
+from qt3utils.datagenerators.spectrometers.spectrometer import SpectrometerConfig, SpectrometerDataAcquisition
 
 
 def prevent_none_set(func: Callable[[Any, Any], None]) -> Union[Callable[[Any, Any], None], None]:
@@ -62,9 +62,10 @@ class AndorAPI(object):
     """
 
     def __init__(self):
-        logging.basicConfig(level=logging.INFO)
         logger_name = self.__class__.__name__
-        self.logger = logging.getLogger(logger_name)
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(logging.DEBUG)
+        self.logger = logger
 
         self._ccd_import_succeeded, self._spg_import_succeeded = self._import_libraries()
         self._lock = threading.RLock()
@@ -159,7 +160,7 @@ class AndorAPI(object):
         if error_code == self.ccd_error_codes.DRV_SUCCESS:
             logger.debug(f"{task} was successful")
         else:
-            logger.warning(f"{task} failed with return code {repr(self.ccd_error_codes(error_code))}")
+            logger.warning(f"{task} failed with return code '{repr(self.ccd_error_codes(error_code))[1:-1]}'")
 
     def log_spg_response(self, task: str, error_code: int, logger: logging.Logger = None):
         if logger is None:
@@ -301,7 +302,7 @@ class GratingInfo:
     home: int = field(init=False)
     offset: int = field(init=False)
 
-    MAX_BLAZE_STRING_LENGTH: int = field(init=False, default=50)
+    MAX_BLAZE_STRING_LENGTH: int = field(init=False, default=50, repr=False, compare=False)
 
     def __post_init__(self):
         self._get_info()
@@ -403,7 +404,7 @@ class CCDInfo:
     number_of_pre_amp_gains: int = field(init=False)
     available_pre_amp_gains: List[float] = field(init=False)
 
-    MAX_PRE_AMP_GAIN_STRING_LENGTH: int = field(init=False, default=10)
+    MAX_PRE_AMP_GAIN_STRING_LENGTH: int = field(init=False, default=10, repr=False, compare=False)
 
     def __post_init__(self):
         self._get_number_of_pixels()
@@ -485,7 +486,7 @@ class CCDInfo:
 
             self.available_pre_amp_gains = [
                 _andor_api.ccd.GetPreAmpGain(i)[1]
-                for i in range(self.number_of_vertical_shift_speeds)
+                for i in range(self.number_of_pre_amp_gains)
             ]
 
 
@@ -566,11 +567,11 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     the tuple of supported modes before initializing the CCD.
     """
     SUPPORTED_ACQUISITION_MODES: Tuple[str, ...] = (
-            AcquisitionMode.SINGLE_SCAN.name,
-            AcquisitionMode.ACCUMULATE.name,
-            AcquisitionMode.KINETICS.name,
-            AcquisitionMode.RUN_TILL_ABORT.name
-        )
+        AcquisitionMode.SINGLE_SCAN.name,
+        AcquisitionMode.ACCUMULATE.name,
+        AcquisitionMode.KINETICS.name,
+        AcquisitionMode.RUN_TILL_ABORT.name
+    )
     """
     These modes represent all the acquisition modes this class supports right now. 
     If you want to limit the supported modes in your application, change 
@@ -602,7 +603,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     initialization, or the actual trigger mode value after initialization.
     """
 
-    DEFAULT_SINGLE_TRACK_READ_MODE_PARAMETERS = SingleTrackReadModeParameters(1, 256)
+    DEFAULT_SINGLE_TRACK_READ_MODE_PARAMETERS = SingleTrackReadModeParameters(128, 256)
     """
     There is no getter for single track read mode parameters in the Andor API,
     so we choose the default value. Feel free to change the default value
@@ -665,9 +666,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     The default output amplifier is first available amplifier.
     Some CCDs support multiples.
     """
-    DEFAULT_HORIZONTAL_SHIFT_SPEED_INDEX: int = 0
+    DEFAULT_HORIZONTAL_SHIFT_SPEED_INDEX: int = -1
     """
-    The default horizontal shift speed index is 0, which is the highest possible value.
+    The default horizontal shift speed index is -1, which is the lowest possible value.
     """
     DEFAULT_HORIZONTAL_BIN_SIZE: int = 1
     """
@@ -704,6 +705,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
         self._number_of_accumulations: int = self.DEFAULT_NUMBER_OF_ACCUMULATIONS
         self._number_of_kinetics: int = self.DEFAULT_NUMBER_OF_KINETICS
+        self._remove_cosmic_rays: Union[bool, None] = None
 
         self._horizontal_bin_size: int = self.DEFAULT_HORIZONTAL_BIN_SIZE
         self._keep_clean_on_external_trigger: bool = self.DEFAULT_KEEP_CLEAN_ON_EXTERNAL_TRIGGER
@@ -737,6 +739,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             self._open_ccd()
             self._open_spg()
 
+        self.horizontal_image_flip = self.input_port != self.output_port
+
     def _open_ccd(self):
         """
         Initializes the connection to the CCD and turns on the cooler.
@@ -755,8 +759,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             if not _andor_api.is_ccd_initialized():
-                # status = _andor_api.ccd.Initialize("")
-                # _andor_api.log_ccd_response('CCD initialization', status)
+                status = _andor_api.ccd.Initialize("")
+                _andor_api.log_ccd_response('CCD initialization', status)
                 status = _andor_api.ccd.CoolerON()
                 _andor_api.log_ccd_response('CCD cooler turn-on', status)
                 self.sensor_temperature_set_point = self.DEFAULT_SET_TEMPERATURE
@@ -776,8 +780,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             if not _andor_api.is_spg_initialized():
-                # status = _andor_api.spg.Initialize("")
-                # _andor_api.log_spg_response('Spectrograph initialization', status)
+                status = _andor_api.spg.Initialize("")
+                _andor_api.log_spg_response('Spectrograph initialization', status)
 
                 status, self._spg_number_of_devices = _andor_api.spg.GetNumberDevices()
                 _andor_api.log_spg_response('Getting number of spectrograph devices', status)
@@ -809,14 +813,32 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Terminates connection to the CCD.
 
-        Warnings
-        --------
-        The CCD cooler has to turn off to terminate the connection to the CCD.
+        Notes
+        -----
+        The CCD SDK ShutDown method has a bug if the AndorSDK is older
+        than AndorSDKSetup-2.104.30084.0. In that case, to
+        properly close the CCD, you need to use ShuDown once,
+        InitializeDevice and then ShutDown again.
+        The InitializeDevice method is not the same as Initialize,
+        and it does not actually initialize the device...
+
+        In the case you have an older AndorSDK version installed,
+        Change the definition of the_close_ccd method to:
+
+        >>> with _andor_api.lock:
+        ...     if _andor_api.is_ccd_initialized():
+        ...         status1 = _andor_api.ccd.ShutDown()
+        ...         status2 = _andor_api.ccd.InitializeDevice('')
+        ...         status3 = _andor_api.ccd.ShutDown()
+        ...         for i, status in enumerate([status1, status2, status3]):
+        ...             _andor_api.log_ccd_response(f'CCD shutdown (step {i + 1})', status)
+        ...     else:
+        ...         _andor_api.logger.warning('CCD is already closed')
         """
         with _andor_api.lock:
             if _andor_api.is_ccd_initialized():
                 status = _andor_api.ccd.ShutDown()
-                _andor_api.log_spg_response('CCD shutdown', status)
+                _andor_api.log_ccd_response(f'CCD shutdown', status)
             else:
                 _andor_api.logger.warning('CCD is already closed')
 
@@ -872,7 +894,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             was_initialized = _andor_api.is_ccd_initialized()
             if was_initialized:
                 self._close_ccd()
-                _andor_api.ccd.SetCurrentCamera(value)
+                _andor_api.ccd.SetCurrentCamera(_andor_api.ccd.GetCameraHandle(value)[1])
                 self._open_ccd()
         else:
             _andor_api.logger.warning(
@@ -959,7 +981,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             status, current_grating = _andor_api.spg.GetGrating(self.spg_device_index)
-        _andor_api.log_spg_response("Getting current grating", status)
+        _andor_api.log_spg_response("Getting current grating index", status)
         return current_grating
 
     @current_grating_index.setter
@@ -991,6 +1013,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Set the spectrometer grating.
         """
+        if value == self.current_grating:
+            return
+
         grating_list = self.grating_list
         if value not in grating_list:
             _andor_api.logger.warning(
@@ -1442,21 +1467,55 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     def remove_cosmic_rays(self) -> bool:
         """
         Returns whether the CCD is configured to remove cosmic rays in accumulation mode.
+
+        Since the Andor API does not like keeping the cosmic ray filter enabled while
+        on Sinlge Scan or Run Till Abort modes, we keep the user preferred value in a
+        local variable that we return.
         """
+        if self._remove_cosmic_rays is not None:
+            return self._remove_cosmic_rays
+
         with _andor_api.lock:
-            status, remove_cosmic_rays = _andor_api.ccd.GetFilterMode()
+            status, self._remove_cosmic_rays = _andor_api.ccd.GetFilterMode()
         _andor_api.log_ccd_response("Getting filter mode (cosmic ray removal)", status)
-        return bool(remove_cosmic_rays)
+        return bool(self._remove_cosmic_rays)
 
     @remove_cosmic_rays.setter
     @prevent_none_set
     def remove_cosmic_rays(self, value: bool):
         """
         Sets whether the CCD is configured to remove cosmic rays in accumulation mode.
+
+        Since the Andor API does not like keeping the cosmic ray filter enabled while
+        on Sinlge Scan or Run Till Abort modes, we keep the user preferred value in a
+        local variable that we return.
+        To double-down, we will make sure the filter is off if this property is called,
+        but only on the device end. We will not change the internal value, and when the
+        mode changes to something that supports accumulation, the filter will be turned
+        on automatically.
         """
+
         with _andor_api.lock:
+            allowed_modes = [
+                self.AcquisitionMode.ACCUMULATE.name,
+                self.AcquisitionMode.KINETICS.name,
+                self.AcquisitionMode.FAST_KINETICS.name
+            ]
+            if value and self.acquisition_mode not in allowed_modes:
+                _andor_api.logger.warning(f'Enabling cosmic ray filter is not allowed in {self.acquisition_mode}.')
+                self.temporarily_disable_cosmic_ray_filter()
+                return
+
             status = _andor_api.ccd.SetFilterMode(int(value) * 2)
         _andor_api.log_ccd_response("Setting filter mode (cosmic ray removal)", status)
+        if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+            self._remove_cosmic_rays = value
+
+    @staticmethod
+    def temporarily_disable_cosmic_ray_filter():
+        if _andor_api.ccd.GetFilterMode()[1]:
+            status = _andor_api.ccd.SetFilterMode(0)
+            _andor_api.log_ccd_response("Temporarily disabling filter mode (cosmic ray removal)", status)
 
     @property
     def baseline_clamp(self) -> bool:
@@ -1505,6 +1564,10 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         _andor_api.log_ccd_response("Setting acquisition mode", status)
         if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
             self._acquisition_mode = mode_name
+            if mode_name in [self.AcquisitionMode.SINGLE_SCAN.name, self.AcquisitionMode.RUN_TILL_ABORT.name]:
+                self.temporarily_disable_cosmic_ray_filter()
+            else:
+                self.remove_cosmic_rays = self._remove_cosmic_rays
 
     @property
     def read_mode(self) -> str:
@@ -1674,6 +1737,15 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         self.logger.error(error_message)
         raise NotImplementedError(error_message)
 
+    @property
+    def total_number_of_single_acquisitions_per_acquisition_cycle(self) -> int:
+        if self.acquisition_mode in [self.AcquisitionMode.SINGLE_SCAN.name, self.AcquisitionMode.RUN_TILL_ABORT.name]:
+            return 1
+        elif self.acquisition_mode in [self.AcquisitionMode.ACCUMULATE.name, self.AcquisitionMode.FAST_KINETICS.name]:
+            return self.number_of_accumulations
+        else:  # KINETICS
+            return self.number_of_accumulations * self.number_of_kinetics
+
     # TODO: for vertical voltage clock amplitudes: SetVSAmplitude, GetNumberVSAmplitudes, GetVSAmplitudeValue,
     #  GetVSAmplitudeFromString, GetVSAmplitudeString
 
@@ -1683,8 +1755,14 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         Returns the vertical shift speed of the CCD (units of microseconds).
         """
         if self._vertical_shift_speed_index == -1:
+            idx = self.ccd_info.fastest_recommended_vertical_shift_speed[0]
+        else:
+            idx = self._vertical_shift_speed_index
+
+        try:
+            return self.ccd_info.available_vertical_shift_speeds[idx]
+        except IndexError:
             return np.nan
-        return self.ccd_info.available_vertical_shift_speeds[self._vertical_shift_speed_index]
 
     @vertical_shift_speed.setter
     @prevent_none_set
@@ -1704,7 +1782,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         Returns the pre-amp gain of the CCD.
         """
-        if self._pre_amp_gain_index in self.ccd_info.available_pre_amp_gains:
+        if self._pre_amp_gain_index in range(self.ccd_info.number_of_pre_amp_gains):
             return self.ccd_info.available_pre_amp_gains[self._pre_amp_gain_index]
 
         return np.nan
@@ -1815,8 +1893,7 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         super().__init__(spectrometer_config)
         self.spectrometer_config: AndorSpectrometerConfig
 
-    @staticmethod
-    def _base_acquisition_method() -> bool:
+    def _base_acquisition_method(self) -> bool:
         """
         Base method that starts the acquisition and waits for it to finish.
         This method is used by all the acquisition methods.
@@ -1831,7 +1908,8 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         with _andor_api.lock:
             status = _andor_api.ccd.StartAcquisition()
             _andor_api.log_ccd_response("Starting acquisition", status)
-            status = _andor_api.ccd.WaitForAcquisition()
+            for _ in range(self.spectrometer_config.total_number_of_single_acquisitions_per_acquisition_cycle):
+                status = _andor_api.ccd.WaitForAcquisition()
             _andor_api.log_ccd_response("Waiting for acquisition", status)
 
         return status == _andor_api.ccd_error_codes.DRV_SUCCESS

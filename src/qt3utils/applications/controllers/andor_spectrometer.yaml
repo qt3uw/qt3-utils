@@ -42,20 +42,21 @@ QT3Scan:
       pre_amp_gain: null  # must be string - find other options in the drop-down menu on the GUI.
       # Temperature
       # - Set Point
-      target_sensor_temperature: -70
+      target_sensor_temperature: -65
       # - Cooler
       cooler_persistence: true  # or false - will keep the CCD cold even after the program ends, as long as Andor Solis does not open
 
 
+# Settings for ARS Cryostat
   PositionController:
     import_path : qt3utils.applications.controllers.nidaqpiezocontroller
     class_name  : QT3ScanNIDAQPositionController
     configure :
       daq_name : Dev1  # NI DAQ Device Name
       write_channels : ao0,ao1,ao2  # NI DAQ analog output channels to use for writing position
-      read_channels : ai0,ai1,ai2  # NI DAQ analog input channels to use for reading position
-      scale_microns_per_volt : 8  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
-      zero_microns_volt_offset: 0  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
-      minimum_allowed_position : 0  # microns
-      maximum_allowed_position : 80  # microns
+      read_channels : None  # NI DAQ analog input channels to use for reading position
+      scale_microns_per_volt : [4.2,6,10]  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
+      zero_microns_volt_offset: 5  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
+      minimum_allowed_position : -50  # microns
+      maximum_allowed_position : 50  # microns
       settling_time_in_seconds : 0.001
