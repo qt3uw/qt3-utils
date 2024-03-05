@@ -1,6 +1,7 @@
 import enum
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import List, Dict, Union, Set, Callable, Any, Tuple, Literal
 
@@ -203,7 +204,7 @@ class AndorAPI(object):
 
         Returns
         -------
-        pyAndorSDK2.atmcd_errors.Error_Codes()
+        pyAndorSDK2.atmcd_errors.Error_Codes
             The pyAndorSDK2.atmcd_errors.Error_Codes enumerator for the Andor API.
         """
         return self._ccd_error_codes
@@ -1315,6 +1316,30 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         return wavelengths
 
     @property
+    def cooler(self) -> bool:
+
+        """
+        Returns True if the CCD is currently being cooled.
+        """
+        with _andor_api.lock:
+            status, cooler_status = _andor_api.ccd.IsCoolerOn()
+        _andor_api.log_ccd_response("Getting CCD cooler state", status)
+        return bool(cooler_status)
+
+    @cooler.setter
+    @prevent_none_set
+    def cooler(self, value: bool):
+        """
+        Turns the CCD cooler on or off.
+        If the cooler is on, it will turn off when the CCD
+        shuts down.
+        """
+        set_cooler_state: Callable[[], int] = _andor_api.ccd.CoolerON if value else _andor_api.ccd.CoolerOFF
+        with _andor_api.lock:
+            status = set_cooler_state()
+        _andor_api.log_ccd_response("Setting CCD cooler state", status)
+
+    @property
     def cooler_persistence_mode(self) -> bool:
         """
         The cooler persistence mode.
@@ -1892,6 +1917,8 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         """
         super().__init__(spectrometer_config)
         self.spectrometer_config: AndorSpectrometerConfig
+        self._reach_temperature_before_acquisition = False
+        self.wait_for_temperature_flag = True
 
     def _base_acquisition_method(self) -> bool:
         """
@@ -1907,10 +1934,11 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         """
         with _andor_api.lock:
             status = _andor_api.ccd.StartAcquisition()
-            _andor_api.log_ccd_response("Starting acquisition", status)
+        _andor_api.log_ccd_response("Starting acquisition", status)
+        with _andor_api.lock:
             for _ in range(self.spectrometer_config.total_number_of_single_acquisitions_per_acquisition_cycle):
                 status = _andor_api.ccd.WaitForAcquisition()
-            _andor_api.log_ccd_response("Waiting for acquisition", status)
+                _andor_api.log_ccd_response("Waiting for acquisition", status)
 
         return status == _andor_api.ccd_error_codes.DRV_SUCCESS
 
@@ -1930,7 +1958,7 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         Tuple[np.ndarray, np.ndarray]
             The data array and the wavelengths corresponding to the data.
             Data array is filled with np.nan if no data were acquired
-            (e.g. acquisition was aborted).
+            (e.g., acquisition was aborted).
         """
         with _andor_api.lock:
             status, data = _andor_api.ccd.GetAcquiredData(data_size)
@@ -1969,9 +1997,79 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
     def stop_acquisition(self):
         """
         Stop the current acquisition.
-
-        Since the abort method will be used by a secondary thread,
-        we do not use the andor api lock in this method
         """
-        status = _andor_api.ccd.AbortAcquisition()
-        _andor_api.log_ccd_response("Aborting acquisition", status)
+        if _andor_api.ccd.GetStatus() == _andor_api.ccd_error_codes.DRV_ACQUIRING:
+            with _andor_api.lock:
+                status = _andor_api.ccd.AbortAcquisition()
+            _andor_api.log_ccd_response("Aborting acquisition", status)
+
+    @property
+    def reach_temperature_before_acquisition(self) -> bool:
+        """
+        Whether the controller should wait for the target temperature to be reached.
+        """
+        return self._reach_temperature_before_acquisition
+
+    @reach_temperature_before_acquisition.setter
+    @prevent_none_set
+    def reach_temperature_before_acquisition(self, value: bool):
+        """
+        If True, the controller will wait for the target temperature to be reached.
+        """
+        self._reach_temperature_before_acquisition = value
+
+    def wait_for_target_temperature_if_necessary(self):
+        """
+        Stay in this method until the target temperature is reached.
+
+        The wait-loop can be broken from another thread if the
+        `wait_for_temperature_flag` attribute is set to false.
+        """
+        if not self.reach_temperature_before_acquisition:
+            return
+
+        self.logger.info(f"Waiting for CCD to be cooled down to "
+                         f"{self.spectrometer_config.sensor_temperature_set_point} °C.")
+        self.wait_for_temperature_flag = True
+        acceptable_statuses = [
+            _andor_api.ccd_error_codes.DRV_TEMPERATURE_STABILIZED,  # stabilized
+            _andor_api.ccd_error_codes.DRV_TEMPERATURE_NOT_STABILIZED,  # reached but not stabilized
+            _andor_api.ccd_error_codes.DRV_TEMPERATURE_DRIFT,  # stabilized but drifted since
+        ]
+
+        while self.wait_for_temperature_flag:
+            with _andor_api.lock:
+                status, current_temperature = _andor_api.ccd.GetTemperatureF()
+
+            if status in acceptable_statuses:
+                self.logger.info(
+                    f'The current temperature is {current_temperature:.1f} °C. '
+                    f'The target temperature of {self.spectrometer_config.sensor_temperature_set_point} °C '
+                    f'is reached!'
+                )
+                self.wait_for_temperature_flag = False
+                return
+
+            self.logger.info(
+                f'The current temperature is {current_temperature:.1f} °C, '
+                f'while the target temperature is {self.spectrometer_config.sensor_temperature_set_point} °C.')
+            time.sleep(2)
+
+        self.logger.info(f'Waiting for CCD to be cooled down to '
+                         f'{self.spectrometer_config.sensor_temperature_set_point} °C is aborted.')
+
+    def stop_waiting_to_reach_temperature(self):
+        """
+        Stops waiting for the target temperature to be reached.
+        """
+        if self.wait_for_temperature_flag:
+            self.logger.info(f"Stopping waiting for CCD to be cooled down to "
+                             f"{self.spectrometer_config.sensor_temperature_set_point} °C.")
+            self.wait_for_temperature_flag = False
+
+    def close(self):
+        self.stop_acquisition()
+        self.stop_waiting_to_reach_temperature()
+
+    def __del__(self):
+        self.close()

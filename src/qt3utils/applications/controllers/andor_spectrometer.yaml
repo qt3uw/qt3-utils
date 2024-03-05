@@ -31,6 +31,7 @@ QT3Scan:
       # - Data-Pre-Processing
       baseline_clamp: true  # or false - will keep the electronic noise floor to the same level
       cosmic_ray_removal: true  # or false - in accumulation mode, will remove peaks that look like cosmic rays
+      keep_clean_on_external_trigger: true  # or false - when an external trigger is used, keeps the CCD free of counts
       # - Single Track Setup
       single_track_center_row: null  # number in [1, 256]
       single_track_height: null  # number that does not exceed the above limits if added or subtracted to the center
@@ -42,8 +43,10 @@ QT3Scan:
       pre_amp_gain: null  # must be string - find other options in the drop-down menu on the GUI.
       # Temperature
       # - Set Point
-      target_sensor_temperature: -65
+      target_sensor_temperature: -65  # in deg C
+      reach_temperature_before_acquisition: true  # or false - Will wait until the target temperature is reached if true
       # - Cooler
+      cooler: true  # or false - will turn CCD cooler on if true
       cooler_persistence: true  # or false - will keep the CCD cold even after the program ends, as long as Andor Solis does not open
 
 

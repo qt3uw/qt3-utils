@@ -52,17 +52,22 @@ class AndorSpectrometerController:
         Nothing to be done in this method. All acquisitions are happening in the "sample_spectrum" method.
         """
         self.logger.debug('Starting controller.')
+        self.spectrometer_daq.wait_for_target_temperature_if_necessary()
 
     def stop(self) -> None:
         """
         Stopping data acquisition.
+
+        We do not abort the acquisition because when stop is
+        used, the scan will complete the row it is currently scanning.
+        We only need to abort acquisition when the controller closes.
         """
-        self.spectrometer_daq.stop_acquisition()
         self.logger.debug('Stopping controller.')
+        self.spectrometer_daq.stop_waiting_to_reach_temperature()
 
     def close(self) -> None:
+        self.spectrometer_daq.close()
         self.spectrometer_config.close()
-        pass
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
         self.logger.debug('Sampling Spectrum')
@@ -125,6 +130,8 @@ class AndorSpectrometerController:
             'baseline_clamp', self.spectrometer_config.baseline_clamp)
         self.spectrometer_config.remove_cosmic_rays = config_dict.get(
             'cosmic_ray_removal', self.spectrometer_config.remove_cosmic_rays)
+        self.spectrometer_config.keep_clean_on_external_trigger = config_dict.get(
+            'keep_clean_on_external_trigger', self.spectrometer_config.keep_clean_on_external_trigger)
         # -------------------------------
         single_track_center_row = config_dict.get(
             'single_track_center_row', self.spectrometer_config.single_track_read_mode_parameters.track_center_row)
@@ -161,6 +168,11 @@ class AndorSpectrometerController:
         # Temperature Settings
         self.spectrometer_config.sensor_temperature_set_point = config_dict.get(
             'target_sensor_temperature', self.spectrometer_config.sensor_temperature_set_point)
+        self.spectrometer_daq.reach_temperature_before_acquisition = config_dict.get(
+            'reach_temperature_before_acquisition', self.spectrometer_daq.reach_temperature_before_acquisition)
+        # -------------------------------
+        self.spectrometer_config.cooler = config_dict.get(
+            'cooler', self.spectrometer_config.cooler)
         self.spectrometer_config.cooler_persistence_mode = config_dict.get(
             'cooler_persistence', self.spectrometer_config.cooler_persistence_mode)
 
@@ -309,6 +321,11 @@ class AndorSpectrometerController:
             data_pre_processing_frame, 'Cosmic Ray Removal', frame_row,
             self.spectrometer_config.remove_cosmic_rays, label_padx)
 
+        frame_row += 1
+        _, _, keep_clean_on_external_trigger_var = make_label_and_check_button(
+            data_pre_processing_frame, 'Keep Cleanon Ext. Trigger', frame_row,
+            self.spectrometer_config.keep_clean_on_external_trigger, label_padx)
+
         row += 1
         single_track_mode_frame = make_label_frame(acquisition_tab, 'Single Track Setup', row)
 
@@ -387,13 +404,23 @@ class AndorSpectrometerController:
 
         frame_row = 0
         _, _, target_sensor_temperature_var = make_label_and_entry(
-            temperature_set_point_frame, 'Target Temperature (°C)', frame_row,
+            temperature_set_point_frame, 'Temperature (°C)', frame_row,
             self.spectrometer_config.sensor_temperature_set_point, tk.IntVar, label_padx)
+
+        frame_row += 1
+        _, _, reach_temperature_before_acq_var = make_label_and_check_button(
+            temperature_set_point_frame, 'Reach before Acquisition', frame_row,
+            self.spectrometer_daq.reach_temperature_before_acquisition, label_padx)
 
         row += 1
         cooler_frame = make_label_frame(temperature_tab, 'Cooler', row)
 
         frame_row = 0
+        _, _, is_cooling_var = make_label_and_check_button(
+            cooler_frame, 'Cooling', frame_row,
+            self.spectrometer_config.cooler, label_padx)
+
+        frame_row += 1
         _, _, cooler_persistence_var = make_label_and_check_button(
             cooler_frame, 'Persistent Cooling', frame_row,
             self.spectrometer_config.cooler_persistence_mode, label_padx)
@@ -428,6 +455,7 @@ class AndorSpectrometerController:
             # - Data-Pre-Processing
             'baseline_clamp': baseline_clamp_var,
             'cosmic_ray_removal': cosmic_ray_removal_var,
+            'keep_clean_on_external_trigger': keep_clean_on_external_trigger_var,
             # - Single Track Setup
             'single_track_center_row': single_track_center_row_var,
             'single_track_height': single_track_height_var,
@@ -442,7 +470,9 @@ class AndorSpectrometerController:
             # Temperature
             # - Set Point
             'target_sensor_temperature': target_sensor_temperature_var,
+            'reach_temperature_before_acquisition':  reach_temperature_before_acq_var,
             # - Cooler
+            'cooler': is_cooling_var,
             'cooler_persistence': cooler_persistence_var,
         }
 
