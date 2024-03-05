@@ -1,11 +1,14 @@
+import threading
 import tkinter as tk
 from tkinter import ttk
-from typing import Any, List, Tuple, Type, Union, Literal, Sequence
+from typing import Any, List, Tuple, Type, Union, Literal, Sequence, Callable
 
 _DEFAULT_PADX = 10
 _DEFAULT_WIDGET_WIDTH = 10
 _DEFAULT_COLUMN_1_SIZE = 180
 _DEFAULT_COLUMN_2_SIZE = 140
+_DEFAULT_POPUP_WINDOW_WIDTH = 300
+_DEFAULT_POPUP_WINDOW_HEIGHT = 100
 
 
 def make_tab_view(
@@ -302,3 +305,59 @@ def prepare_list_for_option_menu(list_to_prepare: Sequence[Any], filler_value: s
         The prepared list.
     """
     return [str(element) for element in list_to_prepare] if len(list_to_prepare) > 0 else [filler_value]
+
+
+def make_popup_window_and_take_threaded_action(
+        parent: Union[tk.Toplevel, ttk.Widget, ttk.Frame],
+        title: str,
+        message: str,
+        action: Callable[[], None],
+        width: int = _DEFAULT_POPUP_WINDOW_WIDTH,
+        height: int = _DEFAULT_POPUP_WINDOW_HEIGHT,
+) -> threading.Thread:
+    """
+    This helper method creates a popup window with a message,
+    and takes a threaded action within the popup window.
+    The popup window will be destroyed after the action is
+    completed.
+
+    Parameters
+    ----------
+    parent: Union[tk.Toplevel, ttk.Widget]
+        The parent window the popup window will be inserted in.
+    title: str
+        The title of the popup window.
+    message: str
+        The message of the popup window.
+    action: Callable[[], None]
+        The method to call within the thread.
+    width: int
+        The width of the popup window. Default is 300.
+    height: int
+        The height of the popup window. Default is 100.
+
+    Returns
+    -------
+    threading.Thread
+        The running thread
+    """
+    popup_window = tk.Toplevel(parent)
+    popup_window.wait_visibility()
+    popup_window.attributes('-disabled', True)  # disables interaction with everything in the GUI
+    popup_window.title(title)
+    x = parent.winfo_x() + parent.winfo_width() // 2 - parent.winfo_width() // 2
+    y = parent.winfo_y() + parent.winfo_height() // 2 - parent.winfo_height() // 2
+    popup_window.geometry(f'{width}x{height}+{x}+{y}')
+    popup_window.resizable(False, False)
+
+    message_label = ttk.Label(popup_window, text=message)
+    message_label.pack(expand=True)
+
+    def thread_target():
+        action()
+        popup_window.destroy()
+
+    thread = threading.Thread(target=thread_target)
+    thread.start()
+
+    return thread

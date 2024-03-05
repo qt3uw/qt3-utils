@@ -1,7 +1,7 @@
 import logging
 import tkinter as tk
 from tkinter import ttk
-from typing import Tuple
+from typing import Tuple, Dict, Type
 
 import numpy as np
 
@@ -12,6 +12,7 @@ from qt3utils.applications.controllers.utils import (
     make_label_and_check_button,
     make_label_frame,
     make_tab_view,
+    make_popup_window_and_take_threaded_action,
     prepare_list_for_option_menu,
 )
 
@@ -477,10 +478,30 @@ class AndorSpectrometerController:
         }
 
         row = 1
-        ttk.Button(config_win, text='Set', command=lambda: self._set_from_gui(gui_info)).grid(row=row, column=0, pady=5)
+        set_button = ttk.Button(config_win, text='Set', command=lambda: self._on_set_click(gui_info, config_win))
+        set_button.grid(row=row, column=0, pady=5)
+
         ttk.Button(config_win, text='Close', command=config_win.destroy).grid(row=row, column=1, pady=5)
 
         tab_view.select(2)
+
+    def _on_set_click(self, gui_info: Dict[str, Type[tk.Variable]], config_win: tk.Toplevel):
+        """
+        Sets the new spectrometer configuration in a thread,
+        while the main window is disabled showing a waiting
+        message in a popup window.
+
+        Notes
+        -----
+        Changing configuration in a spectrometer may take
+        a while because a lot of its components are moving
+        parts that take time to be set.
+        Using a popup window in this manner prevents the GUI
+        from freezing.
+        """
+        title = 'Loading...'
+        message = 'Loading the new spectrometer configuration.\nPlease wait...'
+        make_popup_window_and_take_threaded_action(config_win, title, message, lambda: self._set_from_gui(gui_info))
 
     def _set_from_gui(self, gui_vars: dict) -> None:
         """
