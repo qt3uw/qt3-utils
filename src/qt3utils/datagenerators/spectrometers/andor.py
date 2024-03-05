@@ -1,3 +1,31 @@
+"""
+This module implements three main classes: AndorAPI,
+AndorSpectrometerConfig, and AndorSpectrometerDataAcquisition.
+To use this module, pyAndorSDK2 and pyAndorSpectrograph
+must be installed in the working environment.
+They can be found on the AndorSDK2 package (version 2.104 and up)
+which can be downloaded by paid customers on their website.
+
+The AndorAPI should be seen and used as a singleton module
+(`_andor_api`) that provides a link between the devices (CCD
+and spectrograph) and the software.
+The AndorSpectrometerConfig class is used to configure the various
+device settings prior to acquisition.
+The AndorSpectrometerDataAcquisition class is used to provide methods
+for handling data acquisition with the CCD in various acquisition modes.
+It does not explicitly control data acquisition for a given applicaiton.
+For that, the user needs to create a controller.
+
+To implement the spectrometer for a given application, both
+classes must be instansiated once:
+
+>>> spm_cfg = AndorSpectrometerConfig()
+... spm_daq = AndorSpectrometerDataAcquisition(spm_cfg)
+
+See the AndorSpectrometerController as an example of how to
+implement a spectrometer for a given application.
+"""
+
 import enum
 import logging
 import threading
@@ -1948,7 +1976,7 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         super().__init__(spectrometer_config)
         self.spectrometer_config: AndorSpectrometerConfig
         self._reach_temperature_before_acquisition = False
-        self.wait_for_temperature_flag = True
+        self.wait_for_temperature_flag = False
 
     def _base_acquisition_method(self) -> bool:
         """
