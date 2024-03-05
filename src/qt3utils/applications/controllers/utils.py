@@ -298,7 +298,6 @@ def prepare_list_for_option_menu(list_to_prepare: Sequence[Any], filler_value: s
     filler_value: str
         This value will be added to the returned list if the list is empty.
 
-
     Returns
     -------
     List[str]
@@ -308,7 +307,7 @@ def prepare_list_for_option_menu(list_to_prepare: Sequence[Any], filler_value: s
 
 
 def make_popup_window_and_take_threaded_action(
-        parent: Union[tk.Toplevel, ttk.Widget, ttk.Frame],
+        parent: Union[tk.Toplevel, ttk.Widget, ttk.Frame, tk.Tk, None],
         title: str,
         message: str,
         action: Callable[[], None],
@@ -341,13 +340,16 @@ def make_popup_window_and_take_threaded_action(
     threading.Thread
         The running thread
     """
-    popup_window = tk.Toplevel(parent)
-    popup_window.wait_visibility()
-    popup_window.attributes('-disabled', True)  # disables interaction with everything in the GUI
+    popup_window = tk.Toplevel(parent, )
+    popup_window.attributes('-disabled', True)  # disables interaction with everything in the popup
+    popup_window.grab_set()  # prevents other windows from being accessed while the popup window is open
     popup_window.title(title)
-    x = parent.winfo_x() + parent.winfo_width() // 2 - parent.winfo_width() // 2
-    y = parent.winfo_y() + parent.winfo_height() // 2 - parent.winfo_height() // 2
-    popup_window.geometry(f'{width}x{height}+{x}+{y}')
+    if parent is not None:
+        x = parent.winfo_x() + parent.winfo_width() // 2 - width // 2
+        y = parent.winfo_y() + parent.winfo_height() // 2 - height // 2
+        popup_window.geometry(f'{width}x{height}+{x}+{y}')
+    else:
+        popup_window.geometry(f'{width}x{height}')
     popup_window.resizable(False, False)
 
     message_label = ttk.Label(popup_window, text=message)

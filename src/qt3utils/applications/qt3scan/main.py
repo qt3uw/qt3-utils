@@ -25,6 +25,7 @@ from qt3utils.applications.qt3scan.controller import (
     QT3ScanConfocalApplicationController,
     QT3ScanHyperSpectralApplicationController
 )
+from qt3utils.applications.controllers.utils import make_popup_window_and_take_threaded_action
 
 matplotlib.use('Agg')
 
@@ -520,11 +521,23 @@ class MainTkApplication():
         Loads the default yaml configuration file for the application controller.
 
         Should be called during instantiation of this class and should be the callback
-        function for the support controller pull-down menu in the side panel
+        function for the support controller pull-down menu in the side panel.
+
+        When called from the pull-down menu, a popup window opens to prevent GUI freezes
+        due to long connection times to the devices (e.g., for spectrometers).
         """
         logger.info(f"loading {application_controller_name}")
         config = self._open_yaml_config_for_controller(application_controller_name)
-        self._build_controllers_from_config_dict(config, application_controller_name)
+
+        if hasattr(self, 'application_controller'):  # if this is not the first initialization
+            make_popup_window_and_take_threaded_action(  # handles potential GUI freezes
+                self.root_window,
+                f'Connecting...',
+                f'Connecting to {application_controller_name}. Please wait...',
+                lambda: self._build_controllers_from_config_dict(config, application_controller_name)
+            )
+        else:  # There is no GUI, so there is no fear
+            self._build_controllers_from_config_dict(config, application_controller_name)
 
     def _build_controllers_from_config_dict(self, config: dict, controller_name: str) -> None:
 
