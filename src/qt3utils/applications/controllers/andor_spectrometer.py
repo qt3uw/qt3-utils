@@ -501,6 +501,7 @@ class AndorSpectrometerController:
         """
         title = 'Loading...'
         message = 'Loading the new spectrometer configuration.\nPlease wait...'
+        self.logger.info(f'Setting new spectrometer configuration in a thread.')
         make_popup_window_and_take_threaded_action(config_win, title, message, lambda: self._set_from_gui(gui_info))
 
     def _set_from_gui(self, gui_vars: dict) -> None:
