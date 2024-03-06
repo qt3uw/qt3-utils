@@ -1,4 +1,6 @@
 import logging
+import threading
+import time
 import tkinter as tk
 from tkinter import ttk
 from typing import Tuple, Dict, Type
@@ -20,7 +22,7 @@ from qt3utils.applications.controllers.utils import (
 class AndorSpectrometerController:
 
     def __init__(self, logger_level: int):
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger('Andor Spectrometer Controller')
         self.logger.setLevel(logger_level)
 
         self.spectrometer_config = andor.AndorSpectrometerConfig()
@@ -32,8 +34,6 @@ class AndorSpectrometerController:
             self.spectrometer_config.AcquisitionMode.KINETICS.name,
         )
         self.spectrometer_daq = andor.AndorSpectrometerDataAcquisition(self.spectrometer_config)
-
-        self.spectrometer_config.open()
 
         self.last_config_dict = {}
 
@@ -50,27 +50,111 @@ class AndorSpectrometerController:
 
     def start(self) -> None:
         """
-        Nothing to be done in this method. All acquisitions are happening in the "sample_spectrum" method.
+        This method is run by the Application's DAQ controller
+        once before the actual acquisition sequence begins.
+        For this Spectrometer controller, we decide that the
+        connection should only be established during scans and
+        updating settings.
+        Hence, we connect to the spectrometer, and wait until
+        the target temperature is reached (if the setting is on).
+
+        Raises
+        ------
+        RuntimeError
+            If the connection to the spectrometer fails.
+            This is not a fatal error since the scanning thread will catch it,
+            hence preventing the acquisition sequence from starting.
         """
-        self.logger.debug('Starting controller.')
+        self.logger.info('Starting controller.')
+        self.open()
+        if not self.spectrometer_config.is_open:
+            raise RuntimeError('Failed to connect to Andor Spectrometer.')
         self.spectrometer_daq.wait_for_target_temperature_if_necessary()
 
     def stop(self) -> None:
         """
-        Stopping data acquisition.
+        This method runs at the end of the acquisition sequence loop
+        on the Application's DAQ controller.
 
-        We do not abort the acquisition because when stop is
-        used, the scan will complete the row it is currently scanning.
-        We only need to abort acquisition when the controller closes.
+        We do not abort the acquisition because when stop is on the
+        Application's DAQ controller, it will change the `self.running`
+        parameter to False but will keep taking data until the
+        currently scanned row finishes.
+        So, we only need to abort acquisition when the controller closes,
+        in case it closes abruptly.
         """
-        self.logger.debug('Stopping controller.')
+        self.logger.info('Stopping controller.')
         self.spectrometer_daq.stop_waiting_to_reach_temperature()
+        self.close()
 
-    def close(self) -> None:
+    def open(self) -> bool:
+        """
+        Attempts to establish a connection to the spectrometer.
+
+        The device will not save its settings when it closes,
+        so every time we open the connection, we should load
+        the previous configuration settings.
+
+        If this method is called
+
+        Returns
+        -------
+        bool
+            True if the connection was successful, False otherwise.
+        """
+        self.logger.info('Opening Andor Spectrometer')
+        self.spectrometer_config.open()
+        connection_status: bool = self.spectrometer_config.is_open
+        if connection_status:
+            self.logger.info('Opening Andor Spectrometer was successful.')
+            if self.last_config_dict:
+                self.configure(self.last_config_dict, attempt_connection=False)
+            self.logger.info('Latest configuration settings were set.')
+        else:
+            self.logger.info('Opening Andor Spectrometer failed.')
+        return connection_status
+
+    def close(self) -> bool:
+        """
+        Attempts to close the connection to the spectrometer.
+
+        Returns
+        -------
+        bool
+            True if the disconnection was successful, False otherwise.
+        """
+        if not self.spectrometer_config.is_open:
+            self.logger.info('Andor Spectrometer is already closed.')
+            return True
+        self.logger.info('Closing Andor Spectrometer')
         self.spectrometer_daq.close()
         self.spectrometer_config.close()
+        connection_status: bool = not self.spectrometer_config.is_open
+        if connection_status:
+            self.logger.info('Closing Andor Spectrometer was successful.')
+        else:
+            self.logger.info('Closing Andor Spectrometer failed.')
+        return connection_status
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        This method is used in the Application's DAQ controller
+        to collect a single batch of data.
+
+        The data is collected from the spectrometer DAQ, and the
+        wavelengths are calculated from the spectrometer's
+        wavelength calibration.
+        When acquiring single and accumulation mode scans, the
+        data and wavelengths have the same shape.
+        If kinetic series mode is used, the data have an extra
+        dimension for each acquired spectrum in the series.
+        Wavelengths are pixel and wavelength offset-corrected.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray]
+            A tuple containing the measured spectrum and the wavelength array.
+        """
         self.logger.debug('Sampling Spectrum')
         acq_mode = self.spectrometer_config.acquisition_mode
         if acq_mode == self.spectrometer_config.AcquisitionMode.SINGLE_SCAN.name:
@@ -80,12 +164,52 @@ class AndorSpectrometerController:
         elif acq_mode == self.spectrometer_config.AcquisitionMode.KINETICS.name:
             return self.spectrometer_daq.acquire('kinetic series')
 
-    def configure(self, config_dict: dict) -> None:
+    def configure(self, config_dict: dict, attempt_connection: bool = True) -> None:
         """
-        This method is used to configure the spectrometer with the provided settings.
+        Configures the spectrometer with the provided settings.
+
+        This method is used for two main reasons.
+        The first is to set the initial yaml file configurations loaded
+        through the Application's DAQ controller as a dictionary.
+        The second is to set the spectrometer settings after the
+        spectrometer controller class has been instantiated.
+
+        During the first instantiation, the last_config_dict will be empty,
+        and the spectrometer will not be connected, so we need to connect
+        it first.
+        Afterward, a disconnected spectrometer means there is a
+        connection error, since the spectrometer is connected in the
+        config window realization (see `configure_view` method below).
+
+        Parameters
+        ----------
+        config_dict: dict
+            A dictionary containing the configuration settings.
+        attempt_connection: bool
+            Will attempt to connect to the spectrometer and then disconnect.
+            This is useful for when the configuration is set in the
+            Application's DAQ controller.
+            Default is True.
         """
+        self.logger.setLevel(logging.DEBUG)
         self.logger.debug("Calling configure on the Andor spectrometer controller")
-        self.last_config_dict.update(config_dict)
+
+        if not self.last_config_dict:  # Expected to run during the first instantiation.
+            self.logger.debug("First instantiation of the Andor Spectrometer controller. "
+                              "Establishing connection now...")
+            self.open()
+        elif attempt_connection:
+            self.logger.debug("Subsequent call for configuration outside of configuration GUI. "
+                              "Establishing connection now...")
+            self.open()
+
+        self.last_config_dict.update(config_dict)  # storing the input either way!
+
+        # The spectrometer should already be open at this point, even
+        # if this method is accessed via the set button of the config window.
+        if not self.spectrometer_config.is_open:
+            self.logger.error("Spectrometer is not open. Cannot configure.")
+            return
 
         # Device Settings
         ccd_value = config_dict.get('ccd_device_index', self.spectrometer_config.ccd_device_index)
@@ -148,11 +272,6 @@ class AndorSpectrometerController:
             vss_value = float(vss_value)
         self.spectrometer_config.vertical_shift_speed = vss_value
 
-        # self.spectrometer_config.ad_channel = config_dict.get(
-        #     'ad_channel', int(self.spectrometer_config.ad_channel))
-        # self.spectrometer_config.output_amplifier = config_dict.get(
-        #     'output_amplifier', int(self.spectrometer_config.output_amplifier))
-
         default_hss = str((
             self.spectrometer_config.ad_channel,
             self.spectrometer_config.output_amplifier,
@@ -177,10 +296,44 @@ class AndorSpectrometerController:
         self.spectrometer_config.cooler_persistence_mode = config_dict.get(
             'cooler_persistence', self.spectrometer_config.cooler_persistence_mode)
 
+        if attempt_connection:
+            self.close()
+
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """
-        This method launches a GUI window to configure the data controller.
+        Launch a window to configure the spectrometer after its
+        first instantiation.
+
+        Parameters
+        ----------
+        gui_root : tk.Toplevel
+            The root window of the GUI.
+            This is used to create the new window as a child widget.
         """
+        if not self.spectrometer_config.is_open:
+            self.logger.info("Spectrometer is not open. Opening it.")
+            title = 'Connecting...'
+            message = 'Connecting to Andor spectrometer. Please wait...'
+            # Wait for spectrometer initialization in a thread.
+            # This will allow us to block the main GUI with a pop-up
+            # window in the meantime - and helps prevent GUI freezes.
+
+            thread_finished_event = threading.Event()
+            make_popup_window_and_take_threaded_action(
+                gui_root, title, message, self.open, end_event=thread_finished_event)
+
+            time_start = time.time()
+            while not thread_finished_event.is_set() and time.time() - time_start < 30:
+                time.sleep(0.1)
+            if not self.spectrometer_config.is_open:
+                if not thread_finished_event.is_set():
+                    self.logger.error("Opening the spectrometer in a thread took too long. "
+                                      "Aborting configuration window creation.")
+                else:
+                    self.logger.error("Failed to connect to spectrometer. "
+                                      "Aborting configuration window creation.")
+                return
+
         config_win = tk.Toplevel(gui_root)
         config_win.grab_set()
         config_win.title('Andor Spectrometer Settings')
@@ -358,24 +511,6 @@ class AndorSpectrometerController:
         horizontal_shift_frame = make_label_frame(electronics_tab, 'Horizontal Shift', row)
 
         frame_row = 0
-        # ad_channel_list = prepare_list_for_option_menu(
-        #     range(self.spectrometer_config.ccd_info.number_of_ad_channels))
-        # ad_value = str(self.spectrometer_config.ad_channel)
-        # ad_value = ad_value if ad_value in ad_channel_list else 'None'
-        # _, _, ad_channel_var = make_label_and_option_menu(
-        #     horizontal_shift_frame, 'A/D Channel', frame_row,
-        #     ad_channel_list, ad_value, label_padx)
-        #
-        # frame_row += 1
-        # amp_channel_list = prepare_list_for_option_menu(
-        #     range(self.spectrometer_config.ccd_info.number_of_output_amplifiers))
-        # amp_value = str(self.spectrometer_config.output_amplifier)
-        # amp_value = amp_value if amp_value in amp_channel_list else 'None'
-        # _, _, amp_var = make_label_and_option_menu(
-        #     horizontal_shift_frame, 'Output Amplifier', frame_row,
-        #     amp_channel_list, amp_value, label_padx)
-
-        frame_row += 1
         hss_list = [(ad, amp, hss)
                     for ad, amp in self.spectrometer_config.ccd_info.available_horizontal_shift_speeds
                     for hss in self.spectrometer_config.ccd_info.available_horizontal_shift_speeds[(ad, amp)]]
@@ -464,8 +599,6 @@ class AndorSpectrometerController:
             # - Vertical Shift
             'vertical_shift_speed': vertical_speed_var,
             # - Horizontal Shift
-            # 'ad_channel': ad_channel_var,
-            # 'output_amplifier': amp_var,
             'horizontal_shift_speed': horizontal_speed_var,
             'pre_amp_gain': pre_amp_gain_var,
             # Temperature
@@ -481,9 +614,32 @@ class AndorSpectrometerController:
         set_button = ttk.Button(config_win, text='Set', command=lambda: self._on_set_click(gui_info, config_win))
         set_button.grid(row=row, column=0, pady=5)
 
-        ttk.Button(config_win, text='Close', command=config_win.destroy).grid(row=row, column=1, pady=5)
+        close_button = ttk.Button(config_win, text='Close', command=lambda: self._on_close_click(config_win))
+        close_button.grid(row=row, column=1, pady=5)
 
         tab_view.select(2)
+
+        # Setting window geometry, so that it opens in the middle of the parent application
+        config_win.update_idletasks()
+        width = config_win.winfo_reqwidth()
+        height = config_win.winfo_reqheight()
+        x = gui_root.winfo_x() + gui_root.winfo_width() // 2 - width // 2
+        y = gui_root.winfo_y() + gui_root.winfo_height() // 2 - height // 2
+        config_win.geometry(f'{width}x{height}+{x}+{y}')
+
+    def _on_close_click(self, config_win: tk.Toplevel):
+        """
+        Closes the configuration window and closes the connection
+        to the spectrometer.
+
+        Parameters
+        ----------
+        config_win: tk.Toplevel
+            The configuration window
+        """
+        self.logger.debug('Closing configuration window.')
+        self.close()
+        config_win.destroy()
 
     def _on_set_click(self, gui_info: Dict[str, Type[tk.Variable]], config_win: tk.Toplevel):
         """
@@ -506,14 +662,25 @@ class AndorSpectrometerController:
 
     def _set_from_gui(self, gui_vars: dict) -> None:
         """
-        Sets the spectrometer configuration from the GUI.
+        Sets the new spectrometer configuration from the
+        configuration window variables.
+
+        Parameters
+        ----------
+        gui_vars: dict
+            A dictionary with keys the same as the ones appearing
+            in the YAML configuration file, and `tk.Variable`s pointing
+            to the corresponding spectrometer parameter.
         """
-        config_dict = {k: v.get() if v.get() not in ['None', ''] else None for k, v in
-                       gui_vars.items()}  # code to handle the edge case where there are "None" value
+        config_dict = {k: v.get() if v.get() not in ['None', ''] else None
+                       for k, v in gui_vars.items()}  # code to handle the edge case where there are "None" values
         self.logger.info(config_dict)
-        self.configure(config_dict)
+        self.configure(config_dict, attempt_connection=False)
 
     def print_config(self) -> None:
+        """
+        Prints the current spectrometer configuration to the console.
+        """
         print("Andor spectrometer config")
         print("-------------------------")
         for key in self.last_config_dict:

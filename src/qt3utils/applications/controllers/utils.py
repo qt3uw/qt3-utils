@@ -310,9 +310,10 @@ def make_popup_window_and_take_threaded_action(
         parent: Union[tk.Toplevel, ttk.Widget, ttk.Frame, tk.Tk, None],
         title: str,
         message: str,
-        action: Callable[[], None],
+        action: Callable[[], Any],
         width: int = _DEFAULT_POPUP_WINDOW_WIDTH,
         height: int = _DEFAULT_POPUP_WINDOW_HEIGHT,
+        end_event: threading.Event = None,
 ) -> threading.Thread:
     """
     This helper method creates a popup window with a message,
@@ -344,6 +345,10 @@ def make_popup_window_and_take_threaded_action(
     popup_window.attributes('-disabled', True)  # disables interaction with everything in the popup
     popup_window.grab_set()  # prevents other windows from being accessed while the popup window is open
     popup_window.title(title)
+
+    message_label = ttk.Label(popup_window, text=message)
+    message_label.pack(expand=True)
+
     if parent is not None:
         x = parent.winfo_x() + parent.winfo_width() // 2 - width // 2
         y = parent.winfo_y() + parent.winfo_height() // 2 - height // 2
@@ -352,14 +357,15 @@ def make_popup_window_and_take_threaded_action(
         popup_window.geometry(f'{width}x{height}')
     popup_window.resizable(False, False)
 
-    message_label = ttk.Label(popup_window, text=message)
-    message_label.pack(expand=True)
-
     def thread_target():
         action()
+        if end_event:
+            end_event.set()
         popup_window.destroy()
 
     thread = threading.Thread(target=thread_target)
     thread.start()
+
+    popup_window.update()
 
     return thread

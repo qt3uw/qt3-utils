@@ -768,7 +768,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             self._open_ccd()
             self._open_spg()
 
-        self.horizontal_image_flip = self.input_port != self.output_port
+        if self.is_open:
+            self.horizontal_image_flip = self.input_port != self.output_port
 
     def _open_ccd(self):
         """
@@ -790,13 +791,17 @@ class AndorSpectrometerConfig(SpectrometerConfig):
             if not _andor_api.is_ccd_initialized():
                 status = _andor_api.ccd.Initialize("")
                 _andor_api.log_ccd_response('CCD initialization', status)
-                status = _andor_api.ccd.CoolerON()
-                _andor_api.log_ccd_response('CCD cooler turn-on', status)
-                self.sensor_temperature_set_point = self.DEFAULT_SET_TEMPERATURE
-                self.cooler_persistence_mode = self._cooler_persistence_mode
+                if status == _andor_api.ccd_error_codes.DRV_SUCCESS:
+                    status = _andor_api.ccd.CoolerON()
+                    _andor_api.log_ccd_response('CCD cooler turn-on', status)
+                    self.sensor_temperature_set_point = self.DEFAULT_SET_TEMPERATURE
+                    self.cooler_persistence_mode = self._cooler_persistence_mode
+                else:
+                    return
             else:
                 _andor_api.logger.debug('CCD is already initialized.')
 
+            self.logger.debug('Setting CCDInfo...')
             self._ccd_info = CCDInfo(self.ccd_device_index)
 
     def _open_spg(self):
@@ -812,18 +817,27 @@ class AndorSpectrometerConfig(SpectrometerConfig):
                 status = _andor_api.spg.Initialize("")
                 _andor_api.log_spg_response('Spectrograph initialization', status)
 
-                status, self._spg_number_of_devices = _andor_api.spg.GetNumberDevices()
-                _andor_api.log_spg_response('Getting number of spectrograph devices', status)
+                if status == _andor_api.spg.ATSPECTROGRAPH_SUCCESS:
+                    status, self._spg_number_of_devices = _andor_api.spg.GetNumberDevices()
+                    _andor_api.log_spg_response('Getting number of spectrograph devices', status)
 
-                status = _andor_api.spg.SetPixelWidth(self.spg_device_index, self.ccd_info.pixel_width)
-                _andor_api.log_spg_response('Setting spectrograph pixel width', status)
+                    if self._spg_number_of_devices > 0:
+                        status = _andor_api.spg.SetPixelWidth(self.spg_device_index, self.ccd_info.pixel_width)
+                        _andor_api.log_spg_response('Setting spectrograph pixel width', status)
 
-                status = _andor_api.spg.SetNumberPixels(
-                    self.spg_device_index, self.ccd_info.number_of_pixels_horizontally)
-                _andor_api.log_spg_response('Setting spectrograph number of pixels', status)
+                        status = _andor_api.spg.SetNumberPixels(
+                            self.spg_device_index, self.ccd_info.number_of_pixels_horizontally)
+                        _andor_api.log_spg_response('Setting spectrograph number of pixels', status)
+                    else:
+                        self.logger.debug('No spectrograph devices found. '
+                                          'Spectrograph connection must close. ')
+                        self._close_spg()
+                        return
             else:
                 _andor_api.logger.debug('Spectrograph is already initialized.')
+                return
 
+            self.logger.debug('Setting SpectrographInfo...')
             self._spg_info = SpectrographInfo(self.spg_device_index)
 
     def close(self) -> None:
@@ -862,14 +876,14 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         ...         for i, status in enumerate([status1, status2, status3]):
         ...             _andor_api.log_ccd_response(f'CCD shutdown (step {i + 1})', status)
         ...     else:
-        ...         _andor_api.logger.warning('CCD is already closed')
+        ...         _andor_api.logger.info('CCD is already closed')
         """
         with _andor_api.lock:
             if _andor_api.is_ccd_initialized():
                 status = _andor_api.ccd.ShutDown()
                 _andor_api.log_ccd_response(f'CCD shutdown', status)
             else:
-                _andor_api.logger.warning('CCD is already closed')
+                _andor_api.logger.info('CCD is already closed')
 
             self._ccd_info = None
 
@@ -882,9 +896,19 @@ class AndorSpectrometerConfig(SpectrometerConfig):
                 status = _andor_api.spg.Close()
                 _andor_api.log_spg_response('Spectrograph shutdown', status)
             else:
-                _andor_api.logger.warning('Spectrograph is already shutdown')
+                _andor_api.logger.info('Spectrograph is already shutdown')
 
             self._spg_info = None
+
+    @property
+    def is_open(self) -> bool:
+        """
+        Returns
+        -------
+        bool
+            True if the spectrograph and CCD are initialized, False otherwise.
+        """
+        return _andor_api.is_spg_initialized() and _andor_api.is_ccd_initialized()
 
     @property
     def ccd_number_of_devices(self) -> int:

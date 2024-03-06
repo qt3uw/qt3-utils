@@ -660,7 +660,10 @@ class MainTkApplication():
             logger.warning('Check for other applications using resources.')
         except ValueError as e:
             logger.warning(e)
-            logger.warning('Check your configurtion! You may have entered a value that is out of range')
+            logger.warning('Check your configuration! You may have entered a value that is out of range')
+        except RuntimeError as e:
+            logger.warning(e)
+            logger.warning('Check your configuration! One or more of your devices were not properly initialized.')
 
         finally:
             self.view.sidepanel.startButton.config(state=tk.NORMAL)
