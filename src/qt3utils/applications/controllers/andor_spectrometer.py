@@ -138,6 +138,43 @@ class AndorSpectrometerController:
             self.logger.info('Closing Andor Spectrometer failed.')
         return connection_status
 
+    def _open_in_thread_and_wait_in_main(self, gui_root: tk.Toplevel):
+        """
+        Opens the spectrometer in a thread and waits for it to finish initializing.
+
+        Parameters
+        ----------
+        gui_root : tk.Toplevel
+            The root window of the GUI.
+
+        Returns
+        -------
+        bool
+            True if the connection was successful, False otherwise.
+        """
+        title = 'Connecting...'
+        message = 'Connecting to Andor Spectrometer. Please wait...'
+        # Wait for spectrometer initialization in a thread.
+        # This will allow us to block the main GUI with a pop-up
+        # window in the meantime - and helps prevent GUI freezes.
+
+        thread_finished_event = threading.Event()
+        make_popup_window_and_take_threaded_action(
+            gui_root, title, message, self.open, end_event=thread_finished_event)
+
+        time_start = time.time()
+        while not thread_finished_event.is_set() and time.time() - time_start < 30:
+            time.sleep(0.1)
+        if not self.spectrometer_config.is_open:
+            if not thread_finished_event.is_set():
+                self.logger.error("Opening the spectrometer in a thread took too long. "
+                                  "Aborting configuration window creation.")
+            else:
+                self.logger.error("Failed to connect to spectrometer. "
+                                  "Aborting configuration window creation.")
+            return False
+        return True
+
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         This method is used in the Application's DAQ controller
@@ -314,26 +351,8 @@ class AndorSpectrometerController:
         """
         if not self.spectrometer_config.is_open:
             self.logger.info("Spectrometer is not open. Opening it.")
-            title = 'Connecting...'
-            message = 'Connecting to Andor spectrometer. Please wait...'
-            # Wait for spectrometer initialization in a thread.
-            # This will allow us to block the main GUI with a pop-up
-            # window in the meantime - and helps prevent GUI freezes.
-
-            thread_finished_event = threading.Event()
-            make_popup_window_and_take_threaded_action(
-                gui_root, title, message, self.open, end_event=thread_finished_event)
-
-            time_start = time.time()
-            while not thread_finished_event.is_set() and time.time() - time_start < 30:
-                time.sleep(0.1)
-            if not self.spectrometer_config.is_open:
-                if not thread_finished_event.is_set():
-                    self.logger.error("Opening the spectrometer in a thread took too long. "
-                                      "Aborting configuration window creation.")
-                else:
-                    self.logger.error("Failed to connect to spectrometer. "
-                                      "Aborting configuration window creation.")
+            successful_connection = self._open_in_thread_and_wait_in_main(gui_root)
+            if not successful_connection:
                 return
 
         config_win = tk.Toplevel(gui_root)
