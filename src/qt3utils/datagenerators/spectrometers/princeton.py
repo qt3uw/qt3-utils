@@ -167,8 +167,8 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     DEVICE_NAME: str = 'Princeton Spectrometer'
 
-    def __init__(self, experiment_name: str = None):
-        super().__init__()
+    def __init__(self, logger_level: int, experiment_name: str = None):
+        super().__init__(logger_level)
         self._experiment_name = experiment_name
 
     def open(self) -> None:
@@ -217,8 +217,10 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
     @property
     def grating_list(self) -> List[str]:
         # NOTE: The code below is critical.
-        # "GetCurrentCapabilities" is able to return the list of possibilities of any Lightfield call to provide more information.
-        available_gratings = self.light.experiment.GetCurrentCapabilities( lf.AddIns.SpectrometerSettings.GratingSelected)
+        # "GetCurrentCapabilities" is able to return the list of
+        # possibilities of any Lightfield call to provide more information.
+        available_gratings = self.light.experiment.GetCurrentCapabilities(
+            lf.AddIns.SpectrometerSettings.GratingSelected)
         return [str(a) for a in available_gratings]
 
     @property
@@ -238,7 +240,8 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
 
     @center_wavelength.setter
     def center_wavelength(self, nanometers: float) -> None:
-        # NOTE: The code below addresses bug where if step-and-glue is enabled, it won't allow you to set the center wavelength.
+        # NOTE: The code below addresses bug where if step-and-glue is enabled,
+        # it won't allow you to set the center wavelength.
         self.light.set(lf.AddIns.ExperimentSettings.StepAndGlueEnabled, False)
         self.light.set(lf.AddIns.SpectrometerSettings.GratingCenterWavelength, Double(nanometers))
     
@@ -278,8 +281,10 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
     @sensor_temperature_set_point.setter
     def sensor_temperature_set_point(self, deg_celsius: float) -> None:
         """
-        This function retrieves image data, with particular attention to the camera's configuration determined by the `sensor_temperature_set_point`.
-        The `sensor_temperature_set_point` defines a target or reference value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
+        This function retrieves image data, with particular attention
+        to the camera's configuration determined by the `sensor_temperature_set_point`.
+        The `sensor_temperature_set_point` defines a target or reference
+        value for the camera's sensor, ensuring optimal or specific operation conditions for image acquisition.
         Depending on the setpoint, the behavior or response of the camera sensor might vary.
         """
         self.light.set(lf.AddIns.CameraSettings.SensorTemperatureSetPoint, Double(deg_celsius))
@@ -305,6 +310,7 @@ class PrincetonSpectrometerConfig(SpectrometerConfig):
         Sets the number of frames to be taken during acquisition to number.
         """
         self.light.set(lf.AddIns.ExperimentSettings.AcquisitionFramesToStore, Int64(num_frames))
+
 
 class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
@@ -356,7 +362,8 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
             logger.error(f'Unable to perform step and glue due to error: {e}')
 
         if lambda_max - lambda_min < self.MIN_WAVELENGTH_DIFFERENCE:
-            error_message = (f"End wavelength must be at least {self.MIN_WAVELENGTH_DIFFERENCE} units greater than the start wavelength.")
+            error_message = (f"End wavelength must be at least {self.MIN_WAVELENGTH_DIFFERENCE}"
+                             f" units greater than the start wavelength.")
             raise ValueError(error_message)
 
         data = self.light.acquire()
@@ -372,7 +379,9 @@ class PrincetonSpectrometerDataAcquisition(SpectrometerDataAcquisition):
         If you click "Start" you will be able to continue the scan.
         """
         # TODO: Might need to be worked on further.
-        # There is a risk of it showing incorrect data on the GUI after stopping and the resuming.
-        # Try click "Stop" on the GUI then "Start" again when you take a scan and you will be able to replicate the error.
+        # There is a risk of it showing incorrect data on
+        # the GUI after stopping and the resuming.
+        # Try click "Stop" on the GUI then "Start" again when you
+        # take a scan and you will be able to replicate the error.
         self.light.stop_flag = True
         self.light.experiment.Stop()

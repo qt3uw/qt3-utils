@@ -13,7 +13,7 @@ The AndorSpectrometerConfig class is used to configure the various
 device settings prior to acquisition.
 The AndorSpectrometerDataAcquisition class is used to provide methods
 for handling data acquisition with the CCD in various acquisition modes.
-It does not explicitly control data acquisition for a given applicaiton.
+It does not explicitly control data acquisition for a given application.
 For that, the user needs to create a controller.
 
 To implement the spectrometer for a given application, both
@@ -708,8 +708,9 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     Keeps cleaning CCD while it's waiting for an external trigger.
     """
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, logger_level: int):
+        super().__init__(logger_level)
+        _andor_api.logger.setLevel(logger_level)
 
         # We can get the number of available cameras prior to initializing the CCD, but not for the spectrograph.
         self._spg_number_of_devices: int = 0
@@ -1989,7 +1990,7 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
 
     ACQUISITION_MODES: Set[str] = {'single', 'kinetic series', 'accumulation'}
 
-    def __init__(self, spectrometer_config: AndorSpectrometerConfig):
+    def __init__(self, logger_level: int, spectrometer_config: AndorSpectrometerConfig):
         """
         Parameters
         ----------
@@ -1997,7 +1998,7 @@ class AndorSpectrometerDataAcquisition(SpectrometerDataAcquisition):
             The Andor spectrometer configuration object.
             Used to set the appropriate acquisition settings when needed.
         """
-        super().__init__(spectrometer_config)
+        super().__init__(logger_level, spectrometer_config)
         self.spectrometer_config: AndorSpectrometerConfig
         self._reach_temperature_before_acquisition = False
         self.wait_for_temperature_flag = False

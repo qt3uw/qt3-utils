@@ -25,15 +25,17 @@ class AndorSpectrometerController:
         self.logger = logging.getLogger('Andor Spectrometer Controller')
         self.logger.setLevel(logger_level)
 
-        self.spectrometer_config = andor.AndorSpectrometerConfig()
+        self.spectrometer_config = andor.AndorSpectrometerConfig(logger_level)
 
-        # Changing supported acquisition modes to remove "run until abort" which is nonsensical for this application.
+        # Changing supported acquisition modes to remove
+        # "run until abort" which is nonsensical for this application.
         self.spectrometer_config.SUPPORTED_ACQUISITION_MODES = (
             self.spectrometer_config.AcquisitionMode.SINGLE_SCAN.name,
             self.spectrometer_config.AcquisitionMode.ACCUMULATE.name,
             self.spectrometer_config.AcquisitionMode.KINETICS.name,
         )
-        self.spectrometer_daq = andor.AndorSpectrometerDataAcquisition(self.spectrometer_config)
+        self.spectrometer_daq = andor.AndorSpectrometerDataAcquisition(
+            logger_level, self.spectrometer_config)
 
         self.last_config_dict = {}
 

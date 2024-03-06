@@ -32,10 +32,10 @@ class SpectrometerConfig(abc.ABC):
     DEVICE_NAME: str = ''
     """ The name of the device used for logging purposes. """
 
-    def __init__(self):
+    def __init__(self, logger_level: int):
         logger_name = f'{self.DEVICE_NAME} Config' if self.DEVICE_NAME != '' else self.__class__.__name__
         self.logger = logging.getLogger(logger_name)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logger_level)
 
     @abc.abstractmethod
     def open(self) -> None:
@@ -216,7 +216,7 @@ class SpectrometerDataAcquisition(abc.ABC):
     ACQUISITION_MODES: Set[str] = {'single', 'step-and-glue', 'kinetic series', 'accumulation'}
     """ The supported acquisition modes. """
 
-    def __init__(self, spectrometer_config: SpectrometerConfigType = None):
+    def __init__(self, logger_level: int, spectrometer_config: SpectrometerConfigType = None):
         """
         Parameters
         ----------
@@ -227,7 +227,7 @@ class SpectrometerDataAcquisition(abc.ABC):
         """
         logger_name = f'{self.DEVICE_NAME} Data Acquisition' if self.DEVICE_NAME != '' else self.__class__.__name__
         self.logger = logging.getLogger(logger_name)
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logger_level)
         self.spectrometer_config = spectrometer_config
 
     def acquire(
