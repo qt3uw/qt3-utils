@@ -24,9 +24,9 @@ QT3Scan:
       trigger_mode: INTERNAL  # or EXTERNAL
       # - Timing
       exposure_time: 1  # seconds
-      no_of_accumulations: 2
+      number_of_accumulations: 2
       accumulation_cycle_time: 1  # seconds - will always end up higher than exposure time
-      no_of_kinetics: 10
+      number_of_kinetics: 10
       kinetic_cycle_time: 1  # seconds - will always end up higher than accumulation cycle time
       # - Data-Pre-Processing
       baseline_clamp: true  # or false - will keep the electronic noise floor to the same level
