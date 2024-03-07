@@ -4,7 +4,7 @@ import time
 import tkinter as tk
 from dataclasses import dataclass, fields
 from tkinter import ttk
-from typing import Tuple, Dict, Any, Union
+from typing import Tuple, Dict, Any, Union, TypeVar
 
 import numpy as np
 
@@ -18,6 +18,8 @@ from qt3utils.applications.controllers.utils import (
     make_popup_window_and_take_threaded_action,
     prepare_list_for_option_menu,
 )
+
+_TkVarType = TypeVar('_TkVarType', tk.Variable, tk.IntVar, tk.DoubleVar, tk.BooleanVar, tk.StringVar)
 
 
 class AndorSpectrometerController:
@@ -143,7 +145,7 @@ class AndorSpectrometerController:
         if connection_status:
             self.logger.info('Opening Andor Spectrometer was successful.')
             if self.last_config_dict:
-                self.configure(self.last_config_dict, attempt_connection=False)
+                self.configure(self.last_config_dict.copy(), attempt_connection=False)
             self.logger.info('Latest configuration settings were set.')
         else:
             self.logger.info('Opening Andor Spectrometer failed.')
@@ -287,9 +289,9 @@ class AndorSpectrometerController:
             self.logger.error("Spectrometer is not open. Cannot configure.")
             return
 
-        self.update_config_dict_from_current_values()
         for key in self.last_config_dict:
-            if key not in config_dict:
+            # catch non-existent keys, and values that are None at the same time
+            if config_dict.get(key, None) is None:
                 config_dict[key] = self.last_config_dict[key]
 
         # Device Settings
@@ -334,10 +336,16 @@ class AndorSpectrometerController:
             vss_value = float(vss_value)
         self.spectrometer_config.vertical_shift_speed = vss_value
 
-        hss_value = config_dict['horizontal_shift_speed'][1:-1].replace(' ', '').split(',')
-        self.spectrometer_config.ad_channel = int(hss_value[0])
-        self.spectrometer_config.output_amplifier = int(hss_value[1])
-        self.spectrometer_config.horizontal_shift_speed = float(hss_value[2])
+        hss_value = config_dict['horizontal_shift_speed']
+        if hss_value is not None:
+            hss_value = hss_value[1:-1].replace(' ', '').split(',')
+            self.spectrometer_config.ad_channel = int(hss_value[0])
+            self.spectrometer_config.output_amplifier = int(hss_value[1])
+            self.spectrometer_config.horizontal_shift_speed = float(hss_value[2])
+
+        pre_amp_gain_value = config_dict['pre_amp_gain']
+        if pre_amp_gain_value is not None:
+            self.spectrometer_config.pre_amp_gain = float(pre_amp_gain_value)
 
         # Temperature Settings
         self.spectrometer_config.sensor_temperature_set_point = config_dict['target_sensor_temperature']
@@ -507,7 +515,8 @@ class AndorSpectrometerConfigDataVariables:
         """
         for key in config_dict.keys():
             if hasattr(self, key):
-                setattr(self, key, config_dict[key])
+                variable: tk.Variable = getattr(self, key)
+                variable.set(config_dict[key])
             else:
                 message = (f"Unknown key '{key}' was passed in Andor "
                            f"Spectrometer configuration dictionary.")
@@ -522,15 +531,31 @@ class AndorSpectrometerConfigDataVariables:
         Dict[str, Any]
             The configuration dictionary.
         """
-
-        variable_keys = [f.name for f in fields(self) if isinstance(f.type, tk.Variable)]
+        variable_keys = [f.name for f in fields(self) if isinstance(getattr(self, f.name), tk.Variable)]
 
         config_dict = {}
         for key in variable_keys:
-            variable: tk.Variable = getattr(self, key)
+            variable: _TkVarType = getattr(self, key)
             config_dict[key] = variable.get()
 
         return config_dict
+
+    def variable_dict(self) -> Dict[str, _TkVarType]:
+        """
+        Returns a dictionary of the GUI variables
+
+        Returns
+        -------
+        Dict[str, _TkVarType]
+            A dictionary of the GUI variables.
+        """
+        variable_keys = [f.name for f in fields(self) if isinstance(getattr(self, f.name), tk.Variable)]
+
+        var_dict = {}
+        for key in variable_keys:
+            var_dict[key] = getattr(self, key)
+
+        return var_dict
 
 
 class ConfigurationView:
@@ -587,7 +612,7 @@ class ConfigurationView:
 
         self.logger.debug('Creating configuration window.')
         self.config_win = tk.Toplevel(gui_root)
-        self.config_win.protocol('WM_DELETE_WINDOW', self.hide)
+        self.config_win.protocol('WM_DELETE_WINDOW', self._on_close_click)
         self.config_win.grab_set()
         self.config_win.title('Andor Spectrometer Settings')
         label_padx = 10
@@ -902,14 +927,14 @@ class ConfigurationView:
         Using a popup window in this manner prevents the GUI
         from freezing.
         """
-        gui_info = self.config_data_variables.get_config_dict()
+        gui_info = self.config_data_variables.variable_dict()
         title = 'Loading...'
         message = 'Loading the new spectrometer configuration.\nPlease wait...'
         self.logger.info(f'Setting new spectrometer configuration in a thread.')
         make_popup_window_and_take_threaded_action(
             self.config_win, title, message, lambda: self._update_spectrometer_configuration(gui_info))
 
-    def _update_spectrometer_configuration(self, gui_vars: dict) -> None:
+    def _update_spectrometer_configuration(self, gui_vars: Dict[str, _TkVarType]) -> None:
         """
         Sets the new spectrometer configuration from the
         configuration window variables, and update
@@ -917,7 +942,7 @@ class ConfigurationView:
 
         Parameters
         ----------
-        gui_vars: dict
+        Dict[str, _TkVarType]
             A dictionary with keys the same as the ones appearing
             in the YAML configuration file, and `tk.Variable`s pointing
             to the corresponding spectrometer parameter.
@@ -949,5 +974,3 @@ class ConfigurationView:
         self.config_win.withdraw()
         self.config_win.grab_release()
 
-    def __del__(self):
-        self.config_win.destroy()

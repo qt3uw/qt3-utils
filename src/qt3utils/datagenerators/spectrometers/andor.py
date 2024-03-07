@@ -767,7 +767,8 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         """
         with _andor_api.lock:
             self._open_ccd()
-            self._open_spg()
+            if _andor_api.is_ccd_initialized():
+                self._open_spg()
 
         if self.is_open:
             self.horizontal_image_flip = self.input_port != self.output_port
@@ -1431,7 +1432,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         with _andor_api.lock:
             status, _, temperature, _, _ = _andor_api.ccd.GetTemperatureStatus()
         _andor_api.log_ccd_response("Getting CCD target temperature", status)
-        return int(np.round(temperature, 0))
+        return int(np.ceil(temperature))
 
     @sensor_temperature_set_point.setter
     @prevent_none_set
@@ -1440,7 +1441,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
         Sets the sensor target temperature in Celsius.
         """
         with _andor_api.lock:
-            status = _andor_api.ccd.SetTemperature(int(deg_celsius))
+            status = _andor_api.ccd.SetTemperature(int(np.ceil(deg_celsius)))
         _andor_api.log_ccd_response("Setting CCD temperature", status)
 
     @property
