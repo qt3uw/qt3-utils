@@ -81,9 +81,20 @@ class AndorSpectrometerController:
     def clock_rate(self) -> float:
         """
         The clock rate of a single exposure (1/exposure_time in Hz).
+        Strangely, this is saved in the npz data file, instead of the
+        entire settings.
+
+        This will have to do for now.
         """
-        exposure_time = self.spectrometer_config.exposure_time
-        return 1 / exposure_time if exposure_time > 0 else np.inf
+        exposure_time = self.last_config_dict.get('exposure_time', np.nan)
+        if self.last_config_dict.get('acquisition_mode', None) == \
+                self.spectrometer_config.AcquisitionMode.ACCUMULATE.name:
+            exposure_time *= self.last_config_dict.get('number_of_acquisitions', np.nan)
+        elif self.last_config_dict.get('acquisition_mode', None) == \
+                self.spectrometer_config.AcquisitionMode.KINETICS.name:
+            exposure_time *= self.last_config_dict.get('number_of_accumulations', np.nan)
+            exposure_time *= self.last_config_dict.get('number_of_kinetics', np.nan)
+        return 1 / exposure_time if exposure_time > 0 else np.nan
 
     def start(self) -> None:
         """
@@ -448,7 +459,7 @@ class AndorSpectrometerController:
 class AndorSpectrometerConfigDataVariables:
     """
     Dataclass to hold and update configuration
-    GUI-variables and spectrometer-parameters
+    GUI variables and spectrometer parameters
     via the Andor spectrometer controller GUI.
     """
     logger: logging.Logger
@@ -576,6 +587,8 @@ class ConfigurationView:
     When the window is closed, the configuration
     is stored in the background, and will be used
     when the window reopens.
+    Hence, this class is designed to be instantiated once,
+    and called upon in subsequent requests for the gui.
     """
 
     def __init__(
@@ -973,4 +986,3 @@ class ConfigurationView:
         self.logger.debug('Hiding configuration window.')
         self.config_win.withdraw()
         self.config_win.grab_release()
-

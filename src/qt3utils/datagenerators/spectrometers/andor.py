@@ -824,12 +824,7 @@ class AndorSpectrometerConfig(SpectrometerConfig):
                     _andor_api.log_spg_response('Getting number of spectrograph devices', status)
 
                     if self._spg_number_of_devices > 0:
-                        status = _andor_api.spg.SetPixelWidth(self.spg_device_index, self.ccd_info.pixel_width)
-                        _andor_api.log_spg_response('Setting spectrograph pixel width', status)
-
-                        status = _andor_api.spg.SetNumberPixels(
-                            self.spg_device_index, self.ccd_info.number_of_pixels_horizontally)
-                        _andor_api.log_spg_response('Setting spectrograph number of pixels', status)
+                        self._update_spg_with_ccd_constants()
                     else:
                         self.logger.debug('No spectrograph devices found. '
                                           'Spectrograph connection must close. ')
@@ -841,6 +836,21 @@ class AndorSpectrometerConfig(SpectrometerConfig):
 
             self.logger.debug('Setting SpectrographInfo...')
             self._spg_info = SpectrographInfo(self.spg_device_index)
+
+    def _update_spg_with_ccd_constants(self):
+        """
+        Updates the spectrograph with the relevant information
+        from the CCD.
+        Specifically, the CCD pixel width and the number of pixels.
+        This is relevant for calibrating the spectrometer.
+        """
+        with _andor_api.lock:
+            status = _andor_api.spg.SetPixelWidth(self.spg_device_index, self.ccd_info.pixel_width)
+            _andor_api.log_spg_response('Setting spectrograph pixel width', status)
+
+            status = _andor_api.spg.SetNumberPixels(
+                self.spg_device_index, self.ccd_info.number_of_pixels_horizontally)
+            _andor_api.log_spg_response('Setting spectrograph number of pixels', status)
 
     def close(self) -> None:
         """
@@ -941,16 +951,18 @@ class AndorSpectrometerConfig(SpectrometerConfig):
     @ccd_device_index.setter
     @prevent_none_set
     def ccd_device_index(self, value: int):
-        """ To change the current CCD, we need to close the connection with the previous CCD first. """
+        """ To change the current CCD, we need to close the connection with the previous CCD first,
+        and then update the CCD-related parameters of the spectrometer. """
         if value == self.ccd_device_index:
             return
 
         if value in self.ccd_device_list:
-            was_initialized = _andor_api.is_ccd_initialized()
-            if was_initialized:
+            if _andor_api.is_ccd_initialized():
                 self._close_ccd()
                 _andor_api.ccd.SetCurrentCamera(_andor_api.ccd.GetCameraHandle(value)[1])
                 self._open_ccd()
+                if _andor_api.is_spg_initialized():
+                    self._update_spg_with_ccd_constants()
         else:
             _andor_api.logger.warning(
                 f"CCD device index '{value}' is not in the device index list {self.ccd_device_list}. "

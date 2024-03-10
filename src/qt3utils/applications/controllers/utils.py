@@ -1,3 +1,4 @@
+import logging
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -314,12 +315,16 @@ def make_popup_window_and_take_threaded_action(
         width: int = _DEFAULT_POPUP_WINDOW_WIDTH,
         height: int = _DEFAULT_POPUP_WINDOW_HEIGHT,
         end_event: threading.Event = None,
-) -> threading.Thread:
+        logger: logging.Logger = None,
+):
     """
     This helper method creates a popup window with a message,
     and takes a threaded action within the popup window.
     The popup window will be destroyed after the action is
     completed.
+    If an error occurs, then an exception is raised and registered
+    if a logger is provided.
+    This ensures that the thread closes normally either way.
 
     Parameters
     ----------
@@ -335,11 +340,13 @@ def make_popup_window_and_take_threaded_action(
         The width of the popup window. Default is 300.
     height: int
         The height of the popup window. Default is 100.
-
-    Returns
-    -------
-    threading.Thread
-        The running thread
+    end_event: threading.Event
+        The event to set when the action is completed.
+        Default is None. If None, there will be no
+        indication the thread is finished.
+    logger: logging.Logger
+        If not None, the logger will send a warning
+        if an error occurs during the given action.
     """
     popup_window = tk.Toplevel(parent, )
     popup_window.attributes('-disabled', True)  # disables interaction with everything in the popup
@@ -358,7 +365,11 @@ def make_popup_window_and_take_threaded_action(
     popup_window.resizable(False, False)
 
     def thread_target():
-        action()
+        try:
+            action()
+        except Exception as e:
+            if logger:
+                logger.warning(f'Error in threaded action behind popup window: {e}')
         if end_event:
             end_event.set()
         popup_window.destroy()
@@ -367,5 +378,3 @@ def make_popup_window_and_take_threaded_action(
     thread.start()
 
     popup_window.update()
-
-    return thread
