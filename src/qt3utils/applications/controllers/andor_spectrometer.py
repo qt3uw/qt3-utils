@@ -89,7 +89,7 @@ class AndorSpectrometerController:
         exposure_time = self.last_config_dict.get('exposure_time', np.nan)
         if self.last_config_dict.get('acquisition_mode', None) == \
                 self.spectrometer_config.AcquisitionMode.ACCUMULATE.name:
-            exposure_time *= self.last_config_dict.get('number_of_acquisitions', np.nan)
+            exposure_time *= self.last_config_dict.get('number_of_accumulations', np.nan)
         elif self.last_config_dict.get('acquisition_mode', None) == \
                 self.spectrometer_config.AcquisitionMode.KINETICS.name:
             exposure_time *= self.last_config_dict.get('number_of_accumulations', np.nan)
