@@ -31,8 +31,10 @@ class CounterAndScanner:
         self.num_daq_batches = 1  # could change to 10 if want 10x more samples for each position
 
     def stop(self):
-        self.rate_counter.stop()
         self.running = False
+
+    def post_stop(self):
+        self.rate_counter.stop()
 
     def start(self):
         self.running = True
@@ -169,6 +171,7 @@ class CounterAndScanner:
         self.start()
         raw_counts = self.scan_axis(axis, min_val, max_val, step_size)
         self.stop()
+        self.post_stop()
         axis_vals = np.arange(min_val, max_val, step_size)
         count_rates = [self.sample_count_rate(count) for count in raw_counts]
 

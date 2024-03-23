@@ -98,6 +98,10 @@ class QT3ScanConfocalApplicationController:
         self.daq_and_scanner.stop()
 
     @convert_nidaq_daqnotfounderror(module_logger)
+    def post_stop(self) -> None:
+        self.daq_and_scanner.post_stop()
+
+    @convert_nidaq_daqnotfounderror(module_logger)
     def reset(self) -> None:
         self.daq_and_scanner.reset()
 
@@ -278,10 +282,17 @@ class QT3ScanHyperSpectralApplicationController:
 
     def stop(self) -> None:
         """
-        This method is used to stop the scan. It should stop the hardware from acquiring data.
+        This method is used to stop the scan. It should stop the scanning loop.
+        """
+        self.running = False
+
+    def post_stop(self) -> None:
+        """
+        This method is called after the scan is stopped.
+        It should do the necessary cleanup.
+        For example, it should stop the DAQ.
         """
         self.daq_controller.stop()
-        self.running = False
 
     def reset(self) -> None:
         """

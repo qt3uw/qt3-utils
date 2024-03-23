@@ -683,7 +683,7 @@ class MainTkApplication:
                 self.view.scan_view.update(self.application_controller)
                 self.view.canvas.draw()
 
-            self.application_controller.stop()
+            self.application_controller.post_stop()
 
         except nidaqmx.errors.DaqError as e:
             logger.warning(e)
