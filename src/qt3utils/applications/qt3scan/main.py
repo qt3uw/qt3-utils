@@ -124,7 +124,7 @@ class ScanImage:
         self.artist = self.ax.imshow(data, origin='lower',
                                      cmap=self.cmap,
                                      extent=[app_controller.xmin - app_controller.step_size / 2.0,
-                                             app_controller.xmax - app_controller.step_size / 2.0,
+                                             app_controller.xmax + app_controller.step_size / 2.0,
                                              app_controller.ymin - app_controller.step_size / 2.0,
                                              app_controller.current_y - app_controller.step_size / 2.0])
 

@@ -117,10 +117,12 @@ class QT3ScanConfocalApplicationController:
         self.daq_and_scanner.move_y()
 
     @convert_nidaq_daqnotfounderror(module_logger)
-    def optimize_position(self, axis: str,
-                          central: float,
-                          range: float,
-                          step_size: float) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
+    def optimize_position(
+            self, axis: str,
+            central: float,
+            range: float,
+            step_size: float
+    ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """
         The returned tuple elements should be:
         0th: np.ndarray of count rates across the axis
@@ -137,7 +139,7 @@ class QT3ScanConfocalApplicationController:
         return self.daq_and_scanner.get_completed_scan_range()
 
     @staticmethod
-    def allowed_file_save_formats(self) -> list:
+    def allowed_file_save_formats() -> list:
         """
         Returns a list of tuples of the allowed file save formats
             [(description, file_extension), ...]
@@ -147,7 +149,7 @@ class QT3ScanConfocalApplicationController:
         return formats
 
     @staticmethod
-    def default_file_format(self) -> str:
+    def default_file_format() -> str:
         """
         Returns the default file format
         """
@@ -193,10 +195,12 @@ class QT3ScanHyperSpectralApplicationController:
      Note that the DAQ controller here must implement QT3ScanSpectrometerDAQControllerInterface
     """
 
-    def __init__(self,
-                 position_controller: QT3ScanPositionControllerInterface,
-                 daq_controller: QT3ScanSpectrometerDAQControllerInterface,
-                 logger_level: int) -> None:
+    def __init__(
+            self,
+            position_controller: QT3ScanPositionControllerInterface,
+            daq_controller: QT3ScanSpectrometerDAQControllerInterface,
+            logger_level: int
+    ) -> None:
 
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
@@ -294,7 +298,7 @@ class QT3ScanHyperSpectralApplicationController:
         if self.running is False:  # this allows external process to stop scan
             return False
 
-        if self.current_y < self.ymax:  # stops scan when reaches final position
+        if self.current_y <= self.ymax:  # stops scan when reaches final position
             return True
         else:
             self.running = False
@@ -353,7 +357,7 @@ class QT3ScanHyperSpectralApplicationController:
         self.position_controller.go_to_position(**{axis: min})
         time.sleep(self.raster_line_pause)
 
-        for val in np.arange(min, max, step_size):
+        for val in np.arange(min, max + step_size, step_size):
             self.position_controller.go_to_position(**{axis: val})
             measured_spectrum, measured_wavelengths = self.daq_controller.sample_spectrum()
 
@@ -376,7 +380,7 @@ class QT3ScanHyperSpectralApplicationController:
         return np.array(spectrums_in_scan), wavelength_array
 
     def move_y(self) -> None:
-        if self.current_y < self.ymax:
+        if self.current_y <= self.ymax:
             self._current_y += self.step_size
         try:
             self.position_controller.go_to_position(y=self.current_y)
@@ -442,7 +446,7 @@ class QT3ScanHyperSpectralApplicationController:
                 pickle.dump(data, f)
 
     @staticmethod
-    def allowed_file_save_formats(self) -> list:
+    def allowed_file_save_formats() -> list:
         """
         Returns a list of tuples of the allowed file save formats
             [(description, file_extension), ...]
@@ -455,7 +459,7 @@ class QT3ScanHyperSpectralApplicationController:
         return formats
 
     @staticmethod
-    def default_file_format(self) -> str:
+    def default_file_format() -> str:
         """
         Returns the default file format
         """

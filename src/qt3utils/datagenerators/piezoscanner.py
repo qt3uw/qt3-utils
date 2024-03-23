@@ -5,9 +5,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 def gauss(x, *p):
     C, mu, sigma, offset = p
-    return C*np.exp(-(x-mu)**2/(2.*sigma**2)) + offset
+    return C * np.exp(-(x - mu) ** 2 / (2. * sigma ** 2)) + offset
 
 
 class CounterAndScanner:
@@ -27,7 +28,7 @@ class CounterAndScanner:
 
         self.stage_controller = stage_controller
         self.rate_counter = rate_counter
-        self.num_daq_batches = 1 # could change to 10 if want 10x more samples for each position
+        self.num_daq_batches = 1  # could change to 10 if want 10x more samples for each position
 
     def stop(self):
         self.rate_counter.stop()
@@ -40,11 +41,10 @@ class CounterAndScanner:
     def set_to_starting_position(self):
         self.current_y = self.ymin
         if self.stage_controller:
-            self.stage_controller.go_to_position(x = self.xmin, y = self.ymin)
+            self.stage_controller.go_to_position(x=self.xmin, y=self.ymin)
 
     def close(self):
         self.rate_counter.close()
-
 
     def sample_counts(self):
         return self.rate_counter.sample_counts(self.num_daq_batches)
@@ -79,17 +79,17 @@ class CounterAndScanner:
         return self.xmin, self.xmax, self.ymin, self.current_y
 
     def still_scanning(self):
-        if self.running == False: #this allows external process to stop scan
+        if self.running == False:  # this allows external process to stop scan
             return False
 
-        if self.current_y < self.ymax: #stops scan when reaches final position
+        if self.current_y <= self.ymax:  # stops scan when reaches final position
             return True
         else:
             self.running = False
             return False
 
     def move_y(self):
-        if self.stage_controller and self.current_y < self.ymax:
+        if self.stage_controller and self.current_y <= self.ymax:
             self.current_y += self.step_size
             try:
                 self.stage_controller.go_to_position(y=self.current_y)
@@ -114,12 +114,12 @@ class CounterAndScanner:
         result of a single call to sample_counts at each scan position along the axis.
         """
         raw_counts = []
-        self.stage_controller.go_to_position(**{axis:min})
+        self.stage_controller.go_to_position(**{axis: min})
         time.sleep(self.raster_line_pause)
-        for val in np.arange(min, max, step_size):
+        for val in np.arange(min, max + step_size, step_size):
             if self.stage_controller:
                 logger.info(f'go to position {axis}: {val:.2f}')
-                self.stage_controller.go_to_position(**{axis:val})
+                self.stage_controller.go_to_position(**{axis: val})
             _raw_counts = self.sample_counts()
             raw_counts.append(_raw_counts)
             logger.info(f'raw counts, total clock samples: {_raw_counts}')
@@ -132,8 +132,8 @@ class CounterAndScanner:
         self.scanned_raw_counts = []
         self.scanned_count_rate = []
 
-    def optimize_position(self, axis, center_position, width = 2, step_size = 0.25):
-        '''
+    def optimize_position(self, axis, center_position, width=2, step_size=0.25):
+        """
         Performs a scan over a particular axis about `center_position`.
 
         The scan ranges from center_position +- width and progresses with step_size.
@@ -156,7 +156,7 @@ class CounterAndScanner:
         and the fit_coeff is set to None.
         When the fit is successful, x_optimal = mu.
 
-        '''
+        """
         min_val = center_position - width
         max_val = center_position + width
         if self.stage_controller:
@@ -186,4 +186,3 @@ class CounterAndScanner:
             logger.warning(e)
 
         return count_rates, axis_vals, optimal_position, coeff
-
