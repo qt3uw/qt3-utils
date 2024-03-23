@@ -15,8 +15,9 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
 
-        self.spectrometer_config = princeton.PrincetonSpectrometerConfig()
-        self.spectrometer_daq = princeton.PrincetonSpectrometerDataAcquisition(self.spectrometer_config)
+        self.spectrometer_config = princeton.PrincetonSpectrometerConfig(logger_level)
+        self.spectrometer_daq = princeton.PrincetonSpectrometerDataAcquisition(
+            logger_level, self.spectrometer_config)
 
         self.logger.debug('Initializing the Princeton Spectrometer')
         self.spectrometer_config.open()
@@ -56,8 +57,10 @@ class QT3ScanPrincetonSpectrometerController:
 
     def sample_spectrum(self) -> Tuple[np.ndarray, np.ndarray]:
         self.last_measured_spectrum, self.last_wavelength_array = self.spectrometer_daq.acquire('step-and-glue')
-        # self.logger.debug(f'Length of what you pulled from get_wavelengths is {len(self.spectrometer.get_wavelengths())}')
-        # self.logger.debug(f'Length of measured spectrum is {len(self.last_measured_spectrum)} and length of last wave array is {len(self.last_wavelength_array)}')
+        # self.logger.debug(f'Length of what you pulled from get_wavelengths '
+        #                   f'is {len(self.spectrometer.get_wavelengths())}')
+        # self.logger.debug(f'Length of measured spectrum is {len(self.last_measured_spectrum)} '
+        #                   f'and length of last wave array is {len(self.last_wavelength_array)}')
         self.logger.debug(
             f'acquired spectrum from {self.last_wavelength_array[0]} to {self.last_wavelength_array[-1]} nm')
         return self.last_measured_spectrum, self.last_wavelength_array
@@ -69,14 +72,20 @@ class QT3ScanPrincetonSpectrometerController:
         self.logger.debug("Calling configure on the Princeton Spectrometer data controller")
         self.last_config_dict.update(config_dict)
 
-        self.spectrometer_config.experiment_name = config_dict.get('experiment_name', self.spectrometer_config.experiment_name)
-        self.spectrometer_config.exposure_time = config_dict.get('exposure_time', self.spectrometer_config.exposure_time)
-        self.spectrometer_config.center_wavelength = config_dict.get('center_wavelength', self.spectrometer_config.center_wavelength)
-        self.spectrometer_config.sensor_temperature_set_point = config_dict.get('sensor_temperature_set_point',
-                                                                                self.spectrometer_config.sensor_temperature_set_point)
-        self.spectrometer_config.current_grating = config_dict.get('current_grating', self.spectrometer_config.current_grating)
-        self.spectrometer_config.starting_wavelength = config_dict.get('starting_wavelength', self.spectrometer_config.starting_wavelength)
-        self.spectrometer_config.ending_wavelength = config_dict.get('ending_wavelength', self.spectrometer_config.ending_wavelength)
+        self.spectrometer_config.experiment_name = config_dict.get(
+            'experiment_name', self.spectrometer_config.experiment_name)
+        self.spectrometer_config.exposure_time = config_dict.get(
+            'exposure_time', self.spectrometer_config.exposure_time)
+        self.spectrometer_config.center_wavelength = config_dict.get(
+            'center_wavelength', self.spectrometer_config.center_wavelength)
+        self.spectrometer_config.sensor_temperature_set_point = config_dict.get(
+            'sensor_temperature_set_point', self.spectrometer_config.sensor_temperature_set_point)
+        self.spectrometer_config.current_grating = config_dict.get(
+            'current_grating', self.spectrometer_config.current_grating)
+        self.spectrometer_config.starting_wavelength = config_dict.get(
+            'starting_wavelength', self.spectrometer_config.starting_wavelength)
+        self.spectrometer_config.ending_wavelength = config_dict.get(
+            'ending_wavelength', self.spectrometer_config.ending_wavelength)
 
     def configure_view(self, gui_root: tk.Toplevel) -> None:
         """

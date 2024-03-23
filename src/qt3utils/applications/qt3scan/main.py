@@ -25,6 +25,7 @@ from qt3utils.applications.qt3scan.controller import (
     QT3ScanConfocalApplicationController,
     QT3ScanHyperSpectralApplicationController
 )
+from qt3utils.applications.controllers.utils import make_popup_window_and_take_threaded_action
 
 matplotlib.use('Agg')
 
@@ -47,20 +48,34 @@ if args.verbose == 2:
 NIDAQ_DAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
 RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Counter'
 PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
+ANDOR_SPECTROMETER_DAQ_DEVICE_NAME = 'Andor Spectrometer'
 RANDOM_SPECTROMETER_DAQ_DEVICE_NAME = 'Random Spectrometer'
 
 DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DAQ_DEVICE_NAME
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
-STANDARD_CONTROLLERS = {NIDAQ_DAQ_DEVICE_NAME: {'yaml': 'nidaq_edge_counter.yaml',
-                        'application_controller_class': QT3ScanConfocalApplicationController},
-                        PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml': 'princeton_spectrometer.yaml',
-                        'application_controller_class': QT3ScanHyperSpectralApplicationController},
-                        RANDOM_DATA_DAQ_DEVICE_NAME: {'yaml': 'random_data_generator.yaml',
-                        'application_controller_class': QT3ScanConfocalApplicationController},
-                        RANDOM_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml': 'random_spectrometer.yaml',
-                        'application_controller_class': QT3ScanHyperSpectralApplicationController}
-                        }
+STANDARD_CONTROLLERS = {
+    NIDAQ_DAQ_DEVICE_NAME: {
+        'yaml': 'nidaq_edge_counter.yaml',
+        'application_controller_class': QT3ScanConfocalApplicationController
+    },
+    PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {
+        'yaml': 'princeton_spectrometer.yaml',
+        'application_controller_class': QT3ScanHyperSpectralApplicationController
+    },
+    ANDOR_SPECTROMETER_DAQ_DEVICE_NAME: {
+        'yaml': 'andor_spectrometer.yaml',
+        'application_controller_class': QT3ScanHyperSpectralApplicationController
+    },
+    RANDOM_DATA_DAQ_DEVICE_NAME: {
+        'yaml': 'random_data_generator.yaml',
+        'application_controller_class': QT3ScanConfocalApplicationController
+    },
+    RANDOM_SPECTROMETER_DAQ_DEVICE_NAME: {
+        'yaml': 'random_spectrometer.yaml',
+        'application_controller_class': QT3ScanHyperSpectralApplicationController
+    }
+}
 
 # Hyper Spectral Imaging would add the following to STANDARD_CONTROLLERS
 # PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
@@ -506,11 +521,23 @@ class MainTkApplication():
         Loads the default yaml configuration file for the application controller.
 
         Should be called during instantiation of this class and should be the callback
-        function for the support controller pull-down menu in the side panel
+        function for the support controller pull-down menu in the side panel.
+
+        When called from the pull-down menu, a popup window opens to prevent GUI freezes
+        due to long connection times to the devices (e.g., for spectrometers).
         """
         logger.info(f"loading {application_controller_name}")
         config = self._open_yaml_config_for_controller(application_controller_name)
-        self._build_controllers_from_config_dict(config, application_controller_name)
+
+        if hasattr(self, 'application_controller'):  # if this is not the first initialization of the main application
+            make_popup_window_and_take_threaded_action(  # handles potential GUI freezes
+                self.root_window,
+                f'Connecting...',
+                f'Connecting to {application_controller_name}. Please wait...',
+                lambda: self._build_controllers_from_config_dict(config, application_controller_name)
+            )
+        else:  # There is no GUI, so there is no fear
+            self._build_controllers_from_config_dict(config, application_controller_name)
 
     def _build_controllers_from_config_dict(self, config: dict, controller_name: str) -> None:
 
@@ -546,7 +573,34 @@ class MainTkApplication():
         config = yaml.safe_load(afile)
         afile.close()
 
-        self._build_controllers_from_config_dict(config, self.view.controller_option.get())
+        # Checking that we are loading files that match the current application controller
+        current_daq_controller_class_name = self.application_controller.daq_controller.__class__.__name__
+        yaml_daq_controller_class_name = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_CONTROLLER]['class_name']
+
+        if current_daq_controller_class_name != yaml_daq_controller_class_name:
+            logger.warning(f"The current DAQ controller class ({current_daq_controller_class_name}) "
+                           f"does not match the DAQ controller's class name in the "
+                           f"YAML file ({yaml_daq_controller_class_name}).\n"
+                           f"Loading configuration from YAML was aborted.")
+            return
+
+        current_pos_controller_class_name = self.application_controller.position_controller.__class__.__name__
+        yaml_pos_controller_class_name = \
+            config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_POSITION_CONTROLLER]['class_name']
+
+        if current_pos_controller_class_name != yaml_pos_controller_class_name:
+            logger.warning(f"The current position controller class ({current_pos_controller_class_name}) "
+                           f"does not match the position controller's class name in the "
+                           f"YAML file ({yaml_pos_controller_class_name}).\n"
+                           f"Loading configuration from YAML was aborted.")
+            return
+
+        make_popup_window_and_take_threaded_action(  # handles potential GUI freezes
+            self.root_window,
+            f'Connecting...',
+            f'Connecting to {self.view.controller_option.get()}. Please wait...',
+            lambda: self._build_controllers_from_config_dict(config, self.view.controller_option.get())
+        )
 
     def run(self) -> None:
         self.root_window.title("QT3Scan: Piezo Controlled NIDAQ Digital Count Rate Scanner")
@@ -633,7 +687,10 @@ class MainTkApplication():
             logger.warning('Check for other applications using resources.')
         except ValueError as e:
             logger.warning(e)
-            logger.warning('Check your configurtion! You may have entered a value that is out of range')
+            logger.warning('Check your configuration! You may have entered a value that is out of range')
+        except RuntimeError as e:
+            logger.warning(e)
+            logger.warning('Check your configuration! One or more of your devices were not properly initialized.')
 
         finally:
             self.view.sidepanel.startButton.config(state=tk.NORMAL)
