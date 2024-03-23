@@ -24,7 +24,7 @@ class WavelengthControlBase(abc.ABC):
         self.scale_nm_per_volt = scale_nm_per_volt
         self.minimum_allowed_position = min_position
         self.maximum_allowed_position = max_position
-        self._settling_time_in_seconds = move_settle_time #10 millisecond settle time
+        self._settling_time_in_seconds = move_settle_time  # 10 millisecond settle time
         self.last_write_value = None
         self.speed = "fast"
 
@@ -40,23 +40,24 @@ class WavelengthControlBase(abc.ABC):
         self.maximum_allowed_position = config_dict.get('max_position', self.maximum_allowed_position)
 
     def get_current_wl_point(self) -> float:
-        '''
+        """
         Returns the voltage supplied to the three input analog channels.
         If no input analog channels were provided when objected was created,
         returns [-1,-1,-1]
-        '''
+        """
         output = -1
         if self.read_channel is not None:
             with nidaqmx.Task() as vread, nidaqmx.Task():
-
-                vread.ai_channels.add_ai_voltage_chan(self.device_name + '/' + self.read_channel, min_val=0, max_val=10.0)
+                vread.ai_channels.add_ai_voltage_chan(self.device_name + '/' + self.read_channel, min_val=0,
+                                                      max_val=10.0)
 
                 output = vread.read()
 
         return output
 
     def check_allowed_limits(self, v: float = None) -> None:
-        if v is not None: self._validate_value(v)
+        if v is not None:
+            self._validate_value(v)
 
     def _validate_value(self, voltage: float) -> None:
         voltage = float(voltage)
@@ -69,34 +70,35 @@ class WavelengthControlBase(abc.ABC):
 
     @abc.abstractmethod
     def go_to(self, wl_point: float = None) -> None:
-        '''
+        """
         Sets the voltage
         raises ValueError if try to set voltage out of bounds.
-        '''
+        """
         pass
 
     @property
-    def settling_time_in_seconds (self):
+    def settling_time_in_seconds(self):
         return self._settling_time_in_seconds
+
     @settling_time_in_seconds.setter
-    def settling_time_in_seconds (self, val):
+    def settling_time_in_seconds(self, val):
         self._settling_time_in_seconds = val
 
 
 class VControl(WavelengthControlBase):
 
     def go_to(self, wl_point: float = None) -> None:
-        '''
+        """
         Sets the voltage
         raises ValueError if try to set voltage out of bounds.
-        '''
+        """
         self.go_to_voltage(wl_point)
 
     def go_to_voltage(self, v: float = None) -> None:
-        '''
+        """
         !//Sets the voltage
         raises ValueError if try to set position out of bounds.
-        '''
+        """
         debug_string = []
         if v is not None:
             self._validate_value(v)
@@ -106,7 +108,7 @@ class VControl(WavelengthControlBase):
                 self.last_write_value = v
             debug_string.append(f'v: {v:.2f}')
         logger.info(f'go to voltage {" ".join(debug_string)}')
-        time.sleep(self.settling_time_in_seconds) #wait to ensure piezo actuator has settled into position.
+        time.sleep(self.settling_time_in_seconds)  # wait to ensure piezo actuator has settled into position.
         logger.debug(f'last write: {self.last_write_value}')
 
     def _nm_to_volts(self, nm: float) -> float:
@@ -119,20 +121,20 @@ class VControl(WavelengthControlBase):
 class VControlWavelength(WavelengthControlBase):
 
     def go_to(self, wl_point: float = None) -> None:
-        '''
+        """
         Sets the voltage
         raises ValueError if try to set voltage out of bounds.
-        '''
+        """
         if self.speed == "normal" or self.speed == "fast":
             self.go_to_voltage(wl_point)
         else:
             self.go_to_voltage_slowly(wl_point)
 
     def go_to_voltage(self, v: float = None) -> None:
-        '''
+        """
         !//Sets the voltage
         raises ValueError if try to set position out of bounds.
-        '''
+        """
         debug_string = []
         if v is not None:
             self._validate_value(v)
@@ -143,7 +145,7 @@ class VControlWavelength(WavelengthControlBase):
             debug_string.append(f'v: {v:.2f}')
         logger.info(f'go to voltage {" ".join(debug_string)}')
         if not self.speed == "fast":
-            time.sleep(self.settling_time_in_seconds) #wait to ensure voltage has settled into position.
+            time.sleep(self.settling_time_in_seconds)  # wait to ensure voltage has settled into position.
         logger.debug(f'last write: {self.last_write_value}')
 
     def go_to_voltage_slowly(self, v: float = None) -> None:
@@ -153,8 +155,8 @@ class VControlWavelength(WavelengthControlBase):
             self._validate_value(v)
             with nidaqmx.Task() as task:
                 task.ao_channels.add_ao_voltage_chan(self.device_name + '/' + self.write_channel)
-                while abs(v-self.last_write_value) > step_size_slow:
-                    current_v=self.last_write_value + step_size_slow * np.sign(v-self.last_write_value)
+                while abs(v - self.last_write_value) > step_size_slow:
+                    current_v = self.last_write_value + step_size_slow * np.sign(v - self.last_write_value)
                     task.write(current_v)
                     self.last_write_value = current_v
                     time.sleep(self.settling_time_in_seconds)
@@ -164,5 +166,3 @@ class VControlWavelength(WavelengthControlBase):
         logger.info(f'go to voltage {" ".join(debug_string)}')
         time.sleep(self.settling_time_in_seconds)  # wait to ensure piezo actuator has settled into position.
         logger.debug(f'last write: {self.last_write_value}')
-
-
