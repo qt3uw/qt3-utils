@@ -3,6 +3,7 @@ import numpy as np
 
 import nidaqmx
 
+
 class Lockin:
     def __init__(self, logger_level) -> None:
         self.logger = logging.getLogger(__name__)
