@@ -1,7 +1,6 @@
 import logging
 import time
 import tkinter as tk
-from typing import Type
 
 import numpy as np
 
@@ -11,6 +10,7 @@ from qt3utils.applications.controllers.lockin_controller import Lockin
 from qt3utils.nidaq.customcontrollers import VControl
 
 logger = logging.getLogger(__name__)
+
 
 class PleScanner:
     """
@@ -31,7 +31,7 @@ class PleScanner:
         self.running = False
         self.current_frame = 0
         self._start = float(wavelength_controller.minimum_allowed_position)
-        self._end= float(wavelength_controller.maximum_allowed_position)
+        self._end = float(wavelength_controller.maximum_allowed_position)
         self.tmax = None
         self._step_size = None
         self.wavelength_controller = wavelength_controller
@@ -107,7 +107,7 @@ class PleScanner:
         returning True means the scan should continue
         returning False means the scan should stop
         """
-        if self.running == False:  # this allows external process to stop scan
+        if not self.running:  # this allows external process to stop scan
             return False
 
         if self.current_frame < self.tmax:  # stops scan when reaches final position
@@ -129,9 +129,9 @@ class PleScanner:
 
     def go_to(self, wl_point: float) -> None:
         """
-        Set the wavelength controller to desired point
+        Set the wavelength controller to the desired point
         """
-        if self.wavelength_controller and wl_point <= self._end and wl_point >= self._start:
+        if self.wavelength_controller and self._end >= wl_point >= self._start:
             try:
                 self.wavelength_controller.go_to(wl_point=wl_point)
             except ValueError as e:
@@ -149,9 +149,11 @@ class PleScanner:
         """
         Moves the wavelength controller from min to max in steps of step_size.
         Returns data in the form of a dictionary with
-            keys = name of reader defined in YAML file
-            values = output of scan
-        As well as an array of the points associated with the scan
+
+        - keys = name of reader defined in YAML file
+        - values = output of scan
+
+        as well as an array of the points associated with the scan
         If scan_mode is Discrete, each point will represent average values of batch between points instead
         """
         output = {key: [] for key in self.readers.keys()}
@@ -164,8 +166,8 @@ class PleScanner:
             elif self.scan_mode == "Batches":
                 self.wavelength_controller.speed = "fast"
                 time.sleep(self.wavelength_controller.settling_time_in_seconds)
-                if ii < len(val_array)-1:
-                    batch_vals = np.arange(val, val_array[ii+1])
+                if ii < len(val_array) - 1:
+                    batch_vals = np.arange(val, val_array[ii + 1])
                 else:
                     continue
             for batch_val in batch_vals:
@@ -174,21 +176,23 @@ class PleScanner:
                 scanned_control.append(self.wavelength_controller.get_current_wl_point())
                 batch_output = {key: [] for key in self.readers.keys()}
                 for reader in self.readers:
-                    if isinstance(self.readers[reader], QT3ScanNIDAQEdgeCounterController ):
+                    if isinstance(self.readers[reader], QT3ScanNIDAQEdgeCounterController):
                         self.rate_counters.append(self.readers[reader])
                         raw_counts = []
                         _raw_counts = self.sample_counts(self.readers[reader])
                         raw_counts.append(_raw_counts)
                         logger.info(f'raw counts, total clock samples: {_raw_counts}')
                         if self.wavelength_controller:
-                            logger.info(f'current {self.axis_name}: {self.wavelength_controller.get_current_wl_point()}')
+                            logger.info(
+                                f'current {self.axis_name}: {self.wavelength_controller.get_current_wl_point()}')
                         raw_counts.append(_raw_counts)
                         batch_output[reader].append(self.sample_count_rate(raw_counts))
                     if isinstance(self.readers[reader], WavemeterController):
                         _wm_reading = self.read_wavemeter(self.readers[reader])
                         batch_output[reader].append(_wm_reading)
                         if self.wavelength_controller:
-                            logger.info(f'current {self.axis_name}: {self.wavelength_controller.get_current_wl_point()}')
+                            logger.info(
+                                f'current {self.axis_name}: {self.wavelength_controller.get_current_wl_point()}')
                     if isinstance(self.readers[reader], VControl):
                         v_reading = self.readers[reader].get_current_wl_point()
                         batch_output[reader].append(v_reading)
@@ -236,12 +240,13 @@ class PleScanner:
         """
         return wm_reader.read_wavemeter()
 
-    def set_scan_mode(self, scan_mode: str) ->None:
+    def set_scan_mode(self, scan_mode: str) -> None:
         self.scan_mode = scan_mode
 
     @property
     def discrete_batch_size(self):
         return self._discrete_batch_size
+
     @discrete_batch_size.setter
     def discrete_batch_size(self, batch_size: int) -> None:
         self._discrete_batch_size = batch_size
@@ -261,6 +266,3 @@ class PleScanner:
     @property
     def get_end(self):
         return self._end
-
-
-
