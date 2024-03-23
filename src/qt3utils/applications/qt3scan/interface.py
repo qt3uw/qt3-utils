@@ -1,6 +1,7 @@
 import tkinter as Tk
-import numpy as np
 from typing import Tuple, Optional, Protocol, runtime_checkable
+
+import numpy as np
 from matplotlib.backend_bases import MouseEvent
 
 
@@ -303,9 +304,9 @@ class QT3ScanApplicationControllerInterface(Protocol):
         pass
 
     def set_scan_range(self, xmin: float, xmax: float, ymin: float, ymax: float) -> None:
-        '''
+        """
         This method is used to set the scan range and is called in qt3scan.main
-        '''
+        """
         pass
 
     def save_scan(self) -> None:
@@ -321,16 +322,16 @@ class QT3ScanApplicationControllerInterface(Protocol):
         pass
 
     def allowed_file_save_formats(self) -> list:
-        '''
+        """
         Returns a list of tuples of the allowed file save formats
             [(description, file_extension), ...]
-        '''
+        """
         pass
 
     def default_file_format(self) -> str:
-        '''
+        """
         Returns the default file format
-        '''
+        """
         pass
 
     def scan_image_rightclick_event(self, event: MouseEvent, index_x: int, index_y: int) -> None:

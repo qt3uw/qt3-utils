@@ -1,16 +1,15 @@
 import logging
-import numpy as np
-from typing import Tuple
-import h5py
 import pickle
 import time
 import tkinter as tk
+from typing import Tuple
 
+import h5py
 import matplotlib
+import numpy as np
+from matplotlib import pyplot as plt
 from matplotlib.backend_bases import MouseEvent
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-import matplotlib.pyplot as plt
-matplotlib.use('Agg')
 
 from qt3utils.applications.qt3scan.interface import (
     QT3ScanDAQControllerInterface,
@@ -22,6 +21,9 @@ from qt3utils.applications.qt3scan.interface import (
 import qt3utils.datagenerators
 from qt3utils.errors import convert_nidaq_daqnotfounderror, QT3Error
 
+
+matplotlib.use('Agg')
+
 module_logger = logging.getLogger(__name__)
 module_logger.setLevel(logging.ERROR)
 
@@ -32,6 +34,7 @@ class QT3ScanConfocalApplicationController:
 
     Note that the DAQ controller here must implement QT3ScanCounterDAQControllerInterface
     """
+
     def __init__(self,
                  position_controller: QT3ScanPositionControllerInterface,
                  daq_controller: QT3ScanCounterDAQControllerInterface,
@@ -95,6 +98,10 @@ class QT3ScanConfocalApplicationController:
         self.daq_and_scanner.stop()
 
     @convert_nidaq_daqnotfounderror(module_logger)
+    def post_stop(self) -> None:
+        self.daq_and_scanner.post_stop()
+
+    @convert_nidaq_daqnotfounderror(module_logger)
     def reset(self) -> None:
         self.daq_and_scanner.reset()
 
@@ -114,10 +121,12 @@ class QT3ScanConfocalApplicationController:
         self.daq_and_scanner.move_y()
 
     @convert_nidaq_daqnotfounderror(module_logger)
-    def optimize_position(self, axis: str,
-                          central: float,
-                          range: float,
-                          step_size: float) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
+    def optimize_position(
+            self, axis: str,
+            central: float,
+            range: float,
+            step_size: float
+    ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """
         The returned tuple elements should be:
         0th: np.ndarray of count rates across the axis
@@ -133,30 +142,33 @@ class QT3ScanConfocalApplicationController:
     def get_completed_scan_range(self) -> Tuple[float, float, float, float]:
         return self.daq_and_scanner.get_completed_scan_range()
 
-    def allowed_file_save_formats(self) -> list:
-        '''
+    @staticmethod
+    def allowed_file_save_formats() -> list:
+        """
         Returns a list of tuples of the allowed file save formats
             [(description, file_extension), ...]
-        '''
-        formats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'), ('HDF5', '*.h5')]
+        """
+        formats = [('Compressed Numpy MultiArray', '*.npz'), ('Numpy Array (count rate only)', '*.npy'),
+                   ('HDF5', '*.h5')]
         return formats
 
-    def default_file_format(self) -> str:
-        '''
+    @staticmethod
+    def default_file_format() -> str:
+        """
         Returns the default file format
-        '''
+        """
         return '.npz'
 
     def save_scan(self, afile_name) -> None:
         file_type = afile_name.split('.')[-1]
 
         data = dict(
-                    scan_range=self.get_completed_scan_range(),
-                    raw_counts=self.daq_and_scanner.scanned_raw_counts,
-                    count_rate=self.daq_and_scanner.scanned_count_rate,
-                    step_size=self.daq_and_scanner.step_size,
-                    daq_clock_rate=self.daq_controller.clock_rate,
-                    )
+            scan_range=self.get_completed_scan_range(),
+            raw_counts=self.daq_and_scanner.scanned_raw_counts,
+            count_rate=self.daq_and_scanner.scanned_count_rate,
+            step_size=self.daq_and_scanner.step_size,
+            daq_clock_rate=self.daq_controller.clock_rate,
+        )
 
         if file_type == 'npy':
             np.save(afile_name, data['count_rate'])
@@ -186,10 +198,13 @@ class QT3ScanHyperSpectralApplicationController:
 
      Note that the DAQ controller here must implement QT3ScanSpectrometerDAQControllerInterface
     """
-    def __init__(self,
-                 position_controller: QT3ScanPositionControllerInterface,
-                 daq_controller: QT3ScanSpectrometerDAQControllerInterface,
-                 logger_level: int) -> None:
+
+    def __init__(
+            self,
+            position_controller: QT3ScanPositionControllerInterface,
+            daq_controller: QT3ScanSpectrometerDAQControllerInterface,
+            logger_level: int
+    ) -> None:
 
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logger_level)
@@ -207,7 +222,7 @@ class QT3ScanHyperSpectralApplicationController:
         self._step_size = 0.5
         self.raster_line_pause = 0.150  # wait 150ms for the piezo stage to settle before a line scan
 
-        self.hyper_spectral_raw_data = None  # is there way to create a "default numpy array", similar a 'default dict'??
+        self.hyper_spectral_raw_data = None  # is there way to create a "default numpy array", similar a 'default dict'?
         self.hyper_spectral_wavelengths = None
 
     @property
@@ -267,28 +282,34 @@ class QT3ScanHyperSpectralApplicationController:
 
     def stop(self) -> None:
         """
-        This method is used to stop the scan. It should stop the hardware from acquiring data.
+        This method is used to stop the scan. It should stop the scanning loop.
+        """
+        self.running = False
+
+    def post_stop(self) -> None:
+        """
+        This method is called after the scan is stopped.
+        It should do the necessary cleanup.
+        For example, it should stop the DAQ.
         """
         self.daq_controller.stop()
-        self.running = False
 
     def reset(self) -> None:
         """
         Resets internal data structure. NB: this blows away any previously stored data.
-
         """
         self.hyper_spectral_raw_data = None
         self.hyper_spectral_wavelengths = None
 
     def set_to_starting_position(self) -> None:
         self._current_y = self.ymin
-        self.position_controller.go_to_position(x = self.xmin, y = self.ymin)
+        self.position_controller.go_to_position(x=self.xmin, y=self.ymin)
 
     def still_scanning(self) -> bool:
         if self.running is False:  # this allows external process to stop scan
             return False
 
-        if self.current_y < self.ymax:  # stops scan when reaches final position
+        if self.current_y <= self.ymax:  # stops scan when reaches final position
             return True
         else:
             self.running = False
@@ -297,7 +318,6 @@ class QT3ScanHyperSpectralApplicationController:
     def scan_x(self):
         """
         Scans the x axis from xmin to xmax in steps of step_size.
-
         """
         raw_counts_for_axis, wavelengths = (
             self.scan_axis('x', self.xmin, self.xmax, self.step_size)
@@ -348,7 +368,7 @@ class QT3ScanHyperSpectralApplicationController:
         self.position_controller.go_to_position(**{axis: min})
         time.sleep(self.raster_line_pause)
 
-        for val in np.arange(min, max, step_size):
+        for val in np.arange(min, max + step_size, step_size):
             self.position_controller.go_to_position(**{axis: val})
             measured_spectrum, measured_wavelengths = self.daq_controller.sample_spectrum()
 
@@ -362,7 +382,8 @@ class QT3ScanHyperSpectralApplicationController:
             if initial_spectrum_size != len(measured_wavelengths):
                 raise QT3Error("Inconsistent wavelength array size obtained during scan! Check your hardware.")
             if len(measured_spectrum) != len(measured_wavelengths):
-                raise QT3Error("Inconsistent wavelength array and spectrum size obtained during scan! Check your hardware.")
+                raise QT3Error(
+                    "Inconsistent wavelength array and spectrum size obtained during scan! Check your hardware.")
             if np.array_equal(wavelength_array, measured_wavelengths) is False:
                 raise QT3Error("Inconsistent wavelength array obtained during scan! Check your hardware.")
             spectrums_in_scan.append(measured_spectrum)
@@ -370,26 +391,28 @@ class QT3ScanHyperSpectralApplicationController:
         return np.array(spectrums_in_scan), wavelength_array
 
     def move_y(self) -> None:
-        if self.current_y < self.ymax:
+        if self.current_y <= self.ymax:
             self._current_y += self.step_size
         try:
             self.position_controller.go_to_position(y=self.current_y)
         except ValueError as e:
             self.logger.info(f'move y: out of range\n\n{e}')
 
-    def optimize_position(self, axis: str,
-                            central: float,
-                            range: float,
-                            step_size: float) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
+    def optimize_position(
+            self, axis: str,
+            central: float,
+            range: float,
+            step_size: float
+    ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """
         Not Yet Implemented.
         """
         raise NotImplementedError("QT3ScanHyperSpectralApplicationController does not implement optimize_position")
 
     def set_scan_range(self, xmin: float, xmax: float, ymin: float, ymax: float) -> None:
-        '''
+        """
         This method is used to set the scan range and is called in qt3scan.main
-        '''
+        """
         self.position_controller.check_allowed_position(xmin, ymin)
         self.position_controller.check_allowed_position(xmax, ymax)
 
@@ -433,11 +456,12 @@ class QT3ScanHyperSpectralApplicationController:
             with open(afile_name, 'wb') as f:
                 pickle.dump(data, f)
 
-    def allowed_file_save_formats(self) -> list:
-        '''
+    @staticmethod
+    def allowed_file_save_formats() -> list:
+        """
         Returns a list of tuples of the allowed file save formats
             [(description, file_extension), ...]
-        '''
+        """
         formats = [('Compressed Numpy MultiArray', '*.npz'),
                    ('Numpy Array (count rate only)', '*.npy'),
                    ('HDF5', '*.h5'),
@@ -445,15 +469,16 @@ class QT3ScanHyperSpectralApplicationController:
                    ]
         return formats
 
-    def default_file_format(self) -> str:
-        '''
+    @staticmethod
+    def default_file_format() -> str:
+        """
         Returns the default file format
-        '''
+        """
         return '.npz'
 
     def scan_image_rightclick_event(self, event: MouseEvent, index_x: int, index_y: int) -> None:
         """
-        This method is called when the user right clicks on the scan image.
+        This method is called when the user right-clicks on the scan image.
         """
         self.logger.debug(f"Mouse Event {event}")
 
@@ -466,7 +491,8 @@ class QT3ScanHyperSpectralApplicationController:
         ax.set_xlabel('Wavelength (nm)')
         ax.set_ylabel('Counts / bin')
 
-        self.logger.debug(f'Selecting {index_y}, {index_x} from hyper spectral array of shape {self.hyper_spectral_raw_data.shape}')
+        self.logger.debug(
+            f'Selecting {index_y}, {index_x} from hyper spectral array of shape {self.hyper_spectral_raw_data.shape}')
         selected_spectrum = self.hyper_spectral_raw_data[index_y, index_x, :]
 
         ax.plot(self.hyper_spectral_wavelengths, selected_spectrum, label='data')
