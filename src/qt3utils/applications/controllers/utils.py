@@ -334,7 +334,7 @@ def make_popup_window_and_take_threaded_action(
         The title of the popup window.
     message: str
         The message of the popup window.
-    action: Callable[[], None]
+    action: Callable[[], Any]
         The method to call within the thread.
     width: int
         The width of the popup window. Default is 300.
