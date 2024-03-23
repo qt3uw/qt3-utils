@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qt3utils"
-version = "1.1.0dev0"
+version = "1.1.2dev0"
 
 description = "A package for performing experiments in the QT3 lab at UW."
 readme = "README.md"
@@ -65,6 +65,7 @@ dependencies = [
 [project.scripts]
 qt3scope = "qt3utils.applications.qt3scope.main:main"
 qt3scan = "qt3utils.applications.qt3scan.main:main"
+qt3pb = "qt3utils.applications.qt3pb.main:main"
 
 [tool.setuptools.package-data]
 "qt3utils.applications.controllers" = ["*.yaml"]
