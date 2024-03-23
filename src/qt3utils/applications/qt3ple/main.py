@@ -37,10 +37,11 @@ RANDOM_DAQ_DEVICE_NAME = 'Random Data Generator'
 DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DEVICE_NAMES[0]
 
 CONTROLLER_PATH = 'qt3utils.applications.controllers'
-STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAMES[0] : 'nidaq_rate_counter.yaml',
-                        NIDAQ_DEVICE_NAMES[1] : 'nidaq_wm_ple.yaml'}
+STANDARD_CONTROLLERS = {NIDAQ_DEVICE_NAMES[0]: 'nidaq_rate_counter.yaml',
+                        NIDAQ_DEVICE_NAMES[1]: 'nidaq_wm_ple.yaml'}
 
 SCAN_OPTIONS = ["Discrete", "Batches"]
+
 
 class ScanImage:
     def __init__(self, mplcolormap='gray') -> None:
@@ -68,12 +69,12 @@ class ScanImage:
     def update_image(self, model, grid) -> None:
         for ii, reader in enumerate(model.readers):
 
-            #if self.log_data:
+            # if self.log_data:
             #    data = np.log10(model.scanned_count_rate)
             #    data[np.isinf(data)] = 0  # protect against +-inf
-            #else:
+            # else:
             #    data = model.scanned_count_rate
-            #data = np.array(data).T.tolist()
+            # data = np.array(data).T.tolist()
             y_data = []
             for output in model.outputs:
                 y_scan = output[reader]
@@ -84,14 +85,15 @@ class ScanImage:
 
             ax = self.fig.add_subplot(grid[0, ii])
             y_data = np.array(y_data).T
-            artist = ax.imshow(y_data, cmap=self.cmap
-                                    , extent=[model.current_frame + model.wavelength_controller.settling_time_in_seconds,
-                                                                       0.0,
-                                                                       model.get_start,
-                                                                       model.get_end + model.step_size])
+            artist = ax.imshow(
+                y_data,
+                cmap=self.cmap,
+                extent=[model.current_frame + model.wavelength_controller.settling_time_in_seconds, 0.0,
+                        model.get_start, model.get_end + model.step_size]
+            )
             cbar = self.fig.colorbar(artist, ax=ax)
 
-            #if self.log_data is False:
+            # if self.log_data is False:
             #    cbar.formatter.set_powerlimits((0, 3))
 
             self.ax.set_xlabel('Pixels')
@@ -100,8 +102,8 @@ class ScanImage:
     def update_plot(self, model, grid) -> None:
 
         for ii, reader in enumerate(model.readers):
-            y_data = model.outputs[model.current_frame-1][reader]
-            x_control = model.scanned_control[model.current_frame-1]
+            y_data = model.outputs[model.current_frame - 1][reader]
+            x_control = model.scanned_control[model.current_frame - 1]
             ax = self.fig.add_subplot(grid[1, ii])
             ax.plot(x_control, y_data, color='k', linewidth=1.5)
 
@@ -115,7 +117,7 @@ class ScanImage:
         pass
 
 
-class SidePanel():
+class SidePanel:
     def __init__(self, root, scan_range) -> None:
         frame = tk.Frame(root.root)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -195,7 +197,7 @@ class SidePanel():
         row += 1
         self.get_button = tk.Button(frame, text="Get current Voltage")
         self.get_button.grid(row=row, column=0)
-        self.voltage_show=tk.Label(frame, text='None')
+        self.voltage_show = tk.Label(frame, text='None')
         self.voltage_show.grid(row=row, column=1)
 
         row += 1
@@ -210,7 +212,7 @@ class SidePanel():
         row += 1
         tk.Label(frame, text="Hardware Configuration", font='Helvetica 16').grid(row=row, column=0, pady=10)
 
-        row+=1
+        row += 1
         self.controller_option = tk.StringVar(frame)
         self.controller_option.set(DEFAULT_DAQ_DEVICE_NAME)  # setting the default value
 
@@ -238,9 +240,8 @@ class SidePanel():
             self.downsweep_time_entry.config(state=tk.DISABLED)
 
 
-
-class MainApplicationView():
-    def __init__(self, main_frame, scan_range=[0, 2]) -> None:
+class MainApplicationView:
+    def __init__(self, main_frame, scan_range=(0, 2)) -> None:
         frame = tk.Frame(main_frame.root)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
@@ -256,10 +257,11 @@ class MainApplicationView():
 
         self.canvas.draw()
 
-class MainTkApplication():
+
+class MainTkApplication:
 
     def __init__(self, controller_name) -> None:
-        #self.counter_scanner = counter_scanner
+        # self.counter_scanner = counter_scanner
         self.root = tk.Tk()
         self.view = MainApplicationView(self)
         self.view.controller_option = controller_name
@@ -310,7 +312,7 @@ class MainTkApplication():
         downsweep_time = float(self.view.sidepanel.sweep_time_entry.get())
         if not do_downsweep:
             downsweep_time_entry = None
-        vstart= float(self.view.sidepanel.voltage_start_entry.get())
+        vstart = float(self.view.sidepanel.voltage_start_entry.get())
         vend = float(self.view.sidepanel.voltage_end_entry.get())
         step_size = (vend - vstart) / float(n_sample_size)
         args = [vstart, vend]
@@ -337,6 +339,7 @@ class MainTkApplication():
     def stop_scan(self, event=None) -> None:
         self.application_controller.stop()
         self.enable_buttons()
+
     def on_closing(self) -> None:
         try:
             self.stop_scan()
@@ -385,13 +388,13 @@ class MainTkApplication():
 
         self.enable_buttons()
 
-    def save_scan(self, event = None):
+    def save_scan(self, event=None):
         myformats = [('Pickle', '*.pkl')]
         afile = tk.filedialog.asksaveasfilename(filetypes=myformats, defaultextension='.pkl')
         logger.info(afile)
         file_type = afile.split('.')[-1]
         if afile is None or afile == '':
-            return # selection was canceled.
+            return  # selection was canceled.
         data = {}
         data["Data"] = {}
         if self.application_controller is not None:
@@ -467,7 +470,7 @@ class MainTkApplication():
             self.controller_model = cls(logger.level)
             self.controller_model.configure(daq_controller_config['configure'])
         else:
-           raise Exception("Yaml configuration file must have a controller for PLE scan.")
+            raise Exception("Yaml configuration file must have a controller for PLE scan.")
         self.application_controller = plescanner.PleScanner(self.data_acquisition_models, self.controller_model)
 
     def load_controller_from_name(self, application_controller_name: str) -> None:
@@ -477,7 +480,8 @@ class MainTkApplication():
         Should be called during instantiation of this class and should be the callback
         function for the support controller pull-down menu in the side panel
         """
-        yaml_path = importlib.resources.files(CONTROLLER_PATH).joinpath(STANDARD_CONTROLLERS[application_controller_name])
+        yaml_path = importlib.resources.files(CONTROLLER_PATH).joinpath(
+            STANDARD_CONTROLLERS[application_controller_name])
         self.configure_from_yaml(str(yaml_path))
 
     def disable_buttons(self):
@@ -493,6 +497,7 @@ class MainTkApplication():
         self.view.sidepanel.goto_slow_button['state'] = 'normal'
         self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
         self.view.sidepanel.save_scan_button.config(state=tk.NORMAL)
+
 
 def main() -> None:
     tkapp = MainTkApplication(DEFAULT_DAQ_DEVICE_NAME)
