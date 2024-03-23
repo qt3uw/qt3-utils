@@ -1,34 +1,34 @@
 import argparse
-import tkinter as tk
-import logging
 import datetime
-from threading import Thread
 import importlib.resources
+import logging
+import tkinter as tk
+from threading import Thread
 from typing import Any, Protocol, Optional, Callable, List
 
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.backend_bases import MouseEvent
 import matplotlib
 import nidaqmx
+import numpy as np
 import yaml
+from matplotlib import pyplot as plt
+from matplotlib.backend_bases import MouseEvent
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
 import qt3utils.nidaq
 import qt3utils.pulsers.pulseblaster
-from qt3utils.applications.qt3scan.interface import (
-    QT3ScanDAQControllerInterface,
-    QT3ScanPositionControllerInterface,
-    QT3ScanApplicationControllerInterface,
-)
 from qt3utils.applications.qt3scan.controller import (
     QT3ScanConfocalApplicationController,
     QT3ScanHyperSpectralApplicationController
 )
 from qt3utils.applications.controllers.utils import make_popup_window_and_take_threaded_action
+from qt3utils.applications.qt3scan.interface import (
+    QT3ScanDAQControllerInterface,
+    QT3ScanPositionControllerInterface,
+    QT3ScanApplicationControllerInterface,
+)
+
 
 matplotlib.use('Agg')
-
 
 parser = argparse.ArgumentParser(description='QT3Scan', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-v', '--verbose', type=int, default=2, help='0 = quiet, 1 = info, 2 = debug.')
@@ -88,6 +88,7 @@ CONFIG_FILE_DAQ_CONTROLLER = 'DAQController'
 
 
 class ScanImage:
+
     def __init__(self, mplcolormap: str = 'gray'):
         self.fig, self.ax = plt.subplots()
         self.cbar = None
@@ -215,7 +216,8 @@ class ScanImage:
             self.fig.canvas.draw()
 
 
-class SidePanel():
+class SidePanel:
+
     def __init__(self, application):
         frame = tk.Frame(application.root_window)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -358,7 +360,8 @@ class SidePanel():
         self.y_max_entry.insert(10, scan_range[1])
 
 
-class MainApplicationView():
+class MainApplicationView:
+
     def __init__(self, application):
         frame = tk.Frame(application.root_window)
         frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -410,7 +413,7 @@ class MainApplicationView():
                                y_vals: np.ndarray,
                                fit_coeff: np.ndarray = None) -> None:
         """
-        Consturcts a new window with a plot of the optimization data.
+        Constructs a new window with a plot of the optimization data.
 
         title: title of the window
         old_opt_value: the old optimized value
@@ -445,7 +448,7 @@ class MainApplicationView():
         canvas.draw()
 
 
-class MainTkApplication():
+class MainTkApplication:
 
     def __init__(self, application_controller_name: str):
         self.root_window = tk.Tk()
@@ -751,9 +754,9 @@ class MainTkApplication():
         self.application_controller.save_scan(afile)
 
     def _optimize_thread_function(self, axis: str, central: float, range: float, step_size: float) -> None:
-        '''
+        """
         This function is called by the optimize function. It is not intended to be called directly.
-        '''
+        """
 
         try:
             data, axis_vals, opt_pos, coeff = self.application_controller.optimize_position(axis,
