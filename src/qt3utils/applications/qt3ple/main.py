@@ -19,8 +19,7 @@ matplotlib.use('Agg')
 
 parser = argparse.ArgumentParser(description='NI DAQ (PCIx 6363) / PLE Scanner',
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('-q', '--quiet', action='store_true',
-                    help='When true,logger level will be set to warning. Otherwise, set to "info".')
+parser.add_argument('-v', '--verbose', type=int, default=2, help='0 = quiet, 1 = info, 2 = debug.')
 parser.add_argument('-cmap', metavar='<MPL color>', default='gray',
                     help='Set the MatplotLib colormap scale')
 args = parser.parse_args()
@@ -28,8 +27,12 @@ args = parser.parse_args()
 logger = logging.getLogger(__name__)
 logging.basicConfig()
 
-if args.quiet is False:
+if args.verbose == 0:
+    logger.setLevel(logging.WARNING)
+if args.verbose == 1:
     logger.setLevel(logging.INFO)
+if args.verbose == 2:
+    logger.setLevel(logging.DEBUG)
 
 NIDAQ_DEVICE_NAMES = ['NIDAQ Rate Counter', "Lockin & Wavemeter"]
 RANDOM_DAQ_DEVICE_NAME = 'Random Data Generator'
