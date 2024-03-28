@@ -67,13 +67,6 @@ class ScanImage:
 
     def update_image(self, model, grid) -> None:
         for ii, reader in enumerate(model.readers):
-
-            #if self.log_data:
-            #    data = np.log10(model.scanned_count_rate)
-            #    data[np.isinf(data)] = 0  # protect against +-inf
-            #else:
-            #    data = model.scanned_count_rate
-            #data = np.array(data).T.tolist()
             y_data = []
             for output in model.outputs:
                 y_scan = output[reader]
@@ -130,7 +123,7 @@ class SidePanel():
         self.save_scan_button = tk.Button(frame, text="Save Scan")
         self.save_scan_button.grid(row=row, column=2)
         row += 1
-        tk.Label(frame, text="Voltage Range (V)").grid(row=row, column=0)
+        tk.Label(frame, text="Scan Range").grid(row=row, column=0)
         self.voltage_start_entry = tk.Entry(frame, width=10)
         self.voltage_end_entry = tk.Entry(frame, width=10)
         self.voltage_start_entry.insert(10, scan_range[0])
@@ -158,7 +151,7 @@ class SidePanel():
 
         row += 1
         self.do_downsweep = tk.IntVar(value=0)
-        tk.Label(frame, text="Downsweep Time").grid(row=row, column=0)
+        tk.Label(frame, text="Backward Sweep Time").grid(row=row, column=0)
         self.downsweep_time_entry = tk.Entry(frame, width=10)
         self.downsweep_time_entry.insert(10, 1)
         self.downsweep_time_entry.grid(row=row, column=1)
@@ -182,24 +175,24 @@ class SidePanel():
         tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
 
         row += 1
-        self.goto_button = tk.Button(frame, text="Go To Voltage")
+        self.goto_button = tk.Button(frame, text="Go To scanning parameter")
         self.goto_button.grid(row=row, column=0)
-        self.goto_slow_button = tk.Button(frame, text="Slowly go to Voltage")
+        self.goto_slow_button = tk.Button(frame, text="Slowly go to scanning parameter")
         self.goto_slow_button.grid(row=row, column=1)
         row += 1
-        tk.Label(frame, text="Voltage (V)").grid(row=row, column=0)
+        tk.Label(frame, text="Wavelength Parameter").grid(row=row, column=0)
         self.voltage_entry = tk.Entry(frame, width=10)
         self.voltage_entry.insert(10, 0)
         self.voltage_entry.grid(row=row, column=1)
 
         row += 1
-        self.get_button = tk.Button(frame, text="Get current Voltage")
+        self.get_button = tk.Button(frame, text="Get current scanning parameter")
         self.get_button.grid(row=row, column=0)
         self.voltage_show=tk.Label(frame, text='None')
         self.voltage_show.grid(row=row, column=1)
 
         row += 1
-        tk.Label(frame, text="Voltage Limits (V)").grid(row=row, column=0)
+        tk.Label(frame, text="Scan Limits").grid(row=row, column=0)
         self.voltage_lmin_entry = tk.Entry(frame, width=10)
         self.voltage_lmax_entry = tk.Entry(frame, width=10)
         self.voltage_lmin_entry.insert(10, float(scan_range[0]))
@@ -436,6 +429,7 @@ class MainTkApplication():
         logger.info("load settings from yaml")
         daq_readers = self.app_config["readers"]["daq_readers"]
         self.meta_configs = []
+        self.data_acquisition_models = {}
         if daq_readers is not None:
             for daq_reader in daq_readers:
                 daq_reader_name = daq_readers[daq_reader]

@@ -8,7 +8,7 @@ import numpy as np
 from qt3utils.applications.controllers.nidaqedgecounter import QT3ScanNIDAQEdgeCounterController
 from qt3utils.applications.controllers.wavemeter_controller import WavemeterController
 from qt3utils.applications.controllers.lockin_controller import Lockin
-from qt3utils.nidaq.customcontrollers import VControl
+from qt3utils.nidaq.customcontrollers import WavelengthControlBase, VControl
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class PleScanner:
     Override this class for specific types of PLE experiments
     """
 
-    def __init__(self, readers, wavelength_controller):
+    def __init__(self, readers: dict, wavelength_controller: WavelengthControlBase) -> None:
         """
         self.running: boolean true when scan thread is running
         self.current_frame: current pixel (or time) number in sweep
@@ -234,7 +234,7 @@ class PleScanner:
         """
         Returns the reading from the wavemeter
         """
-        return wm_reader.read_wavemeter()
+        return wm_reader.read()
 
     def set_scan_mode(self, scan_mode: str) ->None:
         self.scan_mode = scan_mode

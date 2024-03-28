@@ -33,7 +33,7 @@ class WavemeterController(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def configure(self):
+    def configure(self, config_dict: dict):
         """
         Override this method to configure the wavemeter from a dict set via yaml file
         """
@@ -46,9 +46,9 @@ class WavemeterDllController(WavemeterController):
     """
     def __init__(self, logger_level, dll_path=""):
         super(WavemeterDllController, self).__init__(logger_level)
-        if not dll_path == "":
-            self.open(dll_path)
         self.dll_path = dll_path
+        if not dll_path == "":
+            self.open(self.dll_path)
         self.last_config_dict = {}
 
     def open(self, dll_path) -> None:
@@ -61,13 +61,13 @@ class WavemeterDllController(WavemeterController):
         if self._dh == -1:
             raise Exception("Failed to connect to wave meter.")
 
-    def read_wavemeter(self) -> float:
+    def read(self) -> float:
         """
         Return the value from the wavemeter via the dll
         """
         return self._mydll.CLGetLambdaReading(self._dh)
 
-    def close_wavemeter(self) -> None:
+    def close(self) -> None:
         """
         Close the connection to the wavemeter via the dll
         """

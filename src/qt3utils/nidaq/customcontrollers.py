@@ -4,10 +4,11 @@ import nidaqmx
 import numpy as np
 import time
 
-logger = logging.getLogger(__name__)
-
-
 class WavelengthControlBase(abc.ABC):
+    """
+    All methods of controlling wavelength should share some common characteristics: min, max, get current value, etc.
+    This is such a base class from which all wavelength controller can inherit from.
+    """
 
     def __init__(self, device_name: str,
                  write_channel: str = 'ao0',
@@ -18,6 +19,7 @@ class WavelengthControlBase(abc.ABC):
                  max_position: float = 80.0) -> None:
         super().__init__()
 
+        self.logger = logging.getLogger(__name__)
         self.device_name = device_name
         self.write_channel = write_channel
         self.read_channel = read_channel
@@ -105,9 +107,9 @@ class VControl(WavelengthControlBase):
                 task.write(self._nm_to_volts(nm=v))
                 self.last_write_value = v
             debug_string.append(f'v: {v:.2f}')
-        logger.info(f'go to voltage {" ".join(debug_string)}')
+        self.logger.info(f'go to voltage {" ".join(debug_string)}')
         time.sleep(self.settling_time_in_seconds) #wait to ensure piezo actuator has settled into position.
-        logger.debug(f'last write: {self.last_write_value}')
+        self.logger.debug(f'last write: {self.last_write_value}')
 
     def _nm_to_volts(self, nm: float) -> float:
         return nm / self.scale_nm_per_volt
@@ -141,10 +143,10 @@ class VControlWavelength(WavelengthControlBase):
                 task.write(v)
                 self.last_write_value = v
             debug_string.append(f'v: {v:.2f}')
-        logger.info(f'go to voltage {" ".join(debug_string)}')
+        self.logger.info(f'go to voltage {" ".join(debug_string)}')
         if not self.speed == "fast":
             time.sleep(self.settling_time_in_seconds) #wait to ensure voltage has settled into position.
-        logger.debug(f'last write: {self.last_write_value}')
+        self.logger.debug(f'last write: {self.last_write_value}')
 
     def go_to_voltage_slowly(self, v: float = None) -> None:
         debug_string = []
@@ -161,8 +163,8 @@ class VControlWavelength(WavelengthControlBase):
                 task.write(v)
                 self.last_write_value = v
             debug_string.append(f'v: {v:.2f}')
-        logger.info(f'go to voltage {" ".join(debug_string)}')
+        self.logger.info(f'go to voltage {" ".join(debug_string)}')
         time.sleep(self.settling_time_in_seconds)  # wait to ensure piezo actuator has settled into position.
-        logger.debug(f'last write: {self.last_write_value}')
+        self.logger.debug(f'last write: {self.last_write_value}')
 
 
