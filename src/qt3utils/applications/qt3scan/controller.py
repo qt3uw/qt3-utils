@@ -1,3 +1,4 @@
+import json
 import logging
 import pickle
 import time
@@ -91,6 +92,7 @@ class QT3ScanConfocalApplicationController:
 
         self.daq_and_scanner = qt3utils.datagenerators.CounterAndScanner(daq_controller, position_controller)
         self.data_clock_rate = None
+        self.data_configs = {'DAQ': None, 'Scanner': None}
 
     @property
     def step_size(self) -> float:
@@ -139,6 +141,8 @@ class QT3ScanConfocalApplicationController:
     @convert_nidaq_daqnotfounderror(module_logger)
     def start(self) -> None:
         self.data_clock_rate = self.daq_controller.clock_rate
+        self.data_configs['DAQ'] = self.daq_controller.last_config_dict
+        self.data_configs['Scanner'] = self.position_controller.last_config_dict
         self.daq_and_scanner.start()
 
     @convert_nidaq_daqnotfounderror(module_logger)
@@ -153,6 +157,7 @@ class QT3ScanConfocalApplicationController:
     def reset(self) -> None:
         self.daq_and_scanner.reset()
         self.data_clock_rate = None
+        self.data_configs = {'DAQ': None, 'Scanner': None}
 
     @convert_nidaq_daqnotfounderror(module_logger)
     def set_to_starting_position(self) -> None:
@@ -217,6 +222,8 @@ class QT3ScanConfocalApplicationController:
             count_rate=self.daq_and_scanner.scanned_count_rate,
             step_size=self.daq_and_scanner.step_size,
             daq_clock_rate=self.data_clock_rate,
+            daq_config=self.data_configs['DAQ'],
+            scanner_config=self.data_configs['Scanner'],
         )
 
         if file_type == 'npy':
@@ -228,17 +235,23 @@ class QT3ScanConfocalApplicationController:
         elif file_type == 'h5':
             h5file = h5py.File(afile_name, 'w')
             for key, value in data.items():
-                h5file.create_dataset(key, data=value)
+                if key not in ['daq_config', 'scanner_config']:
+                    h5file.create_dataset(key, data=value)
+                else:
+                    h5file.attrs[key] = json.dumps(value)
             h5file.close()
 
     def load_scan(self, afile_name):
         file_type = afile_name.split('.')[-1]
 
         if file_type == 'npy':
-            logging.error('Filetype "npy" is not supported for loading scans')
+            logging.error('Filetype "npy" is not supported for loading scans.')
             return
         elif file_type == 'npz':
-            data_dict = dict(np.load(afile_name))
+            data_dict = dict(np.load(afile_name, allow_pickle=True))
+            for key, value in data_dict.items():
+                if len(value.shape) == 0:
+                    data_dict[key] = value[()]
         elif file_type == 'h5':
             with h5py.File(afile_name, 'r') as h5file:
                 data_dict = {}
@@ -247,6 +260,8 @@ class QT3ScanConfocalApplicationController:
                         data_dict[key] = h5file[key][:]
                     except ValueError:
                         data_dict[key] = h5file[key][()]
+                for key, value in dict(h5file.attrs).items():
+                    data_dict[key] = json.loads(value)
         elif file_type == 'pkl':
             with open(filename, 'rb') as f:
                 data_dict = pickle.load(f)
@@ -264,6 +279,8 @@ class QT3ScanConfocalApplicationController:
         self.daq_and_scanner.step_size = data_dict.get('step_size', 0.5)
         self.daq_and_scanner.ymax = self.daq_and_scanner.current_y - self.daq_and_scanner.step_size
         self.data_clock_rate = data_dict.get('daq_clock_rate', None)
+        self.data_configs['DAQ'] = data_dict.get('daq_config', None)
+        self.data_configs['Scanner'] = data_dict.get('scanner_config', None)
 
     def scan_image_rightclick_event(self, event: MouseEvent, index_x: int, index_y: int) -> None:
         """
@@ -310,6 +327,7 @@ class QT3ScanHyperSpectralApplicationController:
         self.hyper_spectral_raw_data = None  # is there way to create a "default numpy array", similar a 'default dict'?
         self.hyper_spectral_wavelengths = None
         self.data_clock_rate = None
+        self.data_configs = {'DAQ': None, 'Scanner': None}
 
     @property
     def step_size(self) -> float:
@@ -428,6 +446,8 @@ class QT3ScanHyperSpectralApplicationController:
         """
         self.running = True
         self.data_clock_rate = self.daq_controller.clock_rate
+        self.data_configs['DAQ'] = self.daq_controller.last_config_dict
+        self.data_configs['Scanner'] = self.position_controller.last_config_dict
         self.daq_controller.start()
 
     def stop(self) -> None:
@@ -451,6 +471,7 @@ class QT3ScanHyperSpectralApplicationController:
         self.hyper_spectral_raw_data = None
         self.hyper_spectral_wavelengths = None
         self.data_clock_rate = None
+        self.data_configs = {'DAQ': None, 'Scanner': None}
 
     def set_to_starting_position(self) -> None:
         self._current_y = self.ymin
@@ -591,7 +612,9 @@ class QT3ScanHyperSpectralApplicationController:
             step_size=self.step_size,
             daq_clock_rate=self.data_clock_rate,
             filter_range=self.filter_view_range,
-            counts_aggregation_option=self.counts_aggregation_option
+            counts_aggregation_option=self.counts_aggregation_option,
+            daq_config=self.data_configs['DAQ'],
+            scanner_config=self.data_configs['Scanner']
         )
 
         if file_type == 'npy':
@@ -603,7 +626,10 @@ class QT3ScanHyperSpectralApplicationController:
         elif file_type == 'h5':
             with h5py.File(afile_name, 'w') as h5file:
                 for key, value in data.items():
-                    h5file.create_dataset(key, data=value)
+                    if key not in ['daq_config', 'scanner_config']:
+                        h5file.create_dataset(key, data=value)
+                    else:
+                        h5file.attrs[key] = json.dumps(value)
 
         elif file_type == 'pkl':
             with open(afile_name, 'wb') as f:
@@ -613,10 +639,13 @@ class QT3ScanHyperSpectralApplicationController:
         file_type = afile_name.split('.')[-1]
 
         if file_type == 'npy':
-            logging.error('Filetype "npy" is not supported for loading scans')
+            logging.error('Filetype "npy" is not supported for loading scans.')
             return
         elif file_type == 'npz':
-            data_dict = dict(np.load(afile_name))
+            data_dict = dict(np.load(afile_name, allow_pickle=True))
+            for key, value in data_dict.items():
+                if len(value.shape) == 0:
+                    data_dict[key] = value[()]
         elif file_type == 'h5':
             with h5py.File(afile_name, 'r') as h5file:
                 data_dict = {}
@@ -625,6 +654,8 @@ class QT3ScanHyperSpectralApplicationController:
                         data_dict[key] = h5file[key][:]
                     except ValueError:
                         data_dict[key] = h5file[key][()]
+                for key, value in dict(h5file.attrs).items():
+                    data_dict[key] = json.loads(value)
         elif file_type == 'pkl':
             with open(filename, 'rb') as f:
                 data_dict = pickle.load(f)
@@ -643,7 +674,9 @@ class QT3ScanHyperSpectralApplicationController:
         self.data_clock_rate = data_dict.get('daq_clock_rate', None)
         self.filter_view_range = data_dict.get('filter_range', (-np.inf, np.inf))
         self.counts_aggregation_option = (
-            data_dict.get('counts_aggregation_option', list(STANDARD_COUNT_AGREGATION_METHODS.keys())))[0]
+            data_dict.get('counts_aggregation_option', list(STANDARD_COUNT_AGREGATION_METHODS.keys())[0]))
+        self.data_configs['DAQ'] = data_dict.get('daq_config', None)
+        self.data_configs['Scanner'] = data_dict.get('scanner_config', None)
 
     @staticmethod
     def allowed_file_save_formats() -> list:
