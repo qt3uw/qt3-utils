@@ -28,6 +28,52 @@ module_logger = logging.getLogger(__name__)
 module_logger.setLevel(logging.ERROR)
 
 
+def weighted_mean_wavelength(wavelengths, spectra):
+    """
+    Calculates the mean wavelength for each x, y coordinate weighted by the counts.
+
+    Args:
+    spectra: A 3D numpy array containing the spectra data, where the first two
+             dimensions represent the x and y coordinates and the third dimension
+             represents the wavelengths.
+
+    Returns:
+    A 2D numpy array containing the mean wavelength for each x, y coordinate.
+    """
+    # Check if 3D array
+    if len(spectra.shape) != 3:
+        raise ValueError("Input data must be a 3D numpy array.")
+
+    # Get number of dimensions (x, y, wavelengths)
+    x_dim, y_dim, wavelength_dim = spectra.shape
+
+    # Initialize array for mean wavelengths
+    mean_wavelengths = np.zeros((x_dim, y_dim))
+
+    # Loop over each x,y coordinate
+    for x in range(x_dim):
+        for y in range(y_dim):
+            # Extract spectrum for current coordinate
+            spectrum = spectra[x, y, :]
+
+            # Calculate weighted mean using counts as weights
+            mean_wavelengths[x, y] = np.average(wavelengths, weights=spectrum)
+
+    return mean_wavelengths
+
+# If we need to implement this for more than a single axis, we need to use the np.apply_over_axes method,
+# and also make sure to take into account the number of axes axes and the number of count axes (though, it should be 1?)
+# I guess if we have multi dimensional axes (e.g. wavelength and number of frames), we need to aggregate that too.
+STANDARD_COUNT_AGREGATION_METHODS = {
+    'Counts-Sum': lambda _, data: np.sum(data, axis=-1),
+    'Counts-Mean': lambda _, data: np.mean(data, axis=-1),
+    'Counts-Max': lambda _, data: np.max(data, axis=-1),
+    'Counts-Min': lambda _, data: np.min(data, axis=-1),
+    'Axes-Weighted-Mean': lambda params, data: weighted_mean_wavelength(params, data),
+    'Axes-ArgMax': lambda params, data: params[np.argmax(data, axis=-1)],
+    'Axes-ArgMin': lambda params, data: params[np.argmin(data, axis=-1)],
+}
+
 class QT3ScanConfocalApplicationController:
     """
     Implements qt3utils.applications.qt3scan.interface.QT3ScanApplicationControllerInterface
@@ -44,6 +90,7 @@ class QT3ScanConfocalApplicationController:
         self.logger.setLevel(logger_level)
 
         self.daq_and_scanner = qt3utils.datagenerators.CounterAndScanner(daq_controller, position_controller)
+        self.data_clock_rate = None
 
     @property
     def step_size(self) -> float:
@@ -91,6 +138,7 @@ class QT3ScanConfocalApplicationController:
 
     @convert_nidaq_daqnotfounderror(module_logger)
     def start(self) -> None:
+        self.data_clock_rate = self.daq_controller.clock_rate
         self.daq_and_scanner.start()
 
     @convert_nidaq_daqnotfounderror(module_logger)
@@ -104,6 +152,7 @@ class QT3ScanConfocalApplicationController:
     @convert_nidaq_daqnotfounderror(module_logger)
     def reset(self) -> None:
         self.daq_and_scanner.reset()
+        self.data_clock_rate = None
 
     @convert_nidaq_daqnotfounderror(module_logger)
     def set_to_starting_position(self) -> None:
@@ -167,7 +216,7 @@ class QT3ScanConfocalApplicationController:
             raw_counts=self.daq_and_scanner.scanned_raw_counts,
             count_rate=self.daq_and_scanner.scanned_count_rate,
             step_size=self.daq_and_scanner.step_size,
-            daq_clock_rate=self.daq_controller.clock_rate,
+            daq_clock_rate=self.data_clock_rate,
         )
 
         if file_type == 'npy':
@@ -181,6 +230,40 @@ class QT3ScanConfocalApplicationController:
             for key, value in data.items():
                 h5file.create_dataset(key, data=value)
             h5file.close()
+
+    def load_scan(self, afile_name):
+        file_type = afile_name.split('.')[-1]
+
+        if file_type == 'npy':
+            logging.error('Filetype "npy" is not supported for loading scans')
+            return
+        elif file_type == 'npz':
+            data_dict = dict(np.load(afile_name))
+        elif file_type == 'h5':
+            with h5py.File(afile_name, 'r') as h5file:
+                data_dict = {}
+                for key in h5file.keys():
+                    try:
+                        data_dict[key] = h5file[key][:]
+                    except ValueError:
+                        data_dict[key] = h5file[key][()]
+        elif file_type == 'pkl':
+            with open(filename, 'rb') as f:
+                data_dict = pickle.load(f)
+
+        self.daq_and_scanner.scanned_raw_counts = data_dict.get('raw_counts', [])
+        self.daq_and_scanner.scanned_count_rate = data_dict.get('count_rate', [])
+        (self.daq_and_scanner.xmin, self.daq_and_scanner.xmax,
+         self.daq_and_scanner.ymin, self.daq_and_scanner.current_y) = \
+            data_dict.get('scan_range', (
+                self.position_controller.minimum_allowed_position,
+                self.position_controller.maximum_allowed_position,
+                self.position_controller.minimum_allowed_position,
+                self.position_controller.maximum_allowed_position)
+            )
+        self.daq_and_scanner.step_size = data_dict.get('step_size', 0.5)
+        self.daq_and_scanner.ymax = self.daq_and_scanner.current_y - self.daq_and_scanner.step_size
+        self.data_clock_rate = data_dict.get('daq_clock_rate', None)
 
     def scan_image_rightclick_event(self, event: MouseEvent, index_x: int, index_y: int) -> None:
         """
@@ -221,9 +304,12 @@ class QT3ScanHyperSpectralApplicationController:
 
         self._step_size = 0.5
         self.raster_line_pause = 0.150  # wait 150ms for the piezo stage to settle before a line scan
+        self._filter_view_range = (-np.inf, np.inf)
+        self._counts_aggregation_option = list(STANDARD_COUNT_AGREGATION_METHODS.keys())[0]
 
         self.hyper_spectral_raw_data = None  # is there way to create a "default numpy array", similar a 'default dict'?
         self.hyper_spectral_wavelengths = None
+        self.data_clock_rate = None
 
     @property
     def step_size(self) -> float:
@@ -235,12 +321,75 @@ class QT3ScanHyperSpectralApplicationController:
 
     @property
     def scanned_count_rate(self) -> np.ndarray:
-        return self.scanned_raw_counts * self.daq_controller.clock_rate
+        if not self.counts_aggregation_option.startswith('Axes'):
+            return self.scanned_raw_counts * self.daq_controller.clock_rate
+        else:
+            return self.scanned_raw_counts
+
+    @property
+    def filter_view_range(self) -> Tuple[float, float]:
+        return self._filter_view_range
+
+    @filter_view_range.setter
+    def filter_view_range(self, value: Tuple[float, float]):
+
+        filter_min = value[0]
+        filter_max = value[1]
+        if filter_min > filter_max:
+            filter_min, filter_max = filter_max, filter_min
+
+        if self.hyper_spectral_wavelengths is not None:
+            error_occured = False
+
+            min_allowed_filter_difference = 1.001 * np.max(np.diff(self.hyper_spectral_wavelengths))
+            filter_difference = filter_max - filter_min
+            if filter_difference < min_allowed_filter_difference:
+                self.logger.error(f"Filter range difference {filter_difference} is larger than "
+                             f"the smallest allowed value {min_allowed_filter_difference}.")
+                error_occured = True
+
+            wl_min = np.min(self.hyper_spectral_wavelengths)
+            wl_max = np.max(self.hyper_spectral_wavelengths)
+            if filter_max < wl_min:
+                self.logger.error(f"Filter maximum {filter_max} is smaller than "
+                             f"the smallest available wavelength {wl_min}.")
+                error_occured = True
+            if filter_min > wl_max:
+                self.logger.error(f"Filter minimum {filter_min} is larger than "
+                             f"the largest available wavelength {wl_max}.")
+                error_occured = True
+            if error_occured:
+                self.logger.error(f'Filter will stay as {self.filter_view_range}.')
+                return
+
+        self._filter_view_range = filter_min, filter_max
+        self.logger.debug(f'Filter Range changed to {self.filter_view_range}.')
+
+    @property
+    def counts_aggregation_option(self):
+        return self._counts_aggregation_option
+
+    @counts_aggregation_option.setter
+    def counts_aggregation_option(self, value: str):
+        valid_values = tuple(STANDARD_COUNT_AGREGATION_METHODS.keys())
+        if value in valid_values:
+            self._counts_aggregation_option = value
+            self.logger.debug(f'Counts aggregation option changed to {value}.')
+        else:
+            self.logger.error(f'Counts aggregation option "{value}", not in list of valid values {valid_values}.')
+
+    @property
+    def counts_aggregation_method(self):
+        return STANDARD_COUNT_AGREGATION_METHODS[self.counts_aggregation_option]
 
     @property
     def scanned_raw_counts(self) -> np.ndarray:
         if self.hyper_spectral_raw_data is not None:
-            return np.sum(self.hyper_spectral_raw_data, axis=2)
+            wl_min, wl_max = min(self.filter_view_range), max(self.filter_view_range)
+            wls = self.hyper_spectral_wavelengths
+            data_in_range = self.hyper_spectral_raw_data[:, :, (wls>=wl_min) & (wls<=wl_max)]
+            wls_in_range = wls[(wls>=wl_min) & (wls<=wl_max)]
+            return self.counts_aggregation_method(wls_in_range, data_in_range)
         else:
             return np.array([])
 
@@ -278,6 +427,7 @@ class QT3ScanHyperSpectralApplicationController:
         begin acquistion of data.
         """
         self.running = True
+        self.data_clock_rate = self.daq_controller.clock_rate
         self.daq_controller.start()
 
     def stop(self) -> None:
@@ -300,6 +450,7 @@ class QT3ScanHyperSpectralApplicationController:
         """
         self.hyper_spectral_raw_data = None
         self.hyper_spectral_wavelengths = None
+        self.data_clock_rate = None
 
     def set_to_starting_position(self) -> None:
         self._current_y = self.ymin
@@ -438,7 +589,9 @@ class QT3ScanHyperSpectralApplicationController:
             raw_counts=self.scanned_raw_counts,
             count_rate=self.scanned_count_rate,
             step_size=self.step_size,
-            daq_clock_rate=self.daq_controller.clock_rate
+            daq_clock_rate=self.data_clock_rate,
+            filter_range=self.filter_view_range,
+            counts_aggregation_option=self.counts_aggregation_option
         )
 
         if file_type == 'npy':
@@ -455,6 +608,42 @@ class QT3ScanHyperSpectralApplicationController:
         elif file_type == 'pkl':
             with open(afile_name, 'wb') as f:
                 pickle.dump(data, f)
+
+    def load_scan(self, afile_name):
+        file_type = afile_name.split('.')[-1]
+
+        if file_type == 'npy':
+            logging.error('Filetype "npy" is not supported for loading scans')
+            return
+        elif file_type == 'npz':
+            data_dict = dict(np.load(afile_name))
+        elif file_type == 'h5':
+            with h5py.File(afile_name, 'r') as h5file:
+                data_dict = {}
+                for key in h5file.keys():
+                    try:
+                        data_dict[key] = h5file[key][:]
+                    except ValueError:
+                        data_dict[key] = h5file[key][()]
+        elif file_type == 'pkl':
+            with open(filename, 'rb') as f:
+                data_dict = pickle.load(f)
+
+        self.hyper_spectral_wavelengths = data_dict.get('wavelengths', None)
+        self.hyper_spectral_raw_data = data_dict.get('hyperspectral_image', None)
+        self._xmin, self._xmax, self._ymin, self._current_y = \
+            data_dict.get('scan_range', (
+                self.position_controller.minimum_allowed_position,
+                self.position_controller.maximum_allowed_position,
+                self.position_controller.minimum_allowed_position,
+                self.position_controller.maximum_allowed_position)
+            )
+        self._step_size = data_dict.get('step_size', 0.5)
+        self._ymax = self.current_y - self.step_size
+        self.data_clock_rate = data_dict.get('daq_clock_rate', None)
+        self.filter_view_range = data_dict.get('filter_range', (-np.inf, np.inf))
+        self.counts_aggregation_option = (
+            data_dict.get('counts_aggregation_option', list(STANDARD_COUNT_AGREGATION_METHODS.keys())))[0]
 
     @staticmethod
     def allowed_file_save_formats() -> list:
@@ -486,8 +675,9 @@ class QT3ScanHyperSpectralApplicationController:
             return
 
         win = tk.Toplevel()
-        win.title(f'Spectrum for location (x,y): {event.xdata}, {event.ydata}')
+        win.title(f'Spectrum for location (x,y): {np.round(event.xdata, 4)}, {np.round(event.ydata, 4)}')
         fig, ax = plt.subplots()
+        ax: plt.Axes
         ax.set_xlabel('Wavelength (nm)')
         ax.set_ylabel('Counts / bin')
 
@@ -497,6 +687,17 @@ class QT3ScanHyperSpectralApplicationController:
 
         ax.plot(self.hyper_spectral_wavelengths, selected_spectrum, label='data')
         ax.grid(True)
+
+        min_range, max_range = self.filter_view_range
+        if not (min_range == -np.inf and max_range == np.inf):
+            if min_range == -np.inf:
+                min_range = np.min(self.hyper_spectral_wavelengths)
+            if max_range == np.inf:
+                max_range = np.max(self.hyper_spectral_wavelengths)
+
+            # ax.axvline(min_range, color='k', linestyle='--')
+            # ax.axvline(max_range, color='k', linestyle='--')
+            ax.axvspan(min_range, max_range, alpha=0.1, color='k')
 
         canvas = FigureCanvasTkAgg(fig, master=win)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)

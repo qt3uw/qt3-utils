@@ -18,7 +18,8 @@ import qt3utils.nidaq
 import qt3utils.pulsers.pulseblaster
 from qt3utils.applications.qt3scan.controller import (
     QT3ScanConfocalApplicationController,
-    QT3ScanHyperSpectralApplicationController
+    QT3ScanHyperSpectralApplicationController,
+    STANDARD_COUNT_AGREGATION_METHODS
 )
 from qt3utils.applications.controllers.utils import make_popup_window_and_take_threaded_action
 from qt3utils.applications.qt3scan.interface import (
@@ -263,6 +264,8 @@ class SidePanel:
         row += 1
         self.popOutScanButton = tk.Button(frame, text="Popout Scan")
         self.popOutScanButton.grid(row=row, column=0)
+        self.loadScanButton = tk.Button(frame, text="Load Scan")
+        self.loadScanButton.grid(row=row, column=1)
 
         row += 1
         tk.Label(frame, text="Position").grid(row=row, column=0, pady=10)
@@ -274,6 +277,9 @@ class SidePanel:
         tk.Entry(frame, textvariable=self.go_to_y_position_text, width=7).grid(row=row, column=2, pady=5)
 
         row += 1
+        self.gotoAfterScanBoolVar = tk.BooleanVar(value=False)
+        tk.Checkbutton(frame, text="'Go to' after scan", variable=self.gotoAfterScanBoolVar).grid(
+            row=row, column=0, columnspan=2)
         self.gotoButton = tk.Button(frame, text="Go To Position")
         self.gotoButton.grid(row=row, column=2)
 
@@ -337,6 +343,29 @@ class SidePanel:
 
         self.log10Button = tk.Button(frame, text="Log10")
         self.log10Button.grid(row=row, column=2, pady=(2, 15))
+
+        row += 1
+        tk.Label(frame, text="Spectral Confocal", font='Helvetica 12').grid(row=row, column=0, pady=2)
+        row += 1
+        self.set_filter_range_button = tk.Button(frame, text="Set Range")
+        self.set_filter_range_button.grid(row=row, column=0, pady=(2, 15))
+        self.range_min_entry = tk.Entry(frame, width=10)
+        self.range_min_entry.insert(10, f'{-np.inf}')
+        self.range_min_entry.grid(row=row, column=1, pady=(2, 15))
+        self.range_max_entry = tk.Entry(frame, width=10)
+        self.range_max_entry.insert(10, f'{np.inf}')
+        self.range_max_entry.grid(row=row, column=2, pady=(2, 15))
+
+        row += 1
+        self.set_count_aggregation_button = tk.Button(frame, text="Set Counts Aggregation")
+        self.set_count_aggregation_button.grid(row=row, column=0, pady=(2, 15))
+        self.count_aggregation_option = tk.StringVar(frame)
+        self.count_aggregation_option.set(list(STANDARD_COUNT_AGREGATION_METHODS.keys())[0])
+        self.count_aggregation_menu = tk.OptionMenu(frame,
+                                              self.count_aggregation_option,
+                                              *STANDARD_COUNT_AGREGATION_METHODS.keys(),
+                                              )
+        self.count_aggregation_menu.grid(row=row, column=1, columnspan=2, pady=(2, 15))
 
     def update_go_to_position(self,
                               x: Optional[float] = None,
@@ -463,8 +492,11 @@ class MainTkApplication:
         self.view.sidepanel.go_to_z_button.bind("<Button>", lambda e: self.go_to_z())
         self.view.sidepanel.saveScanButton.bind("<Button>", lambda e: self.save_scan())
         self.view.sidepanel.popOutScanButton.bind("<Button>", lambda e: self.pop_out_scan())
+        self.view.sidepanel.loadScanButton.bind("<Button>", lambda e: self.load_scan())
 
         self.view.sidepanel.set_color_map_button.bind("<Button>", lambda e: self.set_color_map())
+        self.view.sidepanel.set_filter_range_button.bind("<Button>", lambda e: self.set_filter_range())
+        self.view.sidepanel.set_count_aggregation_button.bind("<Button>", lambda e: self.set_count_aggregation_option())
 
         self.view.sidepanel.optimize_x_button.bind("<Button>", lambda e: self.optimize('x'))
         self.view.sidepanel.optimize_y_button.bind("<Button>", lambda e: self.optimize('y'))
@@ -638,6 +670,33 @@ class MainTkApplication:
             self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
+    def set_filter_range(self) -> None:
+
+        if not hasattr(self.application_controller, 'filter_view_range'):
+            logger.debug(f'Filter Range not available for this DAQ. Nothing happens.')
+            return
+
+        filter_min = np.float_(self.view.sidepanel.range_min_entry.get())
+        filter_max = np.float_(self.view.sidepanel.range_max_entry.get())
+        self.application_controller.filter_view_range = filter_min, filter_max
+
+        if self.application_controller.still_scanning() is False:
+            self.view.scan_view.update(self.application_controller)
+            self.view.canvas.draw()
+
+    def set_count_aggregation_option(self):
+        if not hasattr(self.application_controller, 'counts_aggregation_option'):
+            logger.debug(f'Counts aggregation option is not available for this DAQ. Nothing happens.')
+            return
+
+        self.application_controller.counts_aggregation_option = self.view.sidepanel.count_aggregation_option.get()
+
+        if self.application_controller.still_scanning() is False:
+            self.view.scan_view.update(self.application_controller)
+            self.view.canvas.draw()
+
+
+
     def log_scan_image(self) -> None:
         self.view.scan_view.log_data = not self.view.scan_view.log_data
         if self.application_controller.still_scanning() is False:
@@ -701,6 +760,7 @@ class MainTkApplication:
             self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
             self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
             self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
+            self.view.sidepanel.loadScanButton.config(state=tk.NORMAL)
 
             self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
             self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
@@ -711,12 +771,16 @@ class MainTkApplication:
             self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
             self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
 
+            if self.view.sidepanel.gotoAfterScanBoolVar.get():
+                self.go_to_position()
+
     def start_scan(self) -> None:
         self.view.sidepanel.startButton.config(state=tk.DISABLED)
         self.view.sidepanel.go_to_z_button.config(state=tk.DISABLED)
         self.view.sidepanel.gotoButton.config(state=tk.DISABLED)
         self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
         self.view.sidepanel.popOutScanButton.config(state=tk.DISABLED)
+        self.view.sidepanel.loadScanButton.config(state=tk.DISABLED)
 
         self.view.sidepanel.optimize_x_button.config(state=tk.DISABLED)
         self.view.sidepanel.optimize_y_button.config(state=tk.DISABLED)
@@ -752,6 +816,30 @@ class MainTkApplication:
 
         logger.info(f'Saving data to {afile}')
         self.application_controller.save_scan(afile)
+
+    def load_scan(self):
+        afile = tk.filedialog.askopenfilename(filetypes=self.application_controller.allowed_file_save_formats(),
+                                                defaultextension=self.application_controller.default_file_format())
+        if afile is None or afile == '':
+            return  # selection was canceled.
+
+        logger.info(f'Loading data from {afile}')
+        self.application_controller.load_scan(afile)
+
+        # self.set_filter_range()
+        if hasattr(self.application_controller, 'filter_view_range'):
+            self.view.sidepanel.range_min_entry.delete(0, tk.END)
+            self.view.sidepanel.range_min_entry.insert(0, str(self.application_controller.filter_view_range[0]))
+            self.view.sidepanel.range_max_entry.delete(0, tk.END)
+            self.view.sidepanel.range_max_entry.insert(0, str(self.application_controller.filter_view_range[1]))
+
+        if hasattr(self.application_controller, 'counts_aggregation_option'):
+            self.view.sidepanel.count_aggregation_option.set(self.application_controller.counts_aggregation_option)
+
+
+        if self.application_controller.still_scanning() is False:
+            self.view.scan_view.update(self.application_controller)
+            self.view.canvas.draw()
 
     def _optimize_thread_function(self, axis: str, central: float, range: float, step_size: float) -> None:
         """
@@ -790,6 +878,7 @@ class MainTkApplication:
             self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
             self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
             self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
+            self.view.sidepanel.loadScanButton.config(state=tk.NORMAL)
 
             self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
             self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
@@ -812,6 +901,7 @@ class MainTkApplication:
         self.view.sidepanel.gotoButton.config(state=tk.DISABLED)
         self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
         self.view.sidepanel.popOutScanButton.config(state=tk.DISABLED)
+        self.view.sidepanel.loadScanButton.config(state=tk.DISABLED)
 
         self.view.sidepanel.optimize_x_button.config(state=tk.DISABLED)
         self.view.sidepanel.optimize_y_button.config(state=tk.DISABLED)
