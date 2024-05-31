@@ -577,9 +577,67 @@ class QT3ScanHyperSpectralApplicationController:
             step_size: float
     ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
         """
-        Not Yet Implemented.
+        Performs a scan over a particular axis about `center_position`.
+
+        The scan ranges from center_position +- width and progresses with step_size.
+
+        Returns a tuple of
+           (raw_data, axis_positions, optimal_position, fit_coeff)
+
+        where
+           raw_data is an array of count rates at each position
+           axis_positions is an array of position values along the specified axis
+           optimal_position is a float position that represents the brightest position along the scan
+           fit_coeff is an array of coefficients (C, mu, sigma) that describe
+                 the best-fit gaussian shape to the raw_data
+                 C * np.exp( -(raw_data-mu)**2 / (2.*sigma**2) )
+        example:
+           ([r0, r1, ...], [x0, x1, ...], x_optimal, [C, mu, sigma])
+
+        In cases where the data cannot be successfully fit to a gaussian function,
+        the optimal_position returned is the absolute brightest position in the scan,
+        and the fit_coeff is set to None.
+        When the fit is successful, x_optimal = mu.
+
         """
-        raise NotImplementedError("QT3ScanHyperSpectralApplicationController does not implement optimize_position")
+        import scipy
+        def gauss(x, *p):
+            C, mu, sigma, offset = p
+            return C * np.exp(-(x - mu) ** 2 / (2. * sigma ** 2)) + offset
+
+        min_val = central - range
+        max_val = central + range
+        if self.position_controller:
+            min_val = np.max([min_val, self.position_controller.minimum_allowed_position])
+            max_val = np.min([max_val, self.position_controller.maximum_allowed_position])
+
+        self.start()
+        raw_data, wavelengths = self.scan_axis(axis, min_val, max_val, step_size)
+        self.stop()
+        self.post_stop()
+        axis_vals = np.arange(min_val, max_val + step_size, step_size)
+
+        wl_min, wl_max = min(self.filter_view_range), max(self.filter_view_range)
+        raw_data_in_range = raw_data[:, (wavelengths >= wl_min) & (wavelengths <= wl_max)]
+        wls_in_range = wavelengths[(wavelengths >= wl_min) & (wavelengths <= wl_max)]
+        count_rates = self.counts_aggregation_method(wls_in_range, raw_data_in_range)
+        if not self.counts_aggregation_option.startswith('Axes'):
+            count_rates *= self.data_clock_rate
+
+        optimal_position = axis_vals[np.argmax(count_rates)]
+        coeff = None
+        params = [np.max(count_rates), optimal_position, 1.0, np.min(count_rates)]
+        bounds = ((0, -np.inf, 0, 0), (np.inf, np.inf, np.inf, np.inf))
+        try:
+            coeff, var_matrix = scipy.optimize.curve_fit(gauss, axis_vals, count_rates, p0=params, bounds=bounds)
+            optimal_position = coeff[1]
+            # ensure that the optimal position is within the scan range
+            optimal_position = np.max([min_val, optimal_position])
+            optimal_position = np.min([max_val, optimal_position])
+        except RuntimeError as e:
+            logger.warning(e)
+
+        return count_rates, axis_vals, optimal_position, coeff
 
     def set_scan_range(self, xmin: float, xmax: float, ymin: float, ymax: float) -> None:
         """
