@@ -336,36 +336,39 @@ class SidePanel:
         tk.Label(frame, text="View Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
         row += 1
         self.set_color_map_button = tk.Button(frame, text="Set Color")
-        self.set_color_map_button.grid(row=row, column=0, pady=(2, 15))
+        self.set_color_map_button.grid(row=row, column=0, pady=2)
         self.mpl_color_map_entry = tk.Entry(frame, width=10)
         self.mpl_color_map_entry.insert(10, 'gray')
-        self.mpl_color_map_entry.grid(row=row, column=1, pady=(2, 15))
+        self.mpl_color_map_entry.grid(row=row, column=1, pady=2)
 
         self.log10Button = tk.Button(frame, text="Log10")
-        self.log10Button.grid(row=row, column=2, pady=(2, 15))
+        self.log10Button.grid(row=row, column=2, pady=2)
 
         row += 1
         tk.Label(frame, text="Spectral Confocal", font='Helvetica 12').grid(row=row, column=0, pady=2)
         row += 1
         self.set_filter_range_button = tk.Button(frame, text="Set Range")
-        self.set_filter_range_button.grid(row=row, column=0, pady=(2, 15))
+        self.set_filter_range_button.grid(row=row, column=0)
         self.range_min_entry = tk.Entry(frame, width=10)
         self.range_min_entry.insert(10, f'{-np.inf}')
-        self.range_min_entry.grid(row=row, column=1, pady=(2, 15))
+        self.range_min_entry.grid(row=row, column=1)
         self.range_max_entry = tk.Entry(frame, width=10)
         self.range_max_entry.insert(10, f'{np.inf}')
-        self.range_max_entry.grid(row=row, column=2, pady=(2, 15))
+        self.range_max_entry.grid(row=row, column=2)
 
         row += 1
         self.set_count_aggregation_button = tk.Button(frame, text="Set Counts Aggregation")
-        self.set_count_aggregation_button.grid(row=row, column=0, pady=(2, 15))
+        self.set_count_aggregation_button.grid(row=row, column=0)
         self.count_aggregation_option = tk.StringVar(frame)
         self.count_aggregation_option.set(list(STANDARD_COUNT_AGREGATION_METHODS.keys())[0])
         self.count_aggregation_menu = tk.OptionMenu(frame,
                                               self.count_aggregation_option,
                                               *STANDARD_COUNT_AGREGATION_METHODS.keys(),
                                               )
-        self.count_aggregation_menu.grid(row=row, column=1, columnspan=2, pady=(2, 15))
+        self.count_aggregation_menu.grid(row=row, column=1, columnspan=2)
+
+        row += 1
+        tk.Label(frame, text='', ).grid(row=row, column=0, columnspan=3, pady=10)
 
     def update_go_to_position(self,
                               x: Optional[float] = None,
