@@ -4,6 +4,7 @@ import importlib.resources
 import logging
 import tkinter as tk
 from threading import Thread
+from tkinter import messagebox
 from typing import Any, Protocol, Optional, Callable, List
 
 import matplotlib
@@ -778,6 +779,16 @@ class MainTkApplication:
                 self.go_to_position()
 
     def start_scan(self) -> None:
+        if self.application_controller.data_saved_once is False:
+            stored_data_shape = np.prod(np.shape(self.application_controller.scanned_count_rate))
+            data_shape_product = np.prod(stored_data_shape)
+            if data_shape_product > 0:
+                proceed = messagebox.askyesno("WARNING: Scan NOT SAVED",
+                                              "The previous scan was not saved. Are you sure you want to proceed with "
+                                              "a new scan? All DATA will be LOST.")
+                if not proceed:
+                    return
+
         self.view.sidepanel.startButton.config(state=tk.DISABLED)
         self.view.sidepanel.go_to_z_button.config(state=tk.DISABLED)
         self.view.sidepanel.gotoButton.config(state=tk.DISABLED)
