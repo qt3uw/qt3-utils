@@ -1,25 +1,24 @@
 # QT3 Utils Experiment Classes
 
-This document describes, both generally and specifically for a few classes,
-how the Experiment classes work in QT3Utils.
+This document describes how the Experiment classes work in QT3Utils.
 
-The Experiment classes are constructed in order to provide canned objects
+The Experiment classes are constructed in order to provide "canned" objects
 that a researcher may use to conduct standard experiments. In addition, a
-goal of these classes are to be extensible, as this documentation will
+goal of these classes are to be extensible so that researchers
+may add functionality, as this documentation will
 demonstrate.
 
 The Experiment classes are found in `qt3tuils.experiments` subpackage.
-Each Experiment class should contain, at minimum, the functions
+Each Experiment class should contain, at minimum, two functions:
 
 * `run(N_cycles, post_process_function)`
 * `experimental_conditions()`
 
-The `run` function performs the experiment once the object is created and you've
-set the conditions for the experiment. The `experimental_conditions` function
-returns a Python dictionary object that contains the conditions you've set,
-including the return of the `experimental_conditions` for other hardware used
-in the experiment (NB: this is not yet "automated" internally within the
-experiment class code, though it could be).
+The `run` function performs the experiment once the conditions for the 
+experiment have been set. The `experimental_conditions` function
+returns a Python dictionary object that contains the current conditions.
+This dictionary could be used for inspection and saved with the 
+generated data. 
 
 
 # Setup
@@ -32,19 +31,19 @@ There are four working experiment classes as of this writing:
 * Ramsey
 
 The CWODMR, PulsedODMR and Rabi experiment classes have been tested and
-demonstrated to work in the QT3 lab at this point. Work demonstrating
-Ramsey was paused and could use help from researchers at this point.
+demonstrated to work in the QT3 lab at this point. Demonstration of
+Ramsey was paused, and contribution from another member of qt3 community
+would be appreciated.
 
 Extending (or copying) the Ramsey experiment to create Hahn Echo and
 Dynamical Decoupling experiments should be straight forward.
 
+Each Experiment object is instantiated with objects that control
+the necessary hardware for the experiment and a set of default settings.
 
-Each Experiment object is instantiated with required hardware-related objects
-and a set of default settings.
+The following example demonstrates setup for CWODMR.
 
-For example,
-
-first mport the necessary Python packages and modules
+1. Import the necessary Python packages and modules
 
 ```
 import qt3rfsynthcontrol
@@ -53,19 +52,19 @@ from qt3utils.pulsers.pulseblaster import PulseBlasterCWODMR
 import qt3utils.experiments.cwodmr
 ```
 
-create RF synth object to control the Windfreak RFSynth Pro device
+2. Create RF synth object to control the Windfreak RFSynth Pro device
 
 ```
 rfsynth = qt3rfsynthcontrol.QT3SynthHD('COM5')
 ```
 
-create NIDAQ EdgeCounter configuration object
+2. Create NIDAQ EdgeCounter configuration object
 
 ```
 nidaq_config = qt3utils.nidaq.EdgeCounter('Dev1')
 ```
 
-create a pulser object (in addtion to PulseBlaster, one may use the QCSapphire pulser)
+3. Create a pulser object (in addtion to PulseBlaster, one may use the QCSapphire pulser)
 
 ```
 cwodmr_pulser = PulseBlasterCWODMR(pb_board_number = 0,
@@ -76,10 +75,11 @@ cwodmr_pulser = PulseBlasterCWODMR(pb_board_number = 0,
                                          rf_pulse_duration = 5e-6)
 ```
 
-create the experiment object, passing in the previously created hardware objects.
+4. Create the experiment object, passing in the previously created hardware objects.
+
 Also shown here are some of the optional parameters that one may set
 -- and must set if the hardware configuration does not match the current default values.
-(These default values match the hardware configuration currently in the QT3 lab.)
+(The default values in code match the hardware configuration currently in the QT3 lab.)
 
 ```
 experiment = qt3utils.experiments.cwodmr.CWODMR(cwodmr_pulser, rfsynth, nidaq_config,
@@ -121,23 +121,22 @@ will return the following dictionary
 
 # Taking Data
 
-The experiment object's `run` function performs the data acquisition.
+The experiment object `run` function performs data acquisition.
 The `N_cycles` parameter controls, essentially, how many data points
 will be acquired for each value of your
 independent experimental variable. In the case above of ODMR, the frequency of the
-MW source is the independent variable, from 2.7 GHz to 3.0 GHz.
-See the 'Details'
-section below to understanding how data are acquired, how to access the
+MW source is the independent experimental variable, ranging from 2.7 GHz to 3.0 GHz.
+See the 'Details' section below to understanding how data are acquired, how to access the
 raw data, and other information.
 
-The `run` function iterates through the range of the independent variable.
-For each value in the range, first the hardware is set accordingly (changes
-the MW frequency, for example).
-Then, counts from the NIDAQ are acquired. Finally, a post-processing step
-is done with the raw counts from the NIDAQ and a quantity is computed based
-on the specific experiment. Each experiment has a default post-processing
-function already defined. For ODMR, the contrast of the emitted
-photoluminescence (PL) is measured.
+The `run` function iterates through the range of independent variable values.
+For each value, 
+  1. The hardware is set accordingly (changes the MW frequency, for example)
+  2. Counts from the NIDAQ are acquired. 
+  3. A post-processing step is performed. 
+
+Each experiment has a default post-processing step converts raw counts 
+to a desired quantity (often the contrast). 
 
 The array returned should be a 2D array of shape (N, 2), where N is the
 number of unique values of the experimental variable. The 0th column holds
@@ -150,7 +149,7 @@ scan_data = experiment.run(N_cycles = 50000)
 
 ## Plotting Results
 
-Here we show the results of the CWODMR scan using `matplotlib`.
+Here we show the results of a CWODMR scan.
 
 ```
 import matplotlib.pyplot as plt
@@ -162,8 +161,6 @@ plt.figure(figsize=(10, 6))
 plt.plot(x_data, y_data, 'o-', label='Data')
 plt.xlabel('frequency [Hz]')
 ```
-
-which may look like
 
 ![cwodmr_spectrum](images/cwodmr_measured_spectrum.png)
 
@@ -188,66 +185,80 @@ qt3utils.experiments.cwodmr.logger.setLevel(logging.WARNING)
 ## Details of Data Acquisition
 
 This section describes the details of how the pulse sequences, hardware objects
-and data acquisition works for the experiment classes.
+and data acquisition work for the experiment classes.
+
+### Experiment Timing
 
 In these experiments the TTL pulser controls the timing of the various components.
-Output TTL pulses start and stop the optical pumping and optical readout by applying
-a voltage to the input of the AOM driver. TTL pulses are used to control a switch
-through which microwave signals propagate to the antenna at appropriate times and
-for specific durations. A TTL pulse provides a trigger to the NIDAQ card
-so that it starts acquisition and another TTL signal provides a clock signal to the NIDAQ.
+TTL pulses
+
+  * start and stop optical pumping / readout by applying
+a voltage to the input of the RF amplifier for the AOM. 
+  * control a switch through which microwave signals propagate to the antenna. 
+  * provide a start acquisition trigger to the NIDAQ card
+  * provide a clock signal to the NIDAQ.
+
+
+### MW / RF Generator
 
 The RF synthesizer object controls the Windfreak sythesizer and allows
 an experimenter to set the power (in dBm) and frequency of the signal.
 
-Finally, the NIDAQ Edge Counter configuration object creates the necessary
-readout tasks for the NIDAQ card, configuring which input channel of the NIDAQ
-is used for counting signals from the photon counter, which channel
-is used to receive the clock signal and which channel is used to receive the
-trigger channel. These configuration options are (for now), as you can see in
-the example above, specified during creation of the Experiment object.
+### Photon Counter
+
+The NIDAQ counts TTL pulses from the SPCM to measure PL brightness. 
+The NIDAQ Edge Counter configuration object creates the necessary
+readout Tasks for the NIDAQ card. This object 
+  * configures the input channel of the NIDAQ for counting signals from the SPCM
+  * configures the clock signal for the Task
+  * configures the trigger signal for the Task
+
+Specification of **which** digital input channels are used for signal, clock and 
+trigger a done during creation of the Experiment object. 
 
 
-For example, in CWODMR a sample is continuously pumped with laser
+### Example
+
+In CWODMR, a sample is continuously pumped with laser
 light, while a MW signal is applied with a 50% duty cycle at some period.
-The goal is to measure
-the rate of PL emitted by the sample while being driving by the MW field
-relative to the rate of PL emitted while not being driven. When the MW field
+The goal is to measure the contrast between the PL emission rate observed
+while being driven with an external MW source to the rate observed when 
+no MW source is present. 
+When the MW field
 frequency is on resonance (~2.87 GHz for NV- centers in diamond), the rate of
 emitted PL should be measurably less while being driven.
 
-To achieve this, the TTL pulser channel connected to the AOM driver is held
+To achieve this, the TTL pulser channel connected to the AOM's RF driver is held
 at a constant high value, while the channel connected to the MW switch is
 a square wave for a specified period with a 50% duty cycle.
-In addition to these two
-channels, the TTL pulser also issues a pulse (with small duty cycle) for
+In addition, the TTL pulser also issues a pulse (with small duty cycle) for
 a trigger signal to the NIDAQ and a fast clock signal (50% duty cycle).
 The period of the MW TTL signal, in this case, defines the length of one *cycle*.
-In other experiments, a cycle is defined by the full pulse sequence needed to
-perform one measurement (state initialization,
-spin control, then readout).
+A cycle, in this context, refers to the full pulse sequence needed to
+perform one measurement of the experiment at one particular independent 
+experimental value (state initialization, spin control, then readout).
 
-The TTL pulser is programmed to emit the desired pulse sequence indefinitely.
-When the experimenter calls the `run` function with `N_cycles = X`, the NIDAQ
-Edge Counter is configured to count the number of input photon pulses it
-receives for a finite number of clock ticks. The total number of clock ticks
-will be equal to the product of the number of clock ticks per cycle times
-and the number of cycles.
-That is, `N_daq_samples = X * N_clock_ticks_per_cycle`. Once the NIDAQ Task is
-configured and started, the NIDAQ card begins to count when it receives the
-next trigger pulse, as shown in the figure below.
+The following sequence of actions occur when the `run` function is 
+called with `N_cycles`. For each value of the MW frequency in the 
+specified range of the experiment,
+
+1. The TTL pulser is programmed to emit the desired pulse sequence.
+2. The MW source is configued to emit at the desired frequency.
+3. Given `N_cycles`, the total number of clock ticks for data acquisition is computed. This
+will be `N_daq_samples = N_cycles * N_clock_ticks_per_cycle`
+4. The NIDAQ Edge Counter is configured to count the number of TTL pulses (from the SPCM)
+at each clock tick, for `N_daq_samples` clock ticks.
 
 ![CWODMR](images/cwodmr_pulse_sequence.png)
 
-The "*" at the first trigger TTL pulse indicates that the NIDAQ only
-cares about the first trigger it receives after it's Task is started.
-All subsequent TTL trigger pulses are ignored.
+\*  the NIDAQ only cares about the first trigger it receives after it's 
+Task has been started. All subsequent TTL trigger pulses are ignored.
 
 Upon completion of the acquisition of `N_daq_samples`, a post-processing
 function is called to analyze the data. This post-processing function is
 responsible for converting the long sequence of measured counts to the
 desired quantity. Each Experiment's `run` function has a default post-processing
-function, usually defined in the Experiment class's python module.
+function defined in the Experiment class's python module.
 
 For CWODMR, the post-processing function performs the following actions.
 First, the sequence of measured counts (of length `N_daq_samples`) is
@@ -286,22 +297,23 @@ Below is a pseudo-python code outline of the `run` loop.
 output_data = []
 for value in [independent values]:
   configure_hardware(value)
-  data = read_data_from_nidaq(N_total_samples)
+  N_daq_samples = N_cycles * N_clock_ticks_per_cycle
+  data = read_data_from_nidaq(N_daq_samples)
   data = post_processing_function(data, experiment_object)
   output_data.append(data)
 
 return output_data
 ```
 
-where the `experiment_object` is an instance of the class
+where the `experiment_object`, an instance of the class, 
 is passed to the post-processing function, which assists the post-processing
 function in performing calculations by accessing
 the Experiment attributes.
 
 ## Custom Post-Processing
 
-A user can change the post-processing function as needed by passing
-in a function when `run` is called.
+A user can arbitrarily specify the post-processing function by passing
+in a function as an arguemt to the `run` function.
 
 For example, one can use the stack and sum function, which is already
 [defined here](../src/qt3utils/experiments/common.py#L2) in `qt3utils`.
