@@ -57,15 +57,20 @@ def weighted_mean_wavelength(wavelengths, spectra):
             spectrum = spectra[x, y, :]
 
             # Calculate weighted mean using counts as weights
-            mean_wavelengths[x, y] = np.average(wavelengths, weights=spectrum)
+            try:
+                mean_wavelengths[x, y] = np.average(wavelengths, weights=spectrum)
+            except ZeroDivisionError:
+                # Avoids error if filtered range is off the available wavelength limits
+                # and there are no data to be processed
+                mean_wavelengths[x, y] = np.nan
 
     return mean_wavelengths
 
 
 # If we need to implement this for more than a single axis, we need to use the np.apply_over_axes method,
-# and also make sure to take into account the number of axes axes and the number of count axes (though, it should be 1?)
-# I guess if we have multi dimensional axes (e.g. wavelength and number of frames), we need to aggregate that too.
-STANDARD_COUNT_AGREGATION_METHODS = {
+# and also make sure to take into account the number of axes and the number of count axes (though, it should be 1?)
+# I guess if we have multidimensional axes (e.g. wavelength and number of frames), we need to aggregate that too.
+STANDARD_COUNT_AGGREGATION_METHODS = {
     'Counts-Sum': lambda _, data: np.sum(data, axis=-1),
     'Counts-Mean': lambda _, data: np.mean(data, axis=-1),
     'Counts-Max': lambda _, data: np.max(data, axis=-1),
@@ -329,7 +334,7 @@ class QT3ScanHyperSpectralApplicationController:
         self._step_size = 0.5
         self.raster_line_pause = 0.150  # wait 150ms for the piezo stage to settle before a line scan
         self._filter_view_range = (-np.inf, np.inf)
-        self._counts_aggregation_option = list(STANDARD_COUNT_AGREGATION_METHODS.keys())[0]
+        self._counts_aggregation_option = list(STANDARD_COUNT_AGGREGATION_METHODS.keys())[0]
 
         self.hyper_spectral_raw_data = None  # is there way to create a "default numpy array", similar a 'default dict'?
         self.hyper_spectral_wavelengths = None
@@ -365,26 +370,26 @@ class QT3ScanHyperSpectralApplicationController:
             filter_min, filter_max = filter_max, filter_min
 
         if self.hyper_spectral_wavelengths is not None:
-            error_occured = False
+            error_occurred = False
 
             min_allowed_filter_difference = 1.001 * np.max(np.diff(self.hyper_spectral_wavelengths))
             filter_difference = filter_max - filter_min
             if filter_difference < min_allowed_filter_difference:
                 self.logger.error(f"Filter range difference {filter_difference} is larger than "
                                   f"the smallest allowed value {min_allowed_filter_difference}.")
-                error_occured = True
+                error_occurred = True
 
             wl_min = np.min(self.hyper_spectral_wavelengths)
             wl_max = np.max(self.hyper_spectral_wavelengths)
             if filter_max < wl_min:
                 self.logger.error(f"Filter maximum {filter_max} is smaller than "
                                   f"the smallest available wavelength {wl_min}.")
-                error_occured = True
+                error_occurred = True
             if filter_min > wl_max:
                 self.logger.error(f"Filter minimum {filter_min} is larger than "
                                   f"the largest available wavelength {wl_max}.")
-                error_occured = True
-            if error_occured:
+                error_occurred = True
+            if error_occurred:
                 self.logger.error(f'Filter will stay as {self.filter_view_range}.')
                 return
 
@@ -397,7 +402,7 @@ class QT3ScanHyperSpectralApplicationController:
 
     @counts_aggregation_option.setter
     def counts_aggregation_option(self, value: str):
-        valid_values = tuple(STANDARD_COUNT_AGREGATION_METHODS.keys())
+        valid_values = tuple(STANDARD_COUNT_AGGREGATION_METHODS.keys())
         if value in valid_values:
             self._counts_aggregation_option = value
             self.logger.debug(f'Counts aggregation option changed to {value}.')
@@ -406,7 +411,7 @@ class QT3ScanHyperSpectralApplicationController:
 
     @property
     def counts_aggregation_method(self):
-        return STANDARD_COUNT_AGREGATION_METHODS[self.counts_aggregation_option]
+        return STANDARD_COUNT_AGGREGATION_METHODS[self.counts_aggregation_option]
 
     @property
     def scanned_raw_counts(self) -> np.ndarray:
@@ -745,7 +750,7 @@ class QT3ScanHyperSpectralApplicationController:
         self.data_clock_rate = data_dict.get('daq_clock_rate', None)
         self.filter_view_range = data_dict.get('filter_range', (-np.inf, np.inf))
         self.counts_aggregation_option = (
-            data_dict.get('counts_aggregation_option', list(STANDARD_COUNT_AGREGATION_METHODS.keys())[0]))
+            data_dict.get('counts_aggregation_option', list(STANDARD_COUNT_AGGREGATION_METHODS.keys())[0]))
         self.data_configs['DAQ'] = data_dict.get('daq_config', None)
         self.data_configs['Scanner'] = data_dict.get('scanner_config', None)
         self.data_saved_once = True
