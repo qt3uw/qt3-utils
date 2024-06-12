@@ -20,7 +20,7 @@ import qt3utils.pulsers.pulseblaster
 from qt3utils.applications.qt3scan.controller import (
     QT3ScanConfocalApplicationController,
     QT3ScanHyperSpectralApplicationController,
-    STANDARD_COUNT_AGREGATION_METHODS
+    STANDARD_COUNT_AGGREGATION_METHODS
 )
 from qt3utils.applications.controllers.utils import make_popup_window_and_take_threaded_action
 from qt3utils.applications.qt3scan.interface import (
@@ -361,11 +361,11 @@ class SidePanel:
         self.set_count_aggregation_button = tk.Button(frame, text="Set Counts Aggregation")
         self.set_count_aggregation_button.grid(row=row, column=0)
         self.count_aggregation_option = tk.StringVar(frame)
-        self.count_aggregation_option.set(list(STANDARD_COUNT_AGREGATION_METHODS.keys())[0])
+        self.count_aggregation_option.set(list(STANDARD_COUNT_AGGREGATION_METHODS.keys())[0])
         self.count_aggregation_menu = tk.OptionMenu(frame,
-                                              self.count_aggregation_option,
-                                              *STANDARD_COUNT_AGREGATION_METHODS.keys(),
-                                              )
+                                                    self.count_aggregation_option,
+                                                    *STANDARD_COUNT_AGGREGATION_METHODS.keys(),
+                                                    )
         self.count_aggregation_menu.grid(row=row, column=1, columnspan=2)
 
         row += 1
@@ -699,8 +699,6 @@ class MainTkApplication:
             self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
-
-
     def log_scan_image(self) -> None:
         self.view.scan_view.log_data = not self.view.scan_view.log_data
         if self.application_controller.still_scanning() is False:
@@ -833,14 +831,13 @@ class MainTkApplication:
 
     def load_scan(self):
         afile = tk.filedialog.askopenfilename(filetypes=self.application_controller.allowed_file_save_formats(),
-                                                defaultextension=self.application_controller.default_file_format())
+                                              defaultextension=self.application_controller.default_file_format())
         if afile is None or afile == '':
             return  # selection was canceled.
 
         logger.info(f'Loading data from {afile}')
         self.application_controller.load_scan(afile)
 
-        # self.set_filter_range()
         if hasattr(self.application_controller, 'filter_view_range'):
             self.view.sidepanel.range_min_entry.delete(0, tk.END)
             self.view.sidepanel.range_min_entry.insert(0, str(self.application_controller.filter_view_range[0]))
@@ -849,7 +846,6 @@ class MainTkApplication:
 
         if hasattr(self.application_controller, 'counts_aggregation_option'):
             self.view.sidepanel.count_aggregation_option.set(self.application_controller.counts_aggregation_option)
-
 
         if self.application_controller.still_scanning() is False:
             self.view.scan_view.update(self.application_controller)
