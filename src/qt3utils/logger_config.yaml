@@ -1,0 +1,36 @@
+# logging how-to: https://docs.python.org/3/howto/logging.html
+# logging configuration: https://docs.python.org/3/library/logging.config.html
+# To add color, consider: https://pypi.org/project/colorlog/
+
+version: 1
+formatters:
+  simple:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+  title_message:  # title must be added in the arg 'extra' e.g., logging.info("My message", extra={title: "My Title"}).
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(title)s - %(message)s"
+
+  full:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(title)s - %(subtitle)s - %(message)s"
+
+
+#  colored_formatter:
+#    (): colorlog.ColoredFormatter
+#    format: "%(log_color)s%(asctime)s - %(levelname)s - %(name)s - %(title)s - %(message)s%(reset)s"
+
+handlers:
+  console:  # To standard output
+    class: logging.StreamHandler
+    level: NOTSET
+    formatter: full
+    stream: ext://sys.stdout
+
+  file_handler:  # To specific file
+    class: logging.FileHandler
+    level: NOTSET
+    formatter: full
+    filename: qt3.log
+
+root:
+  level: NOTSET
+  handlers: [file_handler, console_handler]
