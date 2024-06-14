@@ -582,6 +582,18 @@ class MainTkApplication:
         When called from the pull-down menu, a popup window opens to prevent GUI freezes
         due to long connection times to the devices (e.g., for spectrometers).
         """
+        # check if last scan was saved
+        if hasattr(self, 'application_controller'):
+            if self.application_controller.data_saved_once is False:
+                stored_data_shape = np.prod(np.shape(self.application_controller.scanned_count_rate))
+                data_shape_product = np.prod(stored_data_shape)
+                if data_shape_product > 0:
+                    proceed = messagebox.askyesno("WARNING: Scan NOT SAVED",
+                                                  "The previous scan was not saved. Are you sure you want to proceed with "
+                                                  "a new scan? All DATA will be LOST.")
+                    if not proceed:
+                        return
+
         logger.info(f"loading {application_controller_name}")
         config = self._open_yaml_config_for_controller(application_controller_name)
 
