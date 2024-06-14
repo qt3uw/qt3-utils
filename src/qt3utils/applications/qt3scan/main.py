@@ -99,6 +99,7 @@ class ScanImage:
         self.ax.set_xlabel('x position (um)')
         self.ax.set_ylabel('y position (um)')
         self.log_data = False
+        self.plot_count_rate = True
         self.pointer_line2d = None
         self.position_line2d = None
         self.app_controller_step_size = 0
@@ -110,11 +111,13 @@ class ScanImage:
         if len(app_controller.scanned_count_rate) == 0:
             return
 
-        if self.log_data:
-            data = np.log10(app_controller.scanned_count_rate)
-            data[np.isinf(data)] = 0  # protect against +-inf
-        else:
+        if self.plot_count_rate:
             data = app_controller.scanned_count_rate
+        else:
+            data = app_controller.scanned_raw_counts
+        if self.log_data:
+            data = np.log10(data)
+            data[np.isinf(data)] = 0  # protect against +-inf
 
         # we must retain these values for callback functions (feels a bit hacky)
         self.app_controller_step_size = app_controller.step_size
@@ -347,6 +350,17 @@ class SidePanel:
         self.log10Button.grid(row=row, column=2, pady=2)
 
         row += 1
+        self.count_rate_button = tk.Button(frame, text="Toggle: Count Rate/Raw Counts")
+        self.count_rate_button.grid(row=row, column=0, columnspan=3, pady=2)
+
+        row += 1
+        self.set_raw_background_counts_button = tk.Button(frame, text="Set raw BG")
+        self.set_raw_background_counts_button.grid(row=row, column=0)
+        self.raw_background_counts_entry = tk.Entry(frame, width=10)
+        self.raw_background_counts_entry.insert(10, '0')
+        self.raw_background_counts_entry.grid(row=row, column=1, columnspan=2)
+
+        row += 1
         tk.Label(frame, text="Spectral Confocal", font='Helvetica 12').grid(row=row, column=0, pady=2)
         row += 1
         self.set_filter_range_button = tk.Button(frame, text="Set Range")
@@ -359,7 +373,7 @@ class SidePanel:
         self.range_max_entry.grid(row=row, column=2)
 
         row += 1
-        self.set_count_aggregation_button = tk.Button(frame, text="Set Counts Aggregation")
+        self.set_count_aggregation_button = tk.Button(frame, text="Set Aggregation")
         self.set_count_aggregation_button.grid(row=row, column=0)
         self.count_aggregation_option = tk.StringVar(frame)
         self.count_aggregation_option.set(list(STANDARD_COUNT_AGGREGATION_METHODS.keys())[0])
@@ -493,6 +507,7 @@ class MainTkApplication:
         self.view.sidepanel.startButton.bind("<Button>", lambda e: self.start_scan())
         self.view.sidepanel.stopButton.bind("<Button>", lambda e: self.stop_scan())
         self.view.sidepanel.log10Button.bind("<Button>", lambda e: self.log_scan_image())
+        self.view.sidepanel.count_rate_button.bind("<Button>", lambda e: self.toggle_count_rate())
         self.view.sidepanel.gotoButton.bind("<Button>", lambda e: self.go_to_position())
         self.view.sidepanel.go_to_z_button.bind("<Button>", lambda e: self.go_to_z())
         self.view.sidepanel.saveScanButton.bind("<Button>", lambda e: self.save_scan())
@@ -500,6 +515,7 @@ class MainTkApplication:
         self.view.sidepanel.loadScanButton.bind("<Button>", lambda e: self.load_scan())
 
         self.view.sidepanel.set_color_map_button.bind("<Button>", lambda e: self.set_color_map())
+        self.view.sidepanel.set_raw_background_counts_button.bind("<Button>", lambda e: self.set_raw_background_counts())
         self.view.sidepanel.set_filter_range_button.bind("<Button>", lambda e: self.set_filter_range())
         self.view.sidepanel.set_count_aggregation_button.bind("<Button>", lambda e: self.set_count_aggregation_option())
 
@@ -675,6 +691,20 @@ class MainTkApplication:
             self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
 
+    def set_raw_background_counts(self):
+        bg_entry_value = self.view.sidepanel.raw_background_counts_entry.get()
+        try:
+            raw_bg_counts = float(bg_entry_value)
+        except Exception as e:
+            logger.warning(f'{bg_entry_value} is invalid. Background counts did not change:{self.application_controller.raw_bg_counts}.')
+            return
+
+        self.application_controller.raw_bg_counts = raw_bg_counts
+
+        if self.application_controller.still_scanning() is False:
+            self.view.scan_view.update(self.application_controller)
+            self.view.canvas.draw()
+
     def set_filter_range(self) -> None:
 
         if not hasattr(self.application_controller, 'filter_view_range'):
@@ -702,6 +732,12 @@ class MainTkApplication:
 
     def log_scan_image(self) -> None:
         self.view.scan_view.log_data = not self.view.scan_view.log_data
+        if self.application_controller.still_scanning() is False:
+            self.view.scan_view.update(self.application_controller)
+            self.view.canvas.draw()
+
+    def toggle_count_rate(self):
+        self.view.scan_view.plot_count_rate = not self.view.scan_view.plot_count_rate
         if self.application_controller.still_scanning() is False:
             self.view.scan_view.update(self.application_controller)
             self.view.canvas.draw()
