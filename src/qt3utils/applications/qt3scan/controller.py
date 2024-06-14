@@ -120,7 +120,8 @@ class QT3ScanConfocalApplicationController:
 
     @property
     def scanned_count_rate(self) -> np.ndarray:
-        return self.daq_and_scanner.scanned_count_rate - self.raw_bg_counts * self.data_clock_rate
+        data_clock_rate = self.data_clock_rate if self.data_clock_rate is not None else np.nan
+        return self.daq_and_scanner.scanned_count_rate - self.raw_bg_counts * data_clock_rate
 
     @property
     def scanned_raw_counts(self) -> np.ndarray:
@@ -363,7 +364,8 @@ class QT3ScanHyperSpectralApplicationController:
     @property
     def scanned_count_rate(self) -> np.ndarray:
         if not self.counts_aggregation_option.startswith('Axes'):
-            return self.scanned_raw_counts * self.data_clock_rate
+            data_clock_rate = self.data_clock_rate if self.data_clock_rate is not None else np.nan
+            return self.scanned_raw_counts * data_clock_rate
         else:
             return self.scanned_raw_counts
 
