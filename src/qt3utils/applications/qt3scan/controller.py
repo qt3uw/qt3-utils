@@ -833,7 +833,8 @@ class QT3ScanHyperSpectralApplicationController:
             # ax.axvline(max_range, color='k', linestyle='--')
             ax.axvspan(min_range, max_range, alpha=0.1, color='k', label='Filter Range')
 
-        ax.axhline(self.raw_bg_counts, linestyle='--', alpha=0.5, color='chocolate', label='BG')
+        if self.raw_bg_counts != 0.:
+            ax.axhline(self.raw_bg_counts, linestyle='--', alpha=0.5, color='chocolate', label='BG')
 
         if self.counts_aggregation_option == 'Axes-Weighted-Mean':
             ax.axvline(self.scanned_raw_counts[index_y, index_x], alpha=0.5, color='r', label='center')
