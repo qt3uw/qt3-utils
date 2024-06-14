@@ -589,9 +589,10 @@ class MainTkApplication:
                 data_shape_product = np.prod(stored_data_shape)
                 if data_shape_product > 0:
                     proceed = messagebox.askyesno("WARNING: Scan NOT SAVED",
-                                                  "The previous scan was not saved. Are you sure you want to proceed with "
-                                                  "a new scan? All DATA will be LOST.")
+                                                  "The previous scan was not saved. Are you sure you want to change "
+                                                  "the controller? All DATA will be LOST.")
                     if not proceed:
+                        self.view.controller_option.set(self.active_application_controller_option)
                         return
 
         logger.info(f"loading {application_controller_name}")
@@ -624,6 +625,8 @@ class MainTkApplication:
         self.view.scan_view.set_rightclick_callback(self.application_controller.scan_image_rightclick_event)
         self.view.position_controller_config_button.bind("<Button>", lambda e: self.application_controller.position_controller.configure_view(self.root_window))
         self.view.daq_config_button.bind("<Button>", lambda e: self.application_controller.daq_controller.configure_view(self.root_window))
+
+        self.active_application_controller_option = self.view.controller_option.get()
 
     def configure_from_yaml(self) -> None:
         """
