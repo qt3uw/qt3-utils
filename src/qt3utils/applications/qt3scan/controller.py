@@ -240,6 +240,7 @@ class QT3ScanConfocalApplicationController:
             count_rate=self.daq_and_scanner.scanned_count_rate,
             step_size=self.daq_and_scanner.step_size,
             daq_clock_rate=self.data_clock_rate,
+            bg_raw_counts=self.raw_bg_counts,
             daq_config=self.data_configs['DAQ'],
             scanner_config=self.data_configs['Scanner'],
         )
@@ -300,6 +301,7 @@ class QT3ScanConfocalApplicationController:
         self.daq_and_scanner.step_size = data_dict.get('step_size', 0.5)
         self.daq_and_scanner.ymax = self.daq_and_scanner.current_y - self.daq_and_scanner.step_size
         self.data_clock_rate = data_dict.get('daq_clock_rate', None)
+        self.raw_bg_counts = data_dict.get('bg_raw_counts', 0.)
         self.data_configs['DAQ'] = data_dict.get('daq_config', None)
         self.data_configs['Scanner'] = data_dict.get('scanner_config', None)
         self.data_saved_once = False
