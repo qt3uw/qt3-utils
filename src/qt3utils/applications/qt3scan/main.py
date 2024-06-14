@@ -131,7 +131,8 @@ class ScanImage:
                                              app_controller.current_y - app_controller.step_size / 2.0])
 
         if self.cbar is None:
-            self.cbar = self.fig.colorbar(self.artist, ax=self.ax)
+            self.cbar: plt.Colorbar = self.fig.colorbar(self.artist, ax=self.ax)
+            self.cbar.formatter.set_useOffset(False)
         else:
             self.cbar.update_normal(self.artist)
 
