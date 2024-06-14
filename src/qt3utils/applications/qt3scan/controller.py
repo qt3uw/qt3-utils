@@ -58,7 +58,7 @@ def weighted_mean_wavelength(wavelengths, spectra):
 
             # Calculate weighted mean using counts as weights
             try:
-                mean_wavelengths[x, y] = np.average(wavelengths, weights=spectrum)
+                mean_wavelengths[x, y] = np.average(wavelengths, weights=spectrum - np.min(spectrum))
             except ZeroDivisionError:
                 # Avoids error if filtered range is off the available wavelength limits
                 # and there are no data to be processed
@@ -808,6 +808,9 @@ class QT3ScanHyperSpectralApplicationController:
             # ax.axvline(min_range, color='k', linestyle='--')
             # ax.axvline(max_range, color='k', linestyle='--')
             ax.axvspan(min_range, max_range, alpha=0.1, color='k')
+
+        if self.counts_aggregation_option == 'Axes-Weighted-Mean':
+            ax.axvline(self.scanned_raw_counts[index_y, index_x], alpha=0.5, color='r')
 
         canvas = FigureCanvasTkAgg(fig, master=win)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
