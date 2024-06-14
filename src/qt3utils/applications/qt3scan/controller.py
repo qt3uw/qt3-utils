@@ -121,11 +121,11 @@ class QT3ScanConfocalApplicationController:
     @property
     def scanned_count_rate(self) -> np.ndarray:
         data_clock_rate = self.data_clock_rate if self.data_clock_rate is not None else np.nan
-        return self.daq_and_scanner.scanned_count_rate - self.raw_bg_counts * data_clock_rate
+        return np.array(self.daq_and_scanner.scanned_count_rate) - self.raw_bg_counts * data_clock_rate
 
     @property
     def scanned_raw_counts(self) -> np.ndarray:
-        return self.daq_and_scanner.scanned_raw_counts - self.raw_bg_counts
+        return np.array(self.daq_and_scanner.scanned_raw_counts) - self.raw_bg_counts
 
     @property
     def position_controller(self) -> QT3ScanPositionControllerInterface:
