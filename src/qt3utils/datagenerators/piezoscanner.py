@@ -164,15 +164,12 @@ class CounterAndScanner:
         if self.stage_controller:
             min_val = np.max([min_val, self.stage_controller.minimum_allowed_position])
             max_val = np.min([max_val, self.stage_controller.maximum_allowed_position])
-        else:
-            min_val = np.max([min_val, 0.0])
-            max_val = np.min([max_val, 80.0])
 
         self.start()
         raw_counts = self.scan_axis(axis, min_val, max_val, step_size)
         self.stop()
         self.post_stop()
-        axis_vals = np.arange(min_val, max_val, step_size)
+        axis_vals = np.arange(min_val, max_val + step_size, step_size)
         count_rates = [self.sample_count_rate(count) for count in raw_counts]
 
         optimal_position = axis_vals[np.argmax(count_rates)]
