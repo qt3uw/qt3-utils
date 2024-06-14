@@ -98,6 +98,7 @@ class QT3ScanConfocalApplicationController:
 
         self.daq_and_scanner = qt3utils.datagenerators.CounterAndScanner(daq_controller, position_controller)
         self.data_clock_rate = None
+        self._raw_bg_counts = 0.
         self.data_configs = {'DAQ': None, 'Scanner': None}
         self.data_saved_once = False
 
@@ -110,12 +111,20 @@ class QT3ScanConfocalApplicationController:
         self.daq_and_scanner.step_size = value
 
     @property
+    def raw_bg_counts(self) -> float:
+        return self._raw_bg_counts
+
+    @raw_bg_counts.setter
+    def raw_bg_counts(self, value: float):
+        self._raw_bg_counts = value
+
+    @property
     def scanned_count_rate(self) -> np.ndarray:
-        return self.daq_and_scanner.scanned_count_rate
+        return self.daq_and_scanner.scanned_count_rate - self.raw_bg_counts * self.data_clock_rate
 
     @property
     def scanned_raw_counts(self) -> np.ndarray:
-        return self.daq_and_scanner.scanned_raw_counts
+        return self.daq_and_scanner.scanned_raw_counts - self.raw_bg_counts
 
     @property
     def position_controller(self) -> QT3ScanPositionControllerInterface:
@@ -333,6 +342,7 @@ class QT3ScanHyperSpectralApplicationController:
 
         self._step_size = 0.5
         self.raster_line_pause = 0.150  # wait 150ms for the piezo stage to settle before a line scan
+        self._raw_bg_counts = 0.
         self._filter_view_range = (-np.inf, np.inf)
         self._counts_aggregation_option = list(STANDARD_COUNT_AGGREGATION_METHODS.keys())[0]
 
@@ -353,7 +363,7 @@ class QT3ScanHyperSpectralApplicationController:
     @property
     def scanned_count_rate(self) -> np.ndarray:
         if not self.counts_aggregation_option.startswith('Axes'):
-            return self.scanned_raw_counts * self.daq_controller.clock_rate
+            return self.scanned_raw_counts * self.data_clock_rate
         else:
             return self.scanned_raw_counts
 
@@ -397,6 +407,14 @@ class QT3ScanHyperSpectralApplicationController:
         self.logger.debug(f'Filter Range changed to {self.filter_view_range}.')
 
     @property
+    def raw_bg_counts(self) -> float:
+        return self._raw_bg_counts
+
+    @raw_bg_counts.setter
+    def raw_bg_counts(self, value: float):
+        self._raw_bg_counts = value
+
+    @property
     def counts_aggregation_option(self):
         return self._counts_aggregation_option
 
@@ -418,7 +436,8 @@ class QT3ScanHyperSpectralApplicationController:
         if self.hyper_spectral_raw_data is not None:
             wl_min, wl_max = min(self.filter_view_range), max(self.filter_view_range)
             wls = self.hyper_spectral_wavelengths
-            data_in_range = self.hyper_spectral_raw_data[:, :, (wls >= wl_min) & (wls <= wl_max)]
+            data_in_range = np.float_(self.hyper_spectral_raw_data[:, :, (wls >= wl_min) & (wls <= wl_max)])
+            data_in_range -= self.raw_bg_counts
             wls_in_range = wls[(wls >= wl_min) & (wls <= wl_max)]
             return self.counts_aggregation_method(wls_in_range, data_in_range)
         else:
@@ -633,6 +652,7 @@ class QT3ScanHyperSpectralApplicationController:
 
         wl_min, wl_max = min(self.filter_view_range), max(self.filter_view_range)
         raw_data_in_range = raw_data[:, (wavelengths >= wl_min) & (wavelengths <= wl_max)]
+        raw_data_in_range -= self.raw_bg_counts
         wls_in_range = wavelengths[(wavelengths >= wl_min) & (wavelengths <= wl_max)]
         count_rates = self.counts_aggregation_method(wls_in_range, raw_data_in_range)
         if not self.counts_aggregation_option.startswith('Axes'):
@@ -683,6 +703,7 @@ class QT3ScanHyperSpectralApplicationController:
             count_rate=self.scanned_count_rate,
             step_size=self.step_size,
             daq_clock_rate=self.data_clock_rate,
+            bg_raw_counts=self.raw_bg_counts,
             filter_range=self.filter_view_range,
             counts_aggregation_option=self.counts_aggregation_option,
             daq_config=self.data_configs['DAQ'],
@@ -749,6 +770,7 @@ class QT3ScanHyperSpectralApplicationController:
         self._ymax = self.current_y - self.step_size
         self.data_clock_rate = data_dict.get('daq_clock_rate', None)
         self.filter_view_range = data_dict.get('filter_range', (-np.inf, np.inf))
+        self.raw_bg_counts = data_dict.get('bg_raw_counts', 0.)
         self.counts_aggregation_option = (
             data_dict.get('counts_aggregation_option', list(STANDARD_COUNT_AGGREGATION_METHODS.keys())[0]))
         self.data_configs['DAQ'] = data_dict.get('daq_config', None)
@@ -807,10 +829,12 @@ class QT3ScanHyperSpectralApplicationController:
 
             # ax.axvline(min_range, color='k', linestyle='--')
             # ax.axvline(max_range, color='k', linestyle='--')
-            ax.axvspan(min_range, max_range, alpha=0.1, color='k')
+            ax.axvspan(min_range, max_range, alpha=0.1, color='k', label='Filter Range')
+
+        ax.axhline(self.raw_bg_counts, linestyle='--', alpha=0.5, color='chocolate', label='BG')
 
         if self.counts_aggregation_option == 'Axes-Weighted-Mean':
-            ax.axvline(self.scanned_raw_counts[index_y, index_x], alpha=0.5, color='r')
+            ax.axvline(self.scanned_raw_counts[index_y, index_x], alpha=0.5, color='r', label='center')
 
         canvas = FigureCanvasTkAgg(fig, master=win)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
