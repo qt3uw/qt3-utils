@@ -726,8 +726,8 @@ class MainTkApplication:
             logger.debug(f'Filter Range not available for this DAQ. Nothing happens.')
             return
 
-        filter_min = np.float_(self.view.sidepanel.range_min_entry.get())
-        filter_max = np.float_(self.view.sidepanel.range_max_entry.get())
+        filter_min = np.float64(self.view.sidepanel.range_min_entry.get())
+        filter_max = np.float64(self.view.sidepanel.range_max_entry.get())
         self.application_controller.filter_view_range = filter_min, filter_max
 
         if self.application_controller.still_scanning() is False:

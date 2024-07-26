@@ -9,7 +9,7 @@ QT3Scan:
       grating_selected : "[500nm,300][2][0]" # Varies based on spectrometer type
       starting_wavelength : 600
       ending_wavelength : 850
-      experiment_name: "LF_Control"
+      experiment_name: "ZnOTrueShinySide"
 
   PositionController:
     import_path : qt3utils.applications.controllers.nidaqpiezocontroller

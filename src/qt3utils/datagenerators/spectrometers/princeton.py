@@ -66,9 +66,9 @@ class LightfieldApplicationManager:
             if self.experiment.IsValid(setting, value):
                 self.experiment.SetValue(setting, value)
             else:
-                raise Exception(f'Invalid value: {value} for setting: {setting}.')
+                raise Exception(f'Invalid value: {value} for setting: {setting}, with value {value}.')
         else:
-            raise Exception(f'Invalid setting: {setting}.')
+            raise Exception(f'Invalid setting: {setting}, with value {value}, with value {value}.')
 
     def get(self, setting: Any) -> Any:
         """

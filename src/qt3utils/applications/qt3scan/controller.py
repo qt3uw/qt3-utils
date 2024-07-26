@@ -440,7 +440,7 @@ class QT3ScanHyperSpectralApplicationController:
         if self.hyper_spectral_raw_data is not None:
             wl_min, wl_max = min(self.filter_view_range), max(self.filter_view_range)
             wls = self.hyper_spectral_wavelengths
-            data_in_range = np.float_(self.hyper_spectral_raw_data[:, :, (wls >= wl_min) & (wls <= wl_max)])
+            data_in_range = np.float64(self.hyper_spectral_raw_data[:, :, (wls >= wl_min) & (wls <= wl_max)])
             data_in_range -= self.raw_bg_counts
             wls_in_range = wls[(wls >= wl_min) & (wls <= wl_max)]
             return self.counts_aggregation_method(wls_in_range, data_in_range)
