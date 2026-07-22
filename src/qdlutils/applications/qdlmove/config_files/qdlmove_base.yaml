@@ -1,0 +1,67 @@
+QDLMOVE:
+  Positioners:      # Add positioner configs defiend below; edit the GUI/application accordingly.
+    # - MicroX
+    # - MicroY
+    - PiezoX
+    - PiezoY
+    - PiezoZ
+
+  # MicroX:
+  #   import_path : qdlutils.hardware.micrometers.newportmicrometer
+  #   class_name  : NewportMicrometer
+  #   configure :
+  #     port: COM4      # Serial port name
+  #     min: 0.0        # Minimum position in microns
+  #     max: 25000.0    # Maximum position in microns
+  #     timeout: 10     # Time in seconds before timing out on movement
+
+  # MicroY:
+  #   import_path : qdlutils.hardware.micrometers.newportmicrometer
+  #   class_name  : NewportMicrometer
+  #   configure :
+  #     port: COM5      # Serial port name
+  #     min: 0.0        # Minimum position in microns
+  #     max: 25000.0    # Maximum position in microns
+  #     timeout: 10     # Time in seconds before timing out on movement
+
+  PiezoX:
+    import_path : qdlutils.hardware.nidaq.analogoutputs.nidaqposition
+    class_name  : NidaqPositionController
+    configure:
+      device_name: Dev1
+      write_channel: ao0
+      read_channel: 
+      move_settle_time: 0.0         # Time in seconds to wait after movement
+      scale_microns_per_volt: 8     # Number of microns moved per volt
+      zero_microns_volt_offset: 5   # Value of voltage at position 0 microns
+      min_position: -40.0           # Minimum position in microns
+      max_position: 40.0            # Maximum position in microns
+      invert_axis: True             # If True, modifies scale and offset internally to invert axis
+
+  PiezoY:
+    import_path : qdlutils.hardware.nidaq.analogoutputs.nidaqposition
+    class_name  : NidaqPositionController
+    configure:
+      device_name: Dev1
+      write_channel: ao1
+      read_channel: 
+      move_settle_time: 0.0
+      scale_microns_per_volt: 8
+      zero_microns_volt_offset: 5
+      min_position: -40.0
+      max_position: 40.0
+      invert_axis: True
+
+  PiezoZ:
+    import_path : qdlutils.hardware.nidaq.analogoutputs.nidaqposition
+    class_name  : NidaqPositionController
+    configure:
+      device_name: Dev1
+      write_channel: ao2
+      read_channel: 
+      move_settle_time: 0.0
+      scale_microns_per_volt: 8
+      zero_microns_volt_offset: 5
+      min_position: -40.0
+      max_position: 40.0
+      invert_axis: True

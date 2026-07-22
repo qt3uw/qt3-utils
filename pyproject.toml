@@ -3,22 +3,22 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "qt3utils"
-version = "1.1.2dev0"
+name = "qdlutils"
+version = "v1.0.0"
 
-description = "A package for performing experiments in the QT3 lab at UW."
+description = "A package for performing experiments in the quantum defect lab at UW."
 readme = "README.md"
 requires-python = ">=3.8"
 license = {file = "LICENSE"}
-keywords = ["qt3", "confocal scan", "nidaqmx", "piezo", "stage", "control", "electron spin control"]
+keywords = ["qdl", "confocal scan", "nidaqmx", "piezo", "stage", "control", "spin control"]
 
 authors = [
     {name = "G. Adam Cox", email = "gadamc@gmail.com" },
+    {name = "Nicholas S. Yama", email = "nsyama@uw.edu" },
 ]
 
 maintainers = [
-    {name = "G. Adam Cox", email = "gadamc@gmail.com" },
-    {name = "Maxwell Parsons", email = "mfpars@uw.edu " },
+    {name = "Nicholas S. Yama", email = "nsyama@uw.edu" },
 ]
 
 classifiers = [
@@ -57,15 +57,22 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/qt3uw/qt3utils"
-"Source" = "https://github.com/qt3uw/qt3utils"
-"Bug Tracker" = "https://github.com/qt3uw/qt3utils/issues"
+"Homepage" = "https://github.com/UW-Quantum-Defect-Lab/qdl-utils"
+"Source" = "https://github.com/UW-Quantum-Defect-Lab/qdl-utils"
+"Bug Tracker" = "https://github.com/UW-Quantum-Defect-Lab/qdl-utils/issues"
 "Changelog" = "https://github.com/qt3uw/qt3utils/releases"
 
 [project.scripts]
-qt3scope = "qt3utils.applications.qt3scope.main:main"
-qt3scan = "qt3utils.applications.qt3scan.main:main"
-qt3pb = "qt3utils.applications.qt3pb.main:main"
+qdlhome = "qdlutils.applications.qdlhome.main:main"
+qdlmove = "qdlutils.applications.qdlmove.main:main"
+qdlple = "qdlutils.applications.qdlple.main:main"
+qdlscan = "qdlutils.applications.qdlscan.main:main"
+qdlscope = "qdlutils.applications.qdlscope.main:main"
+qt3scan = "qdlutils.applications.qt3scan.main:main"
+qt3scope = "qdlutils.applications.qt3scope.main:main"
 
 [tool.setuptools.package-data]
-"qt3utils.applications.controllers" = ["*.yaml"]
+"*" = ["*.yaml"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

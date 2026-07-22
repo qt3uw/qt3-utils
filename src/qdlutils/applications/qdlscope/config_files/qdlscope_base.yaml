@@ -1,0 +1,18 @@
+QDLSCOPE:
+  ApplicationController:
+    import_path : qdlutils.applications.qdlscope.application_controller
+    class_name : ScopeController
+    hardware :
+      counter : Counter
+
+  Counter:
+    import_path : qdlutils.hardware.nidaq.counters.nidaqtimedratecounter
+    class_name  : NidaqTimedRateCounter
+    configure :
+      daq_name : Dev1               # NI DAQ Device Name
+      signal_terminal : PFI0        # DAQ Write channel
+      clock_terminal :              # Digital input terminal for external clock (blank if using internal)
+      clock_rate: 100000            # NI DAQ clock rate in Hz
+      sample_time_in_seconds : 1    # Sampling time in seconds (updates later in scan)
+      read_write_timeout : 10       # timeout in seconds for read/write operations
+      signal_counter : ctr2         # NIDAQ counter to use for count

@@ -1,0 +1,65 @@
+QDLSCAN:
+  ApplicationController:
+    import_path : qdlutils.applications.qdlscan.application_controller
+    class_name : ScanController
+    hardware :
+      counter : Counter
+      x_axis_control : PiezoX
+      y_axis_control : PiezoY
+      z_axis_control : PiezoZ
+    configure :
+      inter_scan_settle_time : 0.01
+
+  Counter:
+    import_path : qdlutils.hardware.nidaq.counters.nidaqtimedratecounter
+    class_name  : NidaqTimedRateCounter
+    configure :
+      daq_name : Dev1               # NI DAQ Device Name
+      signal_terminal : PFI0        # DAQ Write channel
+      clock_terminal :              # Digital input terminal for external clock (blank if using internal)
+      clock_rate: 100000            # NI DAQ clock rate in Hz
+      sample_time_in_seconds : 1    # Sampling time in seconds (updates later in scan)
+      read_write_timeout : 10       # timeout in seconds for read/write operations
+      signal_counter : ctr2         # NIDAQ counter to use for count
+
+  PiezoX:
+    import_path : qdlutils.hardware.nidaq.analogoutputs.nidaqposition
+    class_name  : NidaqPositionController
+    configure:
+      device_name: Dev1             # NIDAQ Device Name
+      write_channel: ao0            # DAQ Write channel
+      read_channel:                 # DAQ read channel
+      move_settle_time: 0.0         # Time in seconds to wait after movement
+      scale_microns_per_volt: 8     # Number of microns moved per volt
+      zero_microns_volt_offset: 5   # Value of voltage at position 0 microns
+      min_position: -40.0           # Minimum position in microns
+      max_position: 40.0            # Maximum position in microns
+      invert_axis: True             # If True, modifies scale and offset internally to invert axis
+
+  PiezoY:
+    import_path : qdlutils.hardware.nidaq.analogoutputs.nidaqposition
+    class_name  : NidaqPositionController
+    configure:
+      device_name: Dev1
+      write_channel: ao1
+      read_channel: 
+      move_settle_time: 0.0
+      scale_microns_per_volt: 8
+      zero_microns_volt_offset: 5
+      min_position: -40.0
+      max_position: 40.0
+      invert_axis: True
+
+  PiezoZ:
+    import_path : qdlutils.hardware.nidaq.analogoutputs.nidaqposition
+    class_name  : NidaqPositionController
+    configure:
+      device_name: Dev1
+      write_channel: ao2
+      read_channel: 
+      move_settle_time: 0.0
+      scale_microns_per_volt: 8
+      zero_microns_volt_offset: 5
+      min_position: -40.0
+      max_position: 40.0
+      invert_axis: False

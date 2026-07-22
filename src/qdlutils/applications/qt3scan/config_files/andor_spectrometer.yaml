@@ -1,0 +1,65 @@
+QT3Scan:
+  DAQController:
+    import_path : qdlutils.hardware.spectrometers.andor_spectrometer
+    class_name  : AndorSpectrometerController
+    configure :
+      # Devices
+      # - Device Index
+      ccd_device_index: 0
+      spg_device_index: 0
+      # Spectrograph
+      # - Turret
+      grating: null
+      center_wavelength: null  # nm
+      # - Calibration
+      pixel_offset: 0.
+      wavelength_offset: 0.  # nm
+      # - Ports
+      input_port: SIDE  # or DIRECT
+      output_port: DIRECT  # or SIDE
+      # Acquisition
+      # - Modes
+      read_mode: FVB  # or SINGLE_TRACK
+      acquisition_mode: ACCUMULATE  # or SINGLE_SCAN or KINETICS
+      trigger_mode: INTERNAL  # or EXTERNAL
+      # - Timing
+      exposure_time: 1  # seconds
+      number_of_accumulations: 2
+      accumulation_cycle_time: 1  # seconds - will always end up higher than exposure time
+      number_of_kinetics: 10
+      kinetic_cycle_time: 1  # seconds - will always end up higher than accumulation cycle time
+      # - Data-Pre-Processing
+      baseline_clamp: true  # or false - will keep the electronic noise floor to the same level
+      cosmic_ray_removal: true  # or false - in accumulation mode, will remove peaks that look like cosmic rays
+      keep_clean_on_external_trigger: true  # or false - when an external trigger is used, keeps the CCD free of counts
+      # - Single Track Setup
+      single_track_center_row: null  # number in [1, 256]
+      single_track_height: null  # number that does not exceed the above limits if added or subtracted to the center
+      # Electronics
+      # - Vertical Shift
+      vertical_shift_speed: null  # μs - must be string - find other options in the drop-down menu on the GUI.
+      # - Horizontal Shift
+      horizontal_shift_speed: null  # MHz - must be string - find other options in the drop-down menu on the GUI.
+      pre_amp_gain: null  # must be string - find other options in the drop-down menu on the GUI.
+      # Temperature
+      # - Set Point
+      target_sensor_temperature: -65  # in deg C
+      reach_temperature_before_acquisition: true  # or false - Will wait until the target temperature is reached if true
+      # - Cooler
+      cooler: true  # or false - will turn CCD cooler on if true
+      cooler_persistence: true  # or false - will keep the CCD cold even after the program ends, as long as Andor Solis does not open
+
+
+# Settings for ARS Cryostat
+  PositionController:
+    import_path : qdlutils.hardware.nidaq.nidaqpiezocontroller
+    class_name  : QT3ScanNIDAQPositionController
+    configure :
+      daq_name : Dev1  # NI DAQ Device Name
+      write_channels : ao0,ao1,ao2  # NI DAQ analog output channels to use for writing position
+      read_channels : None  # NI DAQ analog input channels to use for reading position
+      scale_microns_per_volt : [4.2,6,10]  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
+      zero_microns_volt_offset: 5  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
+      minimum_allowed_position : -50  # microns
+      maximum_allowed_position : 50  # microns
+      settling_time_in_seconds : 0.001

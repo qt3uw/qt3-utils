@@ -1,0 +1,25 @@
+QT3Scan:
+  DAQController:
+    import_path : qdlutils.hardware.spectrometers.princeton_spectrometer
+    class_name  : QT3ScanPrincetonSpectrometerController
+    configure :
+      exposure_time : 2000 # This is in ms
+      center_wavelength : 700 # This is in nm
+      sensor_temperature_set_point : -70 # This is in Celsius
+      grating_selected : "[500nm,300][2][0]" # Varies based on spectrometer type
+      starting_wavelength : 600
+      ending_wavelength : 850
+      experiment_name: "ZnOTrueShinySide"
+
+  PositionController:
+    import_path : qdlutils.hardware.nidaq.nidaqpiezocontroller
+    class_name  : QT3ScanNIDAQPositionController
+    configure :
+      daq_name : Dev1  # NI DAQ Device Name
+      write_channels : ao0,ao1,ao2  # NI DAQ analog output channels to use for writing position
+      read_channels : ai0,ai1,ai2  # NI DAQ analog input channels to use for reading position
+      scale_microns_per_volt : 8  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
+      zero_microns_volt_offset: 0  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
+      minimum_allowed_position : 0  # microns
+      maximum_allowed_position : 80  # microns
+      settling_time_in_seconds : 0.001

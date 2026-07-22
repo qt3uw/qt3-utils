@@ -1,5 +1,13 @@
 # QT3 Utils Experiment Classes
 
+```
+
+
+WARNING: this document is deprciated and needs to be updated.
+
+
+```
+
 This document describes, both generally and specifically for a few classes,
 how the Experiment classes work in QT3Utils.
 

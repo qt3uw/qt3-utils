@@ -1,0 +1,69 @@
+# Qt3 Mirror — Newport-style TTL flipper mounts on NI-DAQ static digital outputs.
+#
+# USB-6343 (BNC): the front-panel "digital and timing I/O" BNCs map in NI-DAQmx as
+#   port1/line0..7  ↔  PFI 0..7  (often labeled P1.x on pinouts)
+#   port2/line0..7  ↔  PFI 8..15 (often labeled P2.x; P2.0 = PFI8)
+# Port0 lines are on the 37-pin D connector; high-speed timed DO is port0-only on
+# many X Series cards, but static TTL edge writes used here are valid on port1/port2.
+#
+# Set `line` to the DAQmx fragment after the device name, e.g. port2/line0, or give a
+# full channel like "Dev1/port2/line0". Order of `flippers` is index 0..3 = M5..M8.
+
+device: Dev1
+
+sync_pulse_low_ms: 15.0
+sync_pulse_high_ms: 15.0
+
+flippers:
+  - name: M5
+    line: port0/line0
+  - name: M6 
+    line: port0/line1
+  - name: M7
+    line: port0/line2
+  - name: M8
+    line: port0/line3
+
+# Presets only change the mirrors listed; others keep their current TTL line level.
+# Omit `presets` in a custom config to fall back to these defaults in code.
+presets:
+  - label: "532nm - Camera"
+    targets:
+      M5: up
+      M6: up
+      M7: down
+  - label: "532nm - SPCM - Confocal"
+    targets:
+      M5: up
+      M6: down
+      M8: up
+  - label: "532nm - SPCM - g(2)"
+    targets:
+      M5: up
+      M6: down
+      M8: down
+  - label: "532nm - Spectrometer"
+    targets:
+      M5: up
+      M6: up
+      M7: up
+  - label: "SuperK - Camera"
+    targets:
+      M5: down
+      M6: up
+      M7: down
+  - label: "SuperK - SPCM - Confocal"
+    targets:
+      M5: down
+      M6: down
+      M8: up
+  - label: "SuperK - SPCM - g(2)"
+    targets:
+      M5: down
+      M6: down
+      M8: down
+  - label: "SuperK - Spectrometer"
+    targets:
+      M5: down
+      M6: up
+      M7: up

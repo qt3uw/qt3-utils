@@ -1,0 +1,59 @@
+QT3PLE:
+  ApplicationController:
+    import_path : qdlutils.applications.qdlple.application_controller
+    class_name : PleScanner
+    configure :
+      controller: VoltageController
+      readers :
+        - DAQCounter
+      auxiliary_controllers :
+        - RepumpController
+
+  DAQCounter:
+    import_path : qdlutils.hardware.nidaq.counters.nidaqtimedratecounter
+    class_name  : NidaqTimedRateCounter
+    configure :
+      daq_name : Dev1  # NI DAQ Device Name
+      signal_terminal : PFI0  # NI DAQ terminal connected to input digital TTL signal
+      clock_terminal :    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
+      clock_rate: 100000  # NI DAQ clock rate in Hz
+      sample_time_in_seconds : 1
+      read_write_timeout : 10  # timeout in seconds for read/write operations
+      signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
+
+  VoltageController:
+    import_path : qdlutils.hardware.nidaq.analogoutputs.nidaqvoltage
+    class_name  : NidaqVoltageController
+    configure :
+      daq_name : Dev1  # NI DAQ Device Name
+      write_channels : ao3  # NI DAQ analog output channels to use for writing position
+      read_channels : ai3  # NI DAQ analog input channels to use for reading position
+      min_voltage: -3  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
+      max_voltage: 5  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
+      scale_nm_per_volt: 1  # microns
+
+  RepumpController:
+    import_path   : qdlutils.hardware.nidaq.analogoutputs.nidaqvoltage
+    class_name    : NidaqVoltageController
+    configure :
+      daq_name : Dev1  # NI DAQ Device Name ## Dev2 before
+      write_channels : ao2  # NI DAQ analog output channels to use for writing position ## ao0 before
+      read_channels :   # NI DAQ analog input channels to use for reading position
+      min_voltage: 0  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
+      max_voltage: 1  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
+
+
+# notes
+
+# clock_rate:
+#   Specifies the clock rate in Hz. If using an external clock,
+#   you should specifiy the clock rate here so that the correct counts per
+#   second are displayed. If using the internal NI DAQ clock (default behavior),
+#   this value specifies the clock rate to use. Per the NI DAQ manual,
+#   use a suitable clock rate for the device for best performance, which is an integer
+#   multiple downsample of the digital sample clock.
+
+# clock_terminal:
+#   Specifies the digital input terminal to the NI DAQ to use for a clock.
+#   If None, the internal NI DAQ clock is used. Otherwise, a string value
+#   specifies the terminal to use for the clock.

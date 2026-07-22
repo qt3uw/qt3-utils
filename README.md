@@ -1,23 +1,56 @@
-# Utility Classes and Functions for the QT3 Lab
+# UW Quantum Defect Lab Utilities (base)
+This repository contains the base software tools and applications for interfacing
+with hardware used in the [Quantum Defect Laboratory](https://sites.google.com/uw.edu/optospintronics-lab/home) 
+at the University of Washington.
+This repository was initially forked from [`qt3-utils`](https://github.com/qt3uw/qt3-utils) 
+(developed for the Quantum Technologies Teaching and Test-Bed (QT3) lab,
+also at the University of Washington).
 
-This package provides a number of tools and fully-packaged programs for usage
-in the Quantum Technologies Teaching and Test-Bed (QT3) lab at the University of Washington.
+Currently, `qdl-utils` supports the following hardware for experiments with 
+solid-state optical emitters and spin-qubits:
 
-The QT3 lab confocal microscope utilizes the following hardware to perform
-various spin-control experiments on quantum systems, such as NV centers in diamond:
+* TTL pulsers
+  * Quantum Composer Sapphire
+  * Spin Core PulseBlaster
+* NI-DAQ card (PCIx 6363) for data acquisition and control
+  * Edge counting from Excelitas SPCM for photon detection
+  * Jena System's piezo actuator stage control
+  * Mad City Labs piezo actuator stage control
+* Newport Micrometers via serial connection
 
- * TTL pulsers
-   * Quantum Composer Sapphire
-   * Spin Core PulseBlaster
- * Excelitas SPCM for photon detection
- * NI-DAQ card (PCIx 6363) for data acquisition and control
- * Jena System's Piezo Actuator Stage Control Amplifier
- * [Future] spectrometer
+Additionally, several fully interfaced, Python applications are provided for 
+standard and commonly used experiments:
 
-The code in this package facilitates usages of these devices to perform
-experiments.
+* `qdlmove`: Customizable graphical interface for position control, reconfigurable 
+  for mutltiple positioners.
+* `qdlple`: Reconfigurable resonant excitation (photoluminescence excitation)
+  spectroscopy. 
+* `qdlscan`:  Reconfigurable 1-d and 2-d confocal scan imaging.
+* `qdlscope`: Real-time oscilloscope readout from the SPCM via the digital input 
+  terminal on the NI-DAQ board.
 
-# Setup
+as well as some legacy applications from `qt3-utils`.
+
+Applications are generally structured to be easily configured for different
+setups (using supported hardware) via the use of YAML files.
+Modifications to include additional hardware should also be relatively straightforward.
+Finally, in the case where a custom one-off, experiment is required, many of the controllers 
+and hardware interfaces can be utilized directly without the development of a GUI
+or application.
+
+### Intended usage
+With the release of `v1.0.0` we are no longer actively developing features for the main 
+`qdlutils` repository.
+Bug fixes and modifications to existing applications may still be developed and pushed as 
+needed, however large changes will not be actively developed (unless there is significant
+need for such a feature).
+Instead, users are expected to fork this repository and maintain/actively develop their
+forks as needed for their own purposes.
+In the event that specific features, changes, or bug fixes are of generic interest to multiple 
+users, this repository may be merged/updated via a Pull Request.
+
+
+## Setup
 
 ### Prerequisites
 
@@ -30,20 +63,126 @@ SpinCore for the PulseBlaster. These libraries must be installed separately.
 * [SpinCore's PulseBlaster](https://www.spincore.com/pulseblaster.html)
   * [spinAPI driver](http://www.spincore.com/support/spinapi/)
 
-## Installation
+### Installation
 
-Once the prerequisite packages have been installed, qt3utils can be installed from pip.
+Because this package is intended to be forked and customized for use in a
+variety of experimental setups, we do not intend to release this package on PyPI.
+Instead, users must clone `qdl-utils` (or their specific fork) onto their
+own machine and install it locally.
+Instructions for how to do this are provided below.
 
-### Normal Installation
+Note that Pull Requests (and commits to the `main` branch) on `qdl-utils` 
+will generally be rejected.
+Thus, it is strongly discouraged to install `qdl-utils` directly if you 
+intend on tracking your changes with GitHub.
+Instructions for creating a fork are provided below.
+
+
+#### 0. Create your fork of the `qdl-utils` repository
+
+Follow [these instructions to create a fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) 
+via the GitHub web browser.
+For QDL members, create the fork to be owned by the UW-Quantum-Defect-Lab GitHub organization
+and name the fork appropriately as to be distinguishable for your project, e.g. `qdl-utils-diamond`
+or `qdl-utils-magpi`.
+For the purposes of this tutorial we will assume that the fork is named `my-qdl-utils-fork`.
+
+Once the fork has been created on GitHub, move on to the next step.
+Do not clone your fork yet; we will do this in the next steps.
+
+If you wish to completely decouple from `qdl-utils` then you can follow [these
+instructions to detach your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/detaching-a-fork).
+Note that this will prevent you from being able to Pull Request `qdl-utils` or
+straightforwardly merge updates onto your repository.
+
+#### 1. Create a development environment 
+
+It is highly recommended that you utilize some form of virtual environment to
+install your fork `my-qdl-utils-fork` (in this example).
+It is assumed that you will use [Anaconda](https://docs.anaconda.com/anaconda/install/)
+or its lightweight version [Miniconda](https://docs.anaconda.com/miniconda/).
+If you are unfamiliar with `conda` please review [this tutorial](https://docs.conda.io/projects/conda/en/latest/user-guide/getting-started.html).
+For Windows users new to Anaconda, it is recommended to install Anaconda for only your user
+and then utilize the provided Anaconda PowerShell Prompt terminal for the remainder
+of this process.
+
+Create a new virtual environment with Python 3.9. In this example we will name the
+virtual environment `qdlutils`, but you can change it to something else if desired.
+In a terminal configured to for `conda`, run
 
 ```
-pip install qt3utils
+> conda create --name qdlutils python=3.9
 ```
 
-The `qt3utils` package depends on a handful of other [qt3 packages](https://github.com/qt3uw) and will be installed for you by default.
-Additional information may also be [found here](https://github.com/qt3uw/qt3softwaredocs).
+to create the virtual environment and then activate it via
 
-#### Update Tk/Tcl
+```
+> conda activate qdlutils
+```
+
+
+#### 2. Clone your fork
+
+Navigate (in the terminal) to the directory in which you would like to install
+the full `qdl-utils` repository.
+This includes not only the `qdlutils` package source code, but also examples, 
+and any other files stored in the repository.
+Note that you will often need to edit the source code so pick a directory which
+you can easily access.
+
+Once your present working directory is the desired location, clone your fork via
+
+```
+> git clone <URL of my-qdl-utils-fork>
+```
+
+You can get the URL for your fork from its GitHub page by clicking on the green 
+"Code" button as shown in the following picture, then copying the URL:
+
+![repo_url](https://github.com/user-attachments/assets/0396ff47-59e1-47fa-a7d9-053b81d58298)
+
+For example, if we wanted to install the `qdl-utils` repo itself we could run
+`git clone https://github.com/UW-Quantum-Defect-Lab/qdl-utils.git`.
+Your URL will probably be something like `git clone https://github.com/UW-Quantum-Defect-Lab/my-qdl-utils-fork.git`.
+Note that, for reasons explained above, cloning `qdl-utils` directly is not
+recommended.
+
+
+#### 3. Install the local repository in "editor" mode
+
+Finally, move into the the newly created clone of your repository.
+Assuming that the name of your fork is `my-qdl-utils-fork` we first move into 
+the repository by
+
+```
+> cd my-qdl-utils-fork
+```
+
+and then install it locally in editor mode via
+
+```
+> pip install -e . 
+```
+
+Do not forget the `.`! 
+This refers `pip` to the `pyproject.toml` file in the home directory
+of the repository that does the installation.
+The `-e` option ensures that any edits you make to the local repository 
+are reflected in subsequent imports in Python scripts (without this you
+would have to `pip` install after each edit).
+
+
+Finally confirm that the installation worked correctly by launching the
+Python interpreter and then importing the package:
+
+```
+> Python
+Python 3.9 ...
+>>> import qdlutils
+>>>
+```
+
+#### 4. (Optional) Update Tk/Tcl
 
 Upgrading Tcl/Tk via Anaconda overcomes some GUI bugs on Mac OS Sonoma
 
@@ -51,532 +190,136 @@ Upgrading Tcl/Tk via Anaconda overcomes some GUI bugs on Mac OS Sonoma
 conda install 'tk>=8.6.13'
 ```
 
-
-# Usage
-
-This package provides GUI applications and a Python API for controlling the hardware and running experiments.
-
-For instructions on using the python API,
-the simplest way to get started is to see one of the [example](examples) Jupyter notebooks.
-
-The following notebooks demonstrate usage of their respective experiment classes and
-the necessary hardware control objects for those experiments
-
-  * [CWODMR](examples/default_cwodmr.ipynb)
-  * [Pulsed ODMR](examples/default_podmr.ipynb)
-  * [Rabi Oscillations](examples/default_rabi.ipynb)
-  * [Ramsey](examples/default_ramsey.ipynb) (similar usage for spin/Hahn echo and dynamical decoupling)
-
-Additionally, there are two notebooks that demonstrate some basic hardware tests
-
-  * [Pulse Blaster Tests](examples/pulse_blaster_testing.ipynb)
-  * [MW Switch Tests](examples/testing_MW_switch.ipynb)
-
-Most classes and methods contain docstrings that describe functionality, which you can
-discover through the python help() function.
-
-Details of how the experiment classes work and how you can modify
-them are found in [ExperimentsDoc.md](docs/ExeperimentsDoc.md)
-
-Help to [automatically generate documentation](https://github.com/qt3uw/qt3-utils/issues/66) would be appreciated.
-
-
-## Applications
-
-### QT3 Oscilloscope
-
-The console program `qt3scope` comes with this package. It allows you to run
-a simple program from the command-line that reads the count rate on a particular
-digital input terminal on the NI DAQ. Further development may allow it to 
-display count rates from other hardware.
-
-It can be from the command line / terminal
+### Configuration
+The base installation of `qdlutils` contains some basic configuration files in the form
+of YAML files (`*.yaml`).
+Within any of the `qdlapp` family applications (e.g. `qldscope`), the configuration file is
+stored in the `qdlapp/config_files` directory (e.g. `qdlutils/qdlscope/config_files/*.yaml`).
+Each application has a base configuration file `qdlapp_base.yaml` which contains the
+default configuration for the hardware that is loaded by the application on startup.
+For example, the `qdlscope_base.yaml` file reads
 
 ```
-> qt3scope
-```
+QDLSCOPE:
+  ApplicationController:
+    import_path : qdlutils.applications.qdlscope.application_controller
+    class_name : ScopeController
+    hardware :
+      counter : Counter
 
-After `pip install`, there will be an executible file in your python environment. You
-should be able to create a softlink to that executable to a desktop or task bar icon, allowing
-to launch the program from a mouse click.
-
-Starting in version 1.0.3, graphical dropdown menus and configuration windows
-will allow users to configure various hardware options. 
-
-
-#### YAML Configuration
-
-Data Acquisition hardware supported by QT3Scope can also be configured by selecting a YAML file.
-The YAML file must contain a specific structure and names as shown below. 
-
-
-###### Default NIDAQ Edge Counter YAML configuration:
-
-```yaml
-QT3Scope:
-  DAQController:
-    import_path : qt3utils.applications.controllers.nidaqedgecounter
-    class_name  : QT3ScopeNIDAQEdgeCounterController
-    configure : 
-      daq_name : Dev1  # NI DAQ Device Name
-      signal_terminal : PFI0  # NI DAQ terminal connected to input digital TTL signal
-      clock_terminal :    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
-      clock_rate: 100000  # NI DAQ clock rate in Hz
-      num_data_samples_per_batch : 1000
-      read_write_timeout : 10  # timeout in seconds for read/write operations
-      signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
-```
-
-###### Default Random Data Generator configuration:
-
-```yaml
-QT3Scope:
-  DAQController:
-    import_path : qt3utils.applications.controllers.random_data_generator
-    class_name  : QT3ScopeRandomDataController
-    configure : 
-      simulate_single_light_source : False
-      num_data_samples_per_batch : 10
-      default_offset: 100
-      signal_noise_amp: 0.5
-```
-
-All hardware controllers built for QT3Scope have a default
-configuration YAML file, which are found in 
-[src/qt3utils/applications/controllers](src/qt3utils/applications/controllers).
-
-### QT3 Confocal Scan
-
-The console program `qt3scan` performs a 2D (x,y) scan using a data acquisition
-controller object and a position controller object. The default controllers use
-an NIDAQ device that counts TTL edges (typically from an SPCM) and sets
-analog voltage values on a Jena system piezo actuator.
-
-```
-> qt3scan
-```
-
-Similar to `qt3scope`, the supported hardware can be configured via GUI or YAML file. 
-
-All hardware controllers that are built for QT3Scope have a default
-configuration YAML file, which will be found in 
-[src/qt3utils/applications/controllers](src/qt3utils/applications/controllers).
-
-###### Default NIDAQ Edge Counter YAML configuration:
-
-```yaml
-QT3Scan:
-  DAQController:
-    import_path : qt3utils.applications.controllers.nidaqedgecounter
-    class_name  : QT3ScanNIDAQEdgeCounterController
-    configure : 
-      daq_name : Dev1  # NI DAQ Device Name
-      signal_terminal : PFI0  # NI DAQ terminal connected to input digital TTL signal
-      clock_terminal :    # Specifies the digital input terminal to the NI DAQ to use for a clock. If left blank, interprets as None or NULL
-      clock_rate: 100000  # NI DAQ clock rate in Hz
-      num_data_samples_per_batch : 250
-      read_write_timeout : 10  # timeout in seconds for read/write operations
-      signal_counter : ctr2  # NI DAQ counter to use for counting the input signal, e.g. ctr0, ctr1, ctr2, or ctr3
-
-  PositionController:
-    import_path : qt3utils.applications.controllers.nidaqpiezocontroller    
-    class_name  : QT3ScanNIDAQPositionController
-    configure : 
-      daq_name : Dev1  # NI DAQ Device Name
-      write_channels : ao0,ao1,ao2  # NI DAQ analog output channels to use for writing position
-      read_channels : ai0,ai1,ai2  # NI DAQ analog input channels to use for reading position
-      scale_microns_per_volt : 8  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5] 
-      zero_microns_volt_offset: 0  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5] 
-      minimum_allowed_position : 0  # microns
-      maximum_allowed_position : 80  # microns
-      settling_time_in_seconds : 0.001
-
-```
-
-###### Default Princeton Spectrometer YAML configuration:
-
-```yaml
-QT3Scan:
-  DAQController:
-    import_path : qt3utils.applications.controllers.princeton_spectrometer
-    class_name  : QT3ScanPrincetonSpectrometerController
+  Counter:
+    import_path : qdlutils.hardware.nidaq.counters.nidaqtimedratecounter
+    class_name  : NidaqTimedRateCounter
     configure :
-      exposure_time : 2000 # This is in ms
-      center_wavelength : 700 # This is in nm
-      sensor_temperature_set_point : -70 # This is in Celsius
-      grating_selected : "[500nm,300][2][0]" # Varies based on spectrometer type
-      wave_start : 600
-      wave_end : 850
-      experiment_name: "LF_Control"
-
-  PositionController:
-    import_path : qt3utils.applications.controllers.nidaqpiezocontroller
-    class_name  : QT3ScanNIDAQPositionController
-    configure :
-      daq_name : Dev1  # NI DAQ Device Name
-      write_channels : ao0,ao1,ao2  # NI DAQ analog output channels to use for writing position
-      read_channels : ai0,ai1,ai2  # NI DAQ analog input channels to use for reading position
-      scale_microns_per_volt : 8  # conversion factor from volts to microns, can also supply a list [8,8,8] or [6,4.2,5]
-      zero_microns_volt_offset: 0  # the voltage value that defines the position 0,0,0, can also supply a list [0,0,0] or [5,5,5]
-      minimum_allowed_position : 0  # microns
-      maximum_allowed_position : 80  # microns
-      settling_time_in_seconds : 0.001
-
+      daq_name : Dev1               # NI DAQ Device Name
+      signal_terminal : PFI0        # DAQ Write channel
+      clock_terminal :              # Digital input terminal for external clock
+      clock_rate: 100000            # NI DAQ clock rate in Hz
+      sample_time_in_seconds : 1    # Sampling time in seconds (updates via GUI)
+      read_write_timeout : 10       # timeout in seconds for read/write operations
+      signal_counter : ctr2         # NIDAQ counter to use for count
 ```
 
-###### Default Random Data Generator configuration:
+The header `QDLSCOPE` signifies that the YAML file corresponds to the `qdlscope` application.
+When loading this file, the `qdlmove` application will read this file as a series of nested
+dictionaries (demarcated but indentation).
+The application then loads the hardware for the `Counter` using the class `class_name` defined 
+in `import_path`, which is then configured using the `configure` dictionary.
+Note that the structure of the YAML file for any given appliation will generally be different
+as it depends on the design of the configuration file loader within each application.
+Nevertheless, most configuration files are structured similarly.
 
-```yaml
-QT3Scan:
-  PositionController:
-    import_path : qt3utils.applications.controllers.random_data_generator    
-    class_name  : QT3ScanDummyPositionController
-    configure : 
-      maximum_allowed_position : 80
-      minimum_allowed_position : 0
+Users should modify the YAML configuration files to to match the hardware configuration in 
+their own systems.
+Modifying the base configuration files is expected and will set the default behavior.
+In some cases, the use of several different configurations (at different times) on the same
+system might be desired (e.g. for switching between different counters).
+All of the applications support the loading of YAML configuration files after startup,
+however not all applications have this feature enabled by default.
+In most cases this can be accomplished by some simple modificiation of the GUI and application
+classes (simply copying functions from other applications should suffice).
+Users may then create new YAML configuration files and save them in the `config_files` folder.
 
-  DAQController:
-    import_path : qt3utils.applications.controllers.random_data_generator
-    class_name  : QT3ScanRandomDataController
-    configure : 
-      simulate_single_light_source : True
-      num_data_samples_per_batch : 10
-      default_offset: 100
-      signal_noise_amp: 0.1
-
-```
-
-###### Default Spectrometer Random Data Generator configuration:
-
-```yaml
-QT3Scope:
-  DAQController:
-    import_path : qt3utils.applications.controllers.random_data_generator
-    class_name  : QT3ScopeRandomDataController
-    configure : 
-      simulate_single_light_source : False
-      num_data_samples_per_batch : 10
-      default_offset: 100
-      signal_noise_amp: 0.5
-
-QT3Scan:
-  PositionController:
-    import_path : qt3utils.applications.controllers.random_data_generator    
-    class_name  : QT3ScanDummyPositionController
-    configure : 
-      maximum_allowed_position : 80
-      minimum_allowed_position : 0
-
-  DAQController:
-    import_path : qt3utils.applications.controllers.random_data_generator
-    class_name  : QT3ScanRandomDataController
-    configure : 
-      simulate_single_light_source : True
-      num_data_samples_per_batch : 10
-      default_offset: 100
-      signal_noise_amp: 0.1
+Additionally, users may find it convenient to modify the default settings for various GUI
+elements within the applications (e.g. the scan range in `qdlscan`).
+To do so, one should navigate to the `qdlapp/application_gui.py` script file and locate the
+relevant GUI element, for example, to change the scan range in `qdlscan` one finds the lines
 
 ```
-
-### QT3 Piezo Controller
-
-The console program `qt3piezo` comes installed via the 'nipiezojenapy' package, and may be launched from the command line.
-
-```
-> qt3piezo
+# in qdlscan/application_gui.py
+tk.Label(scan_frame, text='Range (μm)').grid(row=row, column=0, padx=5, pady=2)
+self.image_range_entry = tk.Entry(scan_frame, width=10)
+self.image_range_entry.insert(0, 80)
+self.image_range_entry.grid(row=row, column=1, padx=5, pady=2)
 ```
 
-This application can only be configured via command line options at this time.
-The `nipiezojenapy` python package should probably be moved into `qt3utils`. 
+and then modify the line `self.image_range_entry.insert(0, 80)` changing the last argument from
+`80` to whatever the desired value is.
+A similar process can be achieved in all applications as desired.
 
 
-# QT3Scope / QT3Scan Hardware Development
+## Using the software
+If one intends to use multiple applications simultaneously it is recommended to run the applications
+through the `qdlhome` application.
+You can launch `qdlhome` via the `qdlutils` terminal command `qdlhome` or by navigating to 
+`qdlutils/applications/qdlhome/main.py` and running it directly.
+Note that `qdlhome` does not support the `qt3utils` legacy applications (although it would be possible
+to set this up if desired).
 
-Follow these instructions in order to add new hardware support to `qt3scope` or `qt3scan`.
-
-For each application, you'll need to build a Python classes that adheres to each application's interfaces.
-
-## QT3Scope
-
-
-1. Build a class that adheres to `QT3ScopeDAQControllerInterface` as defined in
-[src/qt3utils/applications/qt3scope/interface.py](src/qt3utils/applications/qt3scope/interface.py). There are a number of methods
-that you must construct. Two examples are [QT3ScopeRandomDataController](src/qt3utils/applications/controllers/random_data_generator.py)
-and [QT3ScopeNIDAQEdgeCounterController](src/qt3utils/applications/controllers/nidaqedgecounter.py#L13). 
-In addition to controlling hardware and returning data, they must also supply a way to configure the object via 
-Python dictionary (`configure` method) and graphically (`configure_view` method).
-2. Create a YAML file with a default configuration, similar to that found in 
-[random_data_generator.yaml](src/qt3utils/applications/controllers/random_data_generator.yaml) or [](src/qt3utils/applications/controllers/nidaq_edge_counter.yaml)
-3. Add your new controller to `SUPPORTED_CONTROLLERS` found in [qt3scope](src/qt3utils/applications/qt3scope/main.py#L51)
-
-## QT3Scan
-
-Similar to `qt3scope` but with a little more work.
-
-There are three controllers that are needed by `qt3scan`:
-* Application Controller -- [QT3ScanApplicationControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L106) 
-* DAQ Controller -- [QT3ScanDAQControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L59) 
-* Position Controller -- [QT3ScanPositionControllerInterface](src/qt3utils/applications/qt3scan/interface.py#L7)
-
-### 1. Application Controller 
-
-Currently there are two implementations of the Application Controller. [The first application controller](src/qt3utils/applications/qt3scan/controller.py#L14) is made to support standard 2D (x,y) scans. It is used for scans using the NIDAQ Edge Counter
-Controller, NIDAQ Position Controller, Random Data Generator and Dummy 
-Position Controller. 
-
-If you do not need any changes to the save function 
-or special functionality to right-click on the scan image, then you can probably 
-re-use this Application Controller. 
-
-[The second application controller](https://github.com/qt3uw/qt3-utils/blob/134sub-changes-to-interface/src/qt3utils/applications/qt3scan/controller.py#L180) is an implements the hyperspectral image where each pixel each pixel in the 2D scan is based on a spectrum
-of counts over a range of wavelengths.
-`QT3ScanHyperSpectralApplicationController` class implements this 
-data view when a user right-clicks on the scan and along with a function
-to save the full 3-dimensional data set. 
-
-### 2. DAQ Controller
-
-To support new hardware that acquires data, build an implementation of `QT3ScanDAQControllerInterface`.
-The DAQ controller interface is now split into two distinct interfaces:
-
-- Counter DAQ Controller (`QT3ScanCounterDAQControllerInterface`): This interface is specifically designed for hardware that functions primarily as counters, such as devices measuring photon counts or other discrete events. It extends the base DAQ controller interface by adding methods tailored to sampling counts and computing count rates.
-
-- Spectrometer DAQ Controller (`QT3ScanSpectrometerDAQControllerInterface`): This is tailored for spectrometers that acquire spectral data. This interface adds a method to sample the spectrum, making it easier for developers to integrate spectrometers into the QT3Scan framework.
-
-Examples are [QT3ScanRandomDataController](src/qt3utils/applications/controllers/random_data_generator.py#L124),
-[QT3ScanNIDAQEdgeCounterController](src/qt3utils/applications/controllers/nidaqedgecounter.py#L139), and `QT3ScanPrincetonSpectrometerController`
-
-Create a new python module in in `src/qt3utils/applications/controllers` for your hardware controller.
-
-### 3. Position Controller
-
-To support a new Position Controller build an implementation of `QT3ScanPositionControllerInterface`.
-Examples are [QT3ScanDummyPositionController](src/qt3utils/applications/controllers/random_data_generator.py#L160),
-and [QT3ScanNIDAQPositionController](src/qt3utils/applications/controllers/nidaqpiezocontroller.py#L9)
-
-Create a new python module in in `src/qt3utils/applications/controllers` for your position controller.
-
-### 4. Default YAML file
-
-Create a default YAML file that configures your DAQ and Position Controllers. Place the YAML file in
-`src/qt3utils/applications/controllers`
-
-### 5. Update QT3Scan.main
-
-Add your new controllers to [qt3scan.main.py](src/qt3utils/applications/qt3scan/main.py#L46)
-
-
-# General Python Development
-
-If you wish you make changes to qt3-utils (and hopefully merge those improvements into this repository) here are some brief instructions to get started. These instructions assume you are a 
-member of the QT3 development team and have permission to push branches to this repo. If you are not, you can 
-instead fork this repo into your own GitHub account, perform development and then issue a pull-request from 
-your forked repo to this repo through GitHub. Alternatively, reach out to a maintainer of this repo to be added as a developer. 
-
-These are mostly general guidelines for software development and 
-could be followed for other projects.
-
-### 1. Create a development environment 
-
-Use Conda, venv or virtualenv with Python = 3.9. 
+Otherwise, single applications can be run directly from the terminal via commands installed with 
+`qdlutils`.
+The currently supported commands are:
 
 ```
-> conda create --name qt3utilsdev python=3.9
+qdlmove
+qdlple
+qdlscan
+qdlscope
+qt3scan
+qt3scope
 ```
 
-As of this writing, we have primarily tested and used Python 3.9. 
-Reach out to a Maintainer to discuss moving to newer versions of
-Python if this is needed. 
+of which each open their respective applications.
+Alternatively one can run the `main.py` file of the relevant application directly (or call 
+its method `main()` in another script).
 
-### 2. Activate that environment
-
-```
-> conda activate qt3utilsdev
-```
-
-### 3. Clone this repository
-
-```
-> git clone https://github.com/qt3uw/qt3-utils.git
-```
-
-### 4. Install qt3-utils in "editor" mode
-
-```
-> cd qt3-utils
-> pip install -e . 
-```
-
-The `pip install -e .` command installs the package in editor mode. 
-This allows you to make changes to the source code and immediately
-see the effects of those changes in a Python interpreter. It saves
-you from having to call "pip install" each time you make a change and 
-want to test it. 
+If a one-off experiment is desired then it is also possible to call the hardware classes
+or even application controllers (e.g. in `qdlapp/application_controller.py`) on their own.
+The `qdlutils` package already has some base experiments provided in `qdlutils.experiemnts`,
+however these files are (in the current version), legacy code from `qt3utils`, and may
+consequently require modification.
+Experiments need not be created in the `qdlutils` package itself as all hardware classes
+may be called from any location via standard imports.
 
 
-### 5. Create a new Issue
+## LICENSE
 
-It's generally good practice to first create an Issue in this GitHub
-repository which describes the problem that needs to be addressed. 
-It's also a good idea to be familiar with the current Issues that 
-already exist. The change you want to make may already be 
-reported by another user. In that case, you could collaborate 
-with that person. 
+[BSD 3-Clause License](LICENSE)
 
-### 6. Create a new branch for your work
+Copyright (c) 2022, University of Washington
 
-```
-> git checkout -b X-add-my-fancy-new-feature
-```
-where it's good practice to use X to refer to a specific Issue to fix 
-in this repository. 
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
 
-You should create a new branch only for a specific piece of new work
-that will be added to this repository. It is highly discouraged to create
-a separate branch for your microscope only and to use that branch
-to perform version control for Python scripts or Jupyter notebooks 
-that run experiments. 
-If you need version control for your exerpiment scripts and notebooks, you
-should create a separate git repository and install qt3utils 
-in the normal way (`pip install -U qt3utils`) in a Python environment 
-for your experimental work. If you need to have recent changes to qt3utils
-published to PyPI for your work, reach out to a Maintainer of this 
-repo to ask them to release a new version. 
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
 
-### 7. Add your code and test with your hardware!
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
 
-We do not have an official style convention, unfortunately. However
-please try to follow best-practices as outlined either in 
-[PEP 8 styleguide](https://peps.python.org/pep-0008/)
-or [Google's styleguide](https://google.github.io/styleguide/pyguide.html).
-There are other resources online, of course, that provide "best-practices"
-advice. Having said that, you will certainly find places where I've 
-broken those guides. (Ideally, somebody would go through with a linter
-and fix all of these.). Please heavily document your source code. 
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
 
-We do not have an automatic test rig. This *could* be added by somebody
-if desired. But that could be complicated given that this code requires
-specific local hardware and the setup for each experiment 
-is likely to be different. So, be sure to test your code rigorously and 
-make sure there are no unintended side-effects. 
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-Historically, documentation for this project has been "just okay". Please 
-help this by adding any documentation for your changes where appropriate.
-There is now a `docs` folder that you can use to include any major
-additions or changes. 
-
-### 8. Push your branch
-
-Once development and testing are complete you will want to push your
-branch to Github in order to merge it into the rest of the code-base.
-
-When you first push a branch to Github, you will need to issue this 
-command.
-
-```
-> git push -u origin X-add-my-fancy-new-feature
-```
-
-As you add more commits to your branch, you'll still want to 
-push those changes every once in a while with a simple
-
-```
-> git push
-```
-
-(assuming that X-add-my-fancy-new-feature is your current 
-local working branch)
-
-Finally, before you issue a pull request, you will want to
-synchrononize your branch with any other changes made in 'main'
-to ensure there are no conflicting changes.
-
-This is the following "flow" that has been used successfully in
-various development projects. However, there are other ways
-to do this. 
-
-```
-> git checkout main
-> git pull
-> git checkout X-add-my-fancy-new-feature
-> git rebase main
-> git push -f
-```
-
-The series of commands above will pull down new changes from 
-Github's main branch to your local working copy. The `rebase` 
-command will then "replay" your changes on top of the 
-most recent HEAD of the main branch. If there are conflicts,
-git will notify you and you will be forced to fix those
-conflicts before continuing with the rebase. If it seems too
-complicated, you can `git rebase --abort` to recover and
-then figure out what to do next. Reach out to a more experienced
-colleague, perhaps, for help. 
-
-The final `git push -f` is necessary (if there were indeed new
-commits on the main branch) and will "force" push your branch
-to Github. This is necessary due to the way git works. 
-
-You should then test your local branch with your hardware again!
-
-This particular flow has the benefit of making a very clear git
-history that shows all the commits for each branch being
-merged in logical order. 
-
-Instead of following the instructions above, you may consider
-trying GitHub's "rebase" option when issuing a pull request. 
-It will attempt the same set of operations. However, you may 
-not have the opportunity to test the changes locally. 
-
-### 9. Issue a pull request
-
-At the top of this qt3-utils GitHub repository is a 'pull-request' tab,
-from where you can create a request to merge your branch to another
-branch (usually you merge to main)
-
-When you issue a pull request, be very clear and verbose about the 
-changes you are making. New code must be reviewed by another colleague
-before it gets merged to master. Your pull request should include things like
-
-* a statement describing what is changed or new
-* a reference to the Issue being fixed here (Github will automatically generate a handy link)
-* a statement describing why you chose your specific implementation
-* results of tests on your hardware setup, which could be data, screenshots, etc. There should be a clear record demonstrating functionality.
-* a Jupyter notebook in the "examples" folder that demonstrate usage and changes
-* documentation
-
-### 10. Perform Self Review
-
-Before asking a colleague to review your changes, it's generally
-a good idea to review the changes yourself in Github. 
-When you see your updates from this perspective you may find
-typos and changes that you wish to address first.
-
-### 11. Obtain a Code Review from a colleague
-
-Due to our lack of a test rig, merging should be done with care and
-code reviews should be taken seriously. If you are asked by a colleague
-to review their code, make sure to ask a lot of questions as you read
-through it. You may even want to test the branch on your own setup 
-to ensure it doesn't break anything. 
-
-### 12. Address Changes
-
-If you and your reviewer decide changes are needed, go back 
-to your branch, make changes and push new commits. Repeat
-steps 7, 8, 10, 11 and 12 until you are satisfied. 
-
-### 13. Merge!
-
-If you are satisfied and confident that your changes are 
-ready, and your reviewer has approved the changes, press the
-green Merge button. 
-## Notes
-
-
-
-# Debugging
-
-# LICENSE
-
-[LICENCE](LICENSE)
