@@ -103,6 +103,35 @@ to launch the program from a mouse click.
 Starting in version 1.0.3, graphical dropdown menus and configuration windows
 will allow users to configure various hardware options. 
 
+#### SNSPD (Single Quantum WebSQ, lab LAN)
+
+`qt3scan` and `qt3scope` support a third signal source **SNSPD (Ethernet)** that reads photon
+counts from a Single Quantum Atlas driver over the lab network (Option B: static IP on the
+instrument VLAN). NI DAQ wiring to the SNSPD rack is not required.
+
+**One-time network setup:** Configure the Atlas with a static IP on your lab LAN (disable the
+driver's DHCP server first, using a direct USB–Ethernet link per the EOS manual). The confocal
+PC must reach TCP ports **12345** (counts) and **12000** (JSON control).
+
+**Before first use**, run the connectivity test (replace the host with your Atlas IP):
+
+```
+qt3test-snspd --host 10.0.0.50
+python -m qt3utils.tools.test_snspd_connection --host 10.0.0.50 --dwell 0.1
+```
+
+Enable detectors and set bias in the WebSQ browser UI (`http://<atlas-ip>`) unless you enable
+`auto_enable_detectors` in YAML (not recommended until bias is validated).
+
+Example configs with SNSPD blocks:
+
+- [qt3scan_snspd.yaml](src/qt3utils/applications/qt3scan/config_files/qt3scan_snspd.yaml)
+- [qt3scope_snspd.yaml](src/qt3utils/applications/qt3scope/config_files/qt3scope_snspd.yaml)
+
+Set `signal_source: snspd` and update the `Snspd.configure.host` field to your Atlas IP.
+Use the **SNSPD (Ethernet)** radio in the launcher or scope GUI to switch sources at runtime
+(when not scanning/sampling).
+
 
 #### YAML Configuration
 
@@ -190,6 +219,47 @@ QT3Scan:
       minimum_allowed_position : 0  # microns
       maximum_allowed_position : 80  # microns
       settling_time_in_seconds : 0.001
+
+### QT3 Move (qt3move)
+
+`qt3move` is a small GUI application for controlling the microstage and piezo positioners.
+It must be run from within its own application directory so that `MicroDrive.dll` can be found:
+
+```bash
+cd src/qt3utils/applications/qt3move
+python main.py
+```
+
+The application uses a YAML configuration file `qt3move_base.yaml` in the same directory.
+In addition to the existing `Microstage` and `PiezoX/Y/Z` configuration, it now supports two
+data acquisition modes for a scalar signal:
+
+```yaml
+QDLMOVE:
+  SignalAcquisition:
+    mode: analog   # or 'counter'
+    analog:
+      device_name: Dev1
+      ai_channel: ai7
+      scale_factor: 1.0
+      units: "V"
+    counter:
+      device_name: Dev1
+      signal_terminal: PFI0
+      clock_terminal: ""
+      clock_rate: 100000
+      signal_counter: ctr0
+      samples_per_batch: 1000
+      read_timeout: 5.0
+      units: "counts/s"
+```
+
+- **Analog mode** reads a single NI-DAQ analog input channel and displays a scaled voltage.
+- **Counter mode** uses an NI-DAQ counter channel to measure TTL pulse rates (e.g. from an SPCM
+  or a function generator connected to the specified `signal_terminal`).
+
+Within the `qt3move` GUI, a drop-down in the Setup frame allows switching between `analog` and
+`counter` modes at runtime using this configuration as a template.
 
 ```
 

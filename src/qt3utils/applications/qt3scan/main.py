@@ -1,997 +1,1332 @@
-import argparse
-import datetime
+import importlib
 import importlib.resources
 import logging
-import tkinter as tk
-from threading import Thread
-from tkinter import messagebox
-from typing import Any, Protocol, Optional, Callable, List
-
-import matplotlib
-import nidaqmx
+from typing import Tuple
 import numpy as np
+import datetime
+import h5py
+
+from threading import Thread
+import tkinter as tk
 import yaml
-from matplotlib import pyplot as plt
-from matplotlib.backend_bases import MouseEvent
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
-import qt3utils.nidaq
-import qt3utils.pulsers.pulseblaster
-from qt3utils.applications.qt3scan.controller import (
-    QT3ScanConfocalApplicationController,
-    QT3ScanHyperSpectralApplicationController,
-    STANDARD_COUNT_AGGREGATION_METHODS
+from scipy.optimize import curve_fit
+
+import qt3utils
+from qt3utils.config_loader import merge_shared_positioners_into_app_config
+from qt3utils.applications.qt3scan.application_controller import ScanController
+from qt3utils.applications.qt3scan.application_gui import (
+    LauncherApplicationView,
+    LineScanApplicationView,
+    ImageScanApplicationView
 )
-from qt3utils.applications.controllers.utils import make_popup_window_and_take_threaded_action
-from qt3utils.applications.qt3scan.interface import (
-    QT3ScanDAQControllerInterface,
-    QT3ScanPositionControllerInterface,
-    QT3ScanApplicationControllerInterface,
-)
-
-
-matplotlib.use('Agg')
-
-parser = argparse.ArgumentParser(description='QT3Scan', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('-v', '--verbose', type=int, default=2, help='0 = quiet, 1 = info, 2 = debug.')
-args = parser.parse_args()
+import qt3utils.applications.qt3scope.main as qt3scope
 
 logger = logging.getLogger(__name__)
 logging.basicConfig()
 
-if args.verbose == 0:
-    logger.setLevel(logging.WARNING)
-if args.verbose == 1:
-    logger.setLevel(logging.INFO)
-if args.verbose == 2:
-    logger.setLevel(logging.DEBUG)
+
+CONFIG_PATH = 'qt3utils.applications.qt3scan.config_files'
+DEFAULT_CONFIG_FILE = 'qt3scan_snspd.yaml'
+
+# Dictionary for converting axis to an index
+AXIS_INDEX = {'x': 0, 'y': 1, 'z': 2}
+
+# Default color map
+DEFAULT_COLOR_MAP = 'gray'
 
 
-NIDAQ_DAQ_DEVICE_NAME = 'NIDAQ Edge Counter'
-RANDOM_DATA_DAQ_DEVICE_NAME = 'Random Counter'
-PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
-ANDOR_SPECTROMETER_DAQ_DEVICE_NAME = 'Andor Spectrometer'
-RANDOM_SPECTROMETER_DAQ_DEVICE_NAME = 'Random Spectrometer'
+class LauncherApplication:
+    '''
+    This is the launcher class for the `qt3scan` application which handles the 
+    initalization of individual scanning confocal measurements. This application is
+    serves as a replacement of `qt3scan` which relies on some of the older architecture
+    for DAQ interfacing. The overall application structure is described below:
 
-DEFAULT_DAQ_DEVICE_NAME = NIDAQ_DAQ_DEVICE_NAME
+    The central class of the application is the `ScanController` which is located in
+    `qt3scan/application_controller.py`. This class manages the hardware, which is by
+    default NIDAQ-controlled piezos (`NidaqPositionController` in 
+    `qt3utils/hardware/nidaq/analogoutputs/nidaqposition.py`) and NIDAQ edge counter
+    (`NidaqTimedRateCounter` in `qt3utils/hardware/nidaq/counters/nidaqtimedratecounter.py`)
+    however a suitably designed alternative class for other hardware could also be
+    reasonably used without much effort.
 
-CONTROLLER_PATH = 'qt3utils.applications.controllers'
-STANDARD_CONTROLLERS = {
-    NIDAQ_DAQ_DEVICE_NAME: {
-        'yaml': 'nidaq_edge_counter.yaml',
-        'application_controller_class': QT3ScanConfocalApplicationController
-    },
-    PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {
-        'yaml': 'princeton_spectrometer.yaml',
-        'application_controller_class': QT3ScanHyperSpectralApplicationController
-    },
-    ANDOR_SPECTROMETER_DAQ_DEVICE_NAME: {
-        'yaml': 'andor_spectrometer.yaml',
-        'application_controller_class': QT3ScanHyperSpectralApplicationController
-    },
-    RANDOM_DATA_DAQ_DEVICE_NAME: {
-        'yaml': 'random_data_generator.yaml',
-        'application_controller_class': QT3ScanConfocalApplicationController
-    },
-    RANDOM_SPECTROMETER_DAQ_DEVICE_NAME: {
-        'yaml': 'random_spectrometer.yaml',
-        'application_controller_class': QT3ScanHyperSpectralApplicationController
-    }
-}
+    `ScanController` handles the actual movement of the piezos and coordinates it with
+    the counters in order to perform basic confocal scanning measurements. The 
+    application launches and instantiates a single `ScanController`, dubbed the 
+    "application controller", which it uses to perform scans and scan-related piezo
+    motion. Since it is
+    shared by all scans performed in the application session, it has built-in logic to
+    ignore calls when it is busy, aided by threading. If one desires to perform 
+    confocal scanning is appreciably different hardware, then the scan controller
+    could also be rewritten to interface with it if the current implementation does
+    not immediately work.
 
-# Hyper Spectral Imaging would add the following to STANDARD_CONTROLLERS
-# PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME = 'Princeton Spectrometer'
-# PRINCETON_SPECTROMETER_DAQ_DEVICE_NAME: {'yaml':'princeton_spectromter.yaml',
-#                           'application_controller_class': QT3ScanHyperSpectralApplicationController}
+    The `LauncherApplication` is the other main class. It instantiates the `ScanController`
+    and creates a GUI (`LauncherApplicationView`) which allows the user to input scan
+    parameters and to launch image and line scans. Manual piezo and microstage control
+    are done in qt3move; a cross-process lock prevents qt3move from moving piezos while
+    qt3scan holds the DAQ outputs for a scan.
 
-CONFIG_FILE_APPLICATION_NAME = 'QT3Scan'
-CONFIG_FILE_POSITION_CONTROLLER = 'PositionController'
-CONFIG_FILE_DAQ_CONTROLLER = 'DAQController'
+    When an image or line scan is launched, the parameters are read out from the GUI and
+    a new instance of the `ImageScanApplication` or `LineScanApplication` are created
+    in each case respectively. These sub-applications contain metadata and actual 
+    measured data for the given scan (or set of scans) that they represent. On
+    initialization, they comppute (from the GUI inputs) information to setup the scan(s),
+    making adjustments if needed, and then begin scanning in a thread. After, or between,
+    scans, these sub-applications store the results and update the figure. Additionally,
+    these sub-applications also handle the saving, pausing, and continuing of scans where
+    applicable.
 
+    For additional details about the individual components please see their docstrings.
+    '''
 
-class ScanImage:
+    def __init__(self, default_config_filename: str, is_root_process: bool) -> None:
+        '''
+        Initialization for the LauncherApplication class. It loads the application
+        controller and various hardware, then creates a GUI and binds the buttons.
+        Callback methods for the GUI interactions are contained in this class.
+        
+        Parameters
+        ----------
+        default_config_filename: str
+            Filename of the default config YAML file. It must be located in the
+            `qt3scan/config_files` directory.
+        '''
+        # Boolean if the function is the root or not, determines if the application is
+        # intialized via tk.Tk or tk.Toplevel
+        self.is_root_process = is_root_process
 
-    def __init__(self, mplcolormap: str = 'gray'):
-        self.fig, self.ax = plt.subplots()
-        self.cbar = None
-        self.cmap = mplcolormap
-        self.fig.canvas.mpl_connect('button_press_event', self.onclick)
-        self.ax.set_xlabel('x position (um)')
-        self.ax.set_ylabel('y position (um)')
-        self.log_data = False
-        self.plot_count_rate = True
-        self.pointer_line2d = None
-        self.position_line2d = None
-        self.app_controller_step_size = 0
-        self.xmin = None
-        self.ymin = None
+        # Attributes
+        self.application_controller = None
+        self.min_x_position = None
+        self.min_y_position = None
+        self.min_z_position = None
+        self.max_x_position = None
+        self.max_y_position = None
+        self.max_z_position = None
+        self.max_x_range = None
+        self.max_y_range = None
+        self.max_z_range = None
 
-    def update(self, app_controller: QT3ScanApplicationControllerInterface) -> None:
+        # Number of scan windows launched
+        self.number_scans = 0
+        # Most recent scan -- maybe not needed?
+        self.current_scan = None
+        # Dictionary of scan parameters (from control gui)
+        self.scan_parameters = None
 
-        if len(app_controller.scanned_count_rate) == 0:
-            return
+        # Last save directory
+        self.last_save_directory = None
 
-        if self.plot_count_rate:
-            data = app_controller.scanned_count_rate
+        self.signal_source = 'counter'
+        self._reader_counter = None
+        self._reader_photodiode = None
+        self._reader_snspd = None
+
+        # Load the YAML file
+        self.load_yaml_from_name(yaml_filename=default_config_filename)
+
+        # Initialize the root tkinter widget (window housing GUI)
+        if self.is_root_process:
+            self.root = tk.Tk()
         else:
-            data = app_controller.scanned_raw_counts
-        if self.log_data:
-            data = np.log10(data)
-            data[np.isinf(data)] = 0  # protect against +-inf
-
-        # we must retain these values for callback functions (feels a bit hacky)
-        self.app_controller_step_size = app_controller.step_size
-        self.xmin = app_controller.xmin
-        self.ymin = app_controller.ymin
-
-        # shift the extent so that position centers are directly aligned with data
-        # rather than aligned on bin edges
-        self.artist = self.ax.imshow(data, origin='lower',
-                                     cmap=self.cmap,
-                                     extent=[app_controller.xmin - app_controller.step_size / 2.0,
-                                             app_controller.xmax + app_controller.step_size / 2.0,
-                                             app_controller.ymin - app_controller.step_size / 2.0,
-                                             app_controller.current_y - app_controller.step_size / 2.0])
-
-        if self.cbar is None:
-            self.cbar: plt.Colorbar = self.fig.colorbar(self.artist, ax=self.ax)
-            self.cbar.formatter.set_useOffset(False)
-        else:
-            self.cbar.update_normal(self.artist)
-
-        if self.log_data is False:
-            self.cbar.formatter.set_powerlimits((0, 3))
-
-        self.ax.set_xlabel('x position (um)')
-        self.ax.set_ylabel('y position (um)')
-
-    def reset(self) -> None:
-        self.ax.cla()
-        self.pointer_line2d = None
-        self.position_line2d = None
-        self.app_controller_step_size = 0
-        self.xmin = None
-        self.ymin = None
-
-    def set_onclick_callback(self, func: Callable) -> None:
-        """
-        The callback function should expect three arguments
-            * matplotlib.backend_bases.MouseEvent
-            * pixel_x
-            * pixel_y
-
-            where pixel_x and pixel_y correspond to the pixel
-            index of the data
-        """
-        self.onclick_callback = func
-
-    def set_rightclick_callback(self, func: Callable) -> None:
-        """
-        The callback function should expect three arguments
-            * matplotlib.backend_bases.MouseEvent
-            * pixel_x
-            * pixel_y
-
-            where pixel_x and pixel_y correspond to the pixel
-            index of the data
-        """
-        self.rightclick_callback = func
-
-    def update_pointer_indicator(self, x_position: float, y_position: float) -> None:
-        """
-        Updates the pointer marker on the scan image to show a proposed new position on the image.
-        """
-        if self.pointer_line2d is not None:
-            self.pointer_line2d[0].set_data([[x_position], [y_position]])
-        else:
-            self.pointer_line2d = self.ax.plot(x_position, y_position, 'yx', label='pointer')
-
-    def update_position_indicator(self, x_position: float, y_position: float) -> None:
-        """
-        Updates the position marker on the scan image to show the current position on the image.
-        """
-        if self.position_line2d is not None:
-            self.position_line2d[0].set_data([[x_position], [y_position]])
-        else:
-            self.position_line2d = self.ax.plot(x_position, y_position, 'ro', label='pos')
-
-    def onclick(self, event: MouseEvent) -> None:
-        if event.inaxes != self.ax:
-            return
-
-        logger.debug(f"Button {event.button} click at: ({event.xdata} microns, {event.ydata}) microns")
-
-        if event.xdata is None or event.ydata is None:
-            logger.debug("Button click outside of scan")
-            return
-        if self.xmin is None or self.ymin is None:
-            logger.debug("No data to display")
-            return
-
-        dist_x = event.xdata + self.app_controller_step_size / 2 - self.xmin  # we have to subtract step_size / 2 because the GUI shifts the view.
-        dist_y = event.ydata + self.app_controller_step_size / 2 - self.ymin
-        logger.debug(f'Selected position at distance from lower left (x, y): {dist_x, dist_y}')
-        index_x = int(dist_x / self.app_controller_step_size)
-        index_y = int(dist_y / self.app_controller_step_size)
-
-        if event.button == 3:  # Right click
-            self.rightclick_callback(event, index_x, index_y)
-        elif event.button == 1:  # Left click
-            self.onclick_callback(event, index_x, index_y)
-            self.update_pointer_indicator(event.xdata, event.ydata)
-            self.fig.canvas.draw()
-
-
-class SidePanel:
-
-    def __init__(self, application):
-        frame = tk.Frame(application.root_window)
-        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        row = 0
-        tk.Label(frame, text="Scan Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
-        row += 1
-        tk.Label(frame, text="x range (um)").grid(row=row, column=0)
-        self.x_min_entry = tk.Entry(frame, width=10)
-        self.x_max_entry = tk.Entry(frame, width=10)
-        self.x_min_entry.grid(row=row, column=1)
-        self.x_max_entry.grid(row=row, column=2)
-
-        row += 1
-        tk.Label(frame, text="y range (um)").grid(row=row, column=0)
-        self.y_min_entry = tk.Entry(frame, width=10)
-        self.y_max_entry = tk.Entry(frame, width=10)
-        self.y_min_entry.grid(row=row, column=1)
-        self.y_max_entry.grid(row=row, column=2)
-
-        row += 1
-        tk.Label(frame, text="step size (um)").grid(row=row, column=0)
-        self.step_size_entry = tk.Entry(frame, width=10)
-        self.step_size_entry.insert(10, 1.0)
-        self.step_size_entry.grid(row=row, column=1)
-
-        row += 1
-        tk.Label(frame, text="set z (um)").grid(row=row, column=0)
-        self.z_entry_text = tk.DoubleVar()
-        self.z_entry = tk.Entry(frame, width=10, textvariable=self.z_entry_text)
-        self.z_entry.grid(row=row, column=1)
-        self.go_to_z_button = tk.Button(frame, text="Go To Z")
-        self.go_to_z_button.grid(row=row, column=2)
-
-        row += 1
-        self.startButton = tk.Button(frame, text="Start Scan")
-        self.startButton.grid(row=row, column=0)
-        self.stopButton = tk.Button(frame, text="Stop Scan")
-        self.stopButton.grid(row=row, column=1)
-        self.saveScanButton = tk.Button(frame, text="Save Scan")
-        self.saveScanButton.grid(row=row, column=2)
-
-        row += 1
-        self.popOutScanButton = tk.Button(frame, text="Popout Scan")
-        self.popOutScanButton.grid(row=row, column=0)
-        self.loadScanButton = tk.Button(frame, text="Load Scan")
-        self.loadScanButton.grid(row=row, column=1)
-
-        row += 1
-        tk.Label(frame, text="Position").grid(row=row, column=0, pady=10)
-
-        self.go_to_x_position_text = tk.DoubleVar()
-        self.go_to_y_position_text = tk.DoubleVar()
-
-        tk.Entry(frame, textvariable=self.go_to_x_position_text, width=7).grid(row=row, column=1, pady=5)
-        tk.Entry(frame, textvariable=self.go_to_y_position_text, width=7).grid(row=row, column=2, pady=5)
-
-        row += 1
-        self.gotoAfterScanBoolVar = tk.BooleanVar(value=False)
-        tk.Checkbutton(frame, text="'Go to' after scan", variable=self.gotoAfterScanBoolVar).grid(
-            row=row, column=0, columnspan=2)
-        self.gotoButton = tk.Button(frame, text="Go To Position")
-        self.gotoButton.grid(row=row, column=2)
-
-        # row += 1
-        # tk.Label(frame, text="Optimize Pos", font='Helvetica 16').grid(row=row, column=0, pady=10)
-        row += 1
-        tk.Label(frame, text="Optimize Range (um)").grid(row=row, column=0, columnspan=2)
-        self.optimize_range_entry = tk.Entry(frame, width=10)
-        self.optimize_range_entry.insert(5, 2)
-        self.optimize_range_entry.grid(row=row, column=2)
-        row += 1
-        tk.Label(frame, text="Optimize StepSize (um)").grid(row=row, column=0, columnspan=2)
-        self.optimize_step_size_entry = tk.Entry(frame, width=10)
-        self.optimize_step_size_entry.insert(5, 0.25)
-        self.optimize_step_size_entry.grid(row=row, column=2)
-        row += 1
-        self.optimize_x_button = tk.Button(frame, text="Optimize X")
-        self.optimize_x_button.grid(row=row, column=0)
-        self.optimize_y_button = tk.Button(frame, text="Optimize Y")
-        self.optimize_y_button.grid(row=row, column=1)
-        self.optimize_z_button = tk.Button(frame, text="Optimize Z")
-        self.optimize_z_button.grid(row=row, column=2)
-
-        row += 1
-        tk.Label(frame, text="DAQ Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
-
-        row += 1
-        self.controller_option = tk.StringVar(frame)
-        self.controller_option.set(DEFAULT_DAQ_DEVICE_NAME)
-        # todo - TkOptionMenu doesn't have a way, that I know of,
-        # to modify the callback after instantiation. Therefore,
-        # for now, we need to pass the app_controller to this class
-        # so that it can be used in the callback when a hardware option is selected.
-        self.controller_menu = tk.OptionMenu(frame,
-                                             self.controller_option,
-                                             *STANDARD_CONTROLLERS.keys(),
-                                             command=application.load_controller_from_name)
-        self.controller_menu.grid(row=row, column=0, columnspan=3)
-
-        row += 1
-        self.daq_config_button = tk.Button(frame, text="Data Acquisition Config")
-        self.daq_config_button.grid(row=row, column=0, columnspan=3)
-
-        row += 1
-        self.position_controller_config_button = tk.Button(frame, text="Position Controller Config")
-        self.position_controller_config_button.grid(row=row, column=0, columnspan=3)
-
-        row += 1
-        self.config_from_yaml_button = tk.Button(frame, text="Load YAML Config")
-        self.config_from_yaml_button.grid(row=row, column=0, columnspan=3)
-
-        # todo -- package view settings into a separate GUI breakout window
-        row += 1
-        tk.Label(frame, text="View Settings", font='Helvetica 16').grid(row=row, column=0, pady=10)
-        row += 1
-        self.set_color_map_button = tk.Button(frame, text="Set Color")
-        self.set_color_map_button.grid(row=row, column=0, pady=2)
-        self.mpl_color_map_entry = tk.Entry(frame, width=10)
-        self.mpl_color_map_entry.insert(10, 'gray')
-        self.mpl_color_map_entry.grid(row=row, column=1, pady=2)
-
-        self.log10Button = tk.Button(frame, text="Log10")
-        self.log10Button.grid(row=row, column=2, pady=2)
-
-        row += 1
-        self.count_rate_button = tk.Button(frame, text="Toggle: Count Rate/Raw Counts")
-        self.count_rate_button.grid(row=row, column=0, columnspan=3, pady=2)
-
-        row += 1
-        self.set_raw_background_counts_button = tk.Button(frame, text="Set raw BG")
-        self.set_raw_background_counts_button.grid(row=row, column=0)
-        self.raw_background_counts_entry = tk.Entry(frame, width=10)
-        self.raw_background_counts_entry.insert(10, '0')
-        self.raw_background_counts_entry.grid(row=row, column=1, columnspan=2)
-
-        row += 1
-        tk.Label(frame, text="Spectral Confocal", font='Helvetica 12').grid(row=row, column=0, pady=2)
-        row += 1
-        self.set_filter_range_button = tk.Button(frame, text="Set Range")
-        self.set_filter_range_button.grid(row=row, column=0)
-        self.range_min_entry = tk.Entry(frame, width=10)
-        self.range_min_entry.insert(10, f'{-np.inf}')
-        self.range_min_entry.grid(row=row, column=1)
-        self.range_max_entry = tk.Entry(frame, width=10)
-        self.range_max_entry.insert(10, f'{np.inf}')
-        self.range_max_entry.grid(row=row, column=2)
-
-        row += 1
-        self.set_count_aggregation_button = tk.Button(frame, text="Set Aggregation")
-        self.set_count_aggregation_button.grid(row=row, column=0)
-        self.count_aggregation_option = tk.StringVar(frame)
-        self.count_aggregation_option.set(list(STANDARD_COUNT_AGGREGATION_METHODS.keys())[0])
-        self.count_aggregation_menu = tk.OptionMenu(frame,
-                                                    self.count_aggregation_option,
-                                                    *STANDARD_COUNT_AGGREGATION_METHODS.keys(),
-                                                    )
-        self.count_aggregation_menu.grid(row=row, column=1, columnspan=2)
-
-        row += 1
-        tk.Label(frame, text='', ).grid(row=row, column=0, columnspan=3, pady=10)
-
-    def update_go_to_position(self,
-                              x: Optional[float] = None,
-                              y: Optional[float] = None,
-                              z: Optional[float] = None) -> None:
-        if x is not None:
-            self.go_to_x_position_text.set(np.round(x, 4))
-        if y is not None:
-            self.go_to_y_position_text.set(np.round(y, 4))
-        if z is not None:
-            self.z_entry_text.set(np.round(z, 4))
-
-    def mpl_onclick_callback(self, mpl_event: MouseEvent, index_x: int, index_y: int) -> None:
-        if mpl_event.xdata and mpl_event.ydata:
-            self.update_go_to_position(mpl_event.xdata, mpl_event.ydata)
-
-    def set_scan_range(self, scan_range: List[float]) -> None:
-        self.x_min_entry.insert(10, scan_range[0])
-        self.x_max_entry.insert(10, scan_range[1])
-        self.y_min_entry.insert(10, scan_range[0])
-        self.y_max_entry.insert(10, scan_range[1])
-
-
-class MainApplicationView:
-
-    def __init__(self, application):
-        frame = tk.Frame(application.root_window)
-        frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.scan_view = ScanImage()
-        self.sidepanel = SidePanel(application)
-        self.scan_view.set_onclick_callback(self.sidepanel.mpl_onclick_callback)
-
-        self.canvas = FigureCanvasTkAgg(self.scan_view.fig, master=frame)
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        toolbar = NavigationToolbar2Tk(self.canvas, frame)
-        toolbar.update()
-        self.canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        self.canvas.draw()
-
-    @property
-    def controller_menu(self) -> tk.OptionMenu:
-        return self.sidepanel.controller_menu
-
-    @property
-    def controller_option(self) -> tk.StringVar:
-        return self.sidepanel.controller_option
-
-    @controller_option.setter
-    def controller_option(self, value):
-        self.sidepanel.controller_option.set(value)
-
-    @property
-    def daq_config_button(self) -> tk.Button:
-        return self.sidepanel.daq_config_button
-
-    @property
-    def position_controller_config_button(self) -> tk.Button:
-        return self.sidepanel.position_controller_config_button
-
-    @property
-    def config_from_yaml_button(self) -> tk.Button:
-        return self.sidepanel.config_from_yaml_button
-
-    def set_scan_range(self, scan_range: List[float]) -> None:
-        self.sidepanel.set_scan_range(scan_range)
-
-    def show_optimization_plot(self, title: str,
-                               old_opt_value: float,
-                               new_opt_value: float,
-                               x_vals: np.ndarray,
-                               y_vals: np.ndarray,
-                               fit_coeff: np.ndarray = None) -> None:
-        """
-        Constructs a new window with a plot of the optimization data.
-
-        title: title of the window
-        old_opt_value: the old optimized value
-        new_opt_value: the new optimized value
-        x_vals: the x values of the data
-        y_vals: the measured y values of the data
-        fit_coeff: the fit coefficients of the function qt3utils.datagenerators.piezoscanner.gauss
-        """
-        win = tk.Toplevel()
-        win.title(title)
-        fig, ax = plt.subplots()
-        ax.set_xlabel('position (um)')
-        ax.set_ylabel('count rate (Hz)')
-        ax.plot(x_vals, y_vals, label='data')
-        ax.ticklabel_format(style='sci', scilimits=(0, 3))
-        ax.axvline(old_opt_value, linestyle='--', color='red', label=f'old position {old_opt_value:.2f}')
-        ax.axvline(new_opt_value, linestyle='-', color='blue', label=f'new position {new_opt_value:.2f}')
-
-        if fit_coeff is not None:
-            y_fit = qt3utils.datagenerators.piezoscanner.gauss(x_vals, *fit_coeff)
-            ax.plot(x_vals, y_fit, label='fit', color='orange')
-
-        ax.legend()
-
-        canvas = FigureCanvasTkAgg(fig, master=win)
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        toolbar = NavigationToolbar2Tk(canvas, win)
-        toolbar.update()
-        canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        canvas.draw()
-
-
-class MainTkApplication:
-
-    def __init__(self, application_controller_name: str):
-        self.root_window = tk.Tk()
-
-        self.view = MainApplicationView(self)
-        self.view.controller_option = application_controller_name
-
-        self.view.sidepanel.startButton.bind("<Button>", lambda e: self.start_scan())
-        self.view.sidepanel.stopButton.bind("<Button>", lambda e: self.stop_scan())
-        self.view.sidepanel.log10Button.bind("<Button>", lambda e: self.log_scan_image())
-        self.view.sidepanel.count_rate_button.bind("<Button>", lambda e: self.toggle_count_rate())
-        self.view.sidepanel.gotoButton.bind("<Button>", lambda e: self.go_to_position())
-        self.view.sidepanel.go_to_z_button.bind("<Button>", lambda e: self.go_to_z())
-        self.view.sidepanel.saveScanButton.bind("<Button>", lambda e: self.save_scan())
-        self.view.sidepanel.popOutScanButton.bind("<Button>", lambda e: self.pop_out_scan())
-        self.view.sidepanel.loadScanButton.bind("<Button>", lambda e: self.load_scan())
-
-        self.view.sidepanel.set_color_map_button.bind("<Button>", lambda e: self.set_color_map())
-        self.view.sidepanel.set_raw_background_counts_button.bind("<Button>", lambda e: self.set_raw_background_counts())
-        self.view.sidepanel.set_filter_range_button.bind("<Button>", lambda e: self.set_filter_range())
-        self.view.sidepanel.set_count_aggregation_button.bind("<Button>", lambda e: self.set_count_aggregation_option())
-
-        self.view.sidepanel.optimize_x_button.bind("<Button>", lambda e: self.optimize('x'))
-        self.view.sidepanel.optimize_y_button.bind("<Button>", lambda e: self.optimize('y'))
-        self.view.sidepanel.optimize_z_button.bind("<Button>", lambda e: self.optimize('z'))
-        self.view.config_from_yaml_button.bind("<Button>", lambda e: self.configure_from_yaml())
-
-        self.load_controller_from_name(application_controller_name)
-
-        scan_range = [self.application_controller.position_controller.minimum_allowed_position,
-                      self.application_controller.position_controller.maximum_allowed_position]
-
-        self.view.set_scan_range(scan_range)
-
-        self.root_window.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.scan_thread = None
-
-        self.optimized_position = {'x': 0, 'y': 0, 'z': -1}
-        self.optimized_position['z'] = self.application_controller.position_controller.get_current_position()[2]
-        self.optimized_position['z'] = self.optimized_position['z'] if self.optimized_position['z'] is not None else 0  # protects against None value returned by position controller when it cannot connect to hardware
-        self.view.sidepanel.z_entry_text.set(np.round(self.optimized_position['z'], 4))
-
-    def _open_yaml_config_for_controller(self, controller_name: str) -> dict:
-        with importlib.resources.path(CONTROLLER_PATH, STANDARD_CONTROLLERS[controller_name]['yaml']) as yaml_path:
-            logger.info(f"opening config file: {yaml_path}")
-            with open(yaml_path, 'r') as yaml_file:
-                config = yaml.safe_load(yaml_file)
-
-        return config
-
-    def _load_controller_from_dict(self, config: dict, a_protocol: Protocol) -> Any:
-        """
-        Dynamically imports the module and instantiates the class specified in the config dictionary.
-        Class the class configure method if it exists.
-        """
-        # Dynamically import the module
-        module = importlib.import_module(config['import_path'])
-        logger.debug(f"loading {config['import_path']}")
-
-        # Dynamically instantiate the class
-        cls = getattr(module, config['class_name'])
-        logger.debug(f"instantiating {config['class_name']}")
-
-        controller = cls(logger.level)
-
-        logger.debug(f"asserting {config['class_name']} of proper type {a_protocol}")
-        assert isinstance(controller, a_protocol)
-
-        # configure the controller
-        # all controllers *should* have a configure method
-        logger.debug(f"calling {a_protocol} configure method")
-        controller.configure(config['configure'])
-
-        return controller
-
-    def load_controller_from_name(self, application_controller_name: str) -> None:
-        """
-        Loads the default yaml configuration file for the application controller.
-
-        Should be called during instantiation of this class and should be the callback
-        function for the support controller pull-down menu in the side panel.
-
-        When called from the pull-down menu, a popup window opens to prevent GUI freezes
-        due to long connection times to the devices (e.g., for spectrometers).
-        """
-        # check if last scan was saved
-        if hasattr(self, 'application_controller'):
-            if self.application_controller.data_saved_once is False:
-                stored_data_shape = np.prod(np.shape(self.application_controller.scanned_count_rate))
-                data_shape_product = np.prod(stored_data_shape)
-                if data_shape_product > 0:
-                    proceed = messagebox.askyesno("WARNING: Scan NOT SAVED",
-                                                  "The previous scan was not saved. Are you sure you want to change "
-                                                  "the controller? All DATA will be LOST.")
-                    if not proceed:
-                        self.view.controller_option.set(self.active_application_controller_option)
-                        return
-
-        logger.info(f"loading {application_controller_name}")
-        config = self._open_yaml_config_for_controller(application_controller_name)
-
-        if hasattr(self, 'application_controller'):  # if this is not the first initialization of the main application
-            make_popup_window_and_take_threaded_action(  # handles potential GUI freezes
-                self.root_window,
-                f'Connecting...',
-                f'Connecting to {application_controller_name}. Please wait...',
-                lambda: self._build_controllers_from_config_dict(config, application_controller_name)
-            )
-        else:  # There is no GUI, so there is no fear
-            self._build_controllers_from_config_dict(config, application_controller_name)
-
-    def _build_controllers_from_config_dict(self, config: dict, controller_name: str) -> None:
-
-        # load the position controller from dict
-        pos_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_POSITION_CONTROLLER]
-        position_controller = self._load_controller_from_dict(pos_config, QT3ScanPositionControllerInterface)
-
-        # load the data acquisition model from dict
-        daq_config = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_CONTROLLER]
-        daq_controller = self._load_controller_from_dict(daq_config, QT3ScanDAQControllerInterface)
-
-        ControllerClass = STANDARD_CONTROLLERS[controller_name]['application_controller_class']
-        self.application_controller = ControllerClass(position_controller, daq_controller, logger.level)
-
-        # bind buttons to controllers
-        self.view.scan_view.set_rightclick_callback(self.application_controller.scan_image_rightclick_event)
-        self.view.position_controller_config_button.bind("<Button>", lambda e: self.application_controller.position_controller.configure_view(self.root_window))
-        self.view.daq_config_button.bind("<Button>", lambda e: self.application_controller.daq_controller.configure_view(self.root_window))
-
-        self.active_application_controller_option = self.view.controller_option.get()
-
-    def configure_from_yaml(self) -> None:
-        """
-        This method launches a GUI window to allow the user to select a yaml file to configure the data controller.
-
-        This does instantiate a new hardware controller classes and calls configure.
-        """
-        filetypes = (
-            ('YAML', '*.yaml'),
-        )
-        afile = tk.filedialog.askopenfile(filetypes=filetypes, defaultextension='.yaml')
-        if afile is None:
-            return  # selection was canceled.
-
-        config = yaml.safe_load(afile)
-        afile.close()
-
-        # Checking that we are loading files that match the current application controller
-        current_daq_controller_class_name = self.application_controller.daq_controller.__class__.__name__
-        yaml_daq_controller_class_name = config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_DAQ_CONTROLLER]['class_name']
-
-        if current_daq_controller_class_name != yaml_daq_controller_class_name:
-            logger.warning(f"The current DAQ controller class ({current_daq_controller_class_name}) "
-                           f"does not match the DAQ controller's class name in the "
-                           f"YAML file ({yaml_daq_controller_class_name}).\n"
-                           f"Loading configuration from YAML was aborted.")
-            return
-
-        current_pos_controller_class_name = self.application_controller.position_controller.__class__.__name__
-        yaml_pos_controller_class_name = \
-            config[CONFIG_FILE_APPLICATION_NAME][CONFIG_FILE_POSITION_CONTROLLER]['class_name']
-
-        if current_pos_controller_class_name != yaml_pos_controller_class_name:
-            logger.warning(f"The current position controller class ({current_pos_controller_class_name}) "
-                           f"does not match the position controller's class name in the "
-                           f"YAML file ({yaml_pos_controller_class_name}).\n"
-                           f"Loading configuration from YAML was aborted.")
-            return
-
-        make_popup_window_and_take_threaded_action(  # handles potential GUI freezes
-            self.root_window,
-            f'Connecting...',
-            f'Connecting to {self.view.controller_option.get()}. Please wait...',
-            lambda: self._build_controllers_from_config_dict(config, self.view.controller_option.get())
-        )
+            self.root = tk.Toplevel()
+        # Create the main application GUI
+        self.view = LauncherApplicationView(main_window=self.root)
+        self._sync_signal_source_gui()
+
+        # Bind the buttons
+        self.view.control_panel.image_start_button.bind('<Button>', self.start_image_scan)
+        self.view.control_panel.line_start_x_button.bind('<Button>', self.optimize_x_axis)
+        self.view.control_panel.line_start_y_button.bind('<Button>', self.optimize_y_axis)
+        self.view.control_panel.line_start_z_button.bind('<Button>', self.optimize_z_axis)
+        self.view.control_panel.open_counter_button.bind('<Button>', self.open_counter)
+        self.view.control_panel.counter_radio.config(
+            command=self._on_signal_source_selected)
+        self.view.control_panel.photodiode_radio.config(
+            command=self._on_signal_source_selected)
+        self.view.control_panel.snspd_radio.config(
+            command=self._on_signal_source_selected)
+        self.root.protocol('WM_DELETE_WINDOW', self._on_launcher_closing)
+
+    def _on_launcher_closing(self) -> None:
+        self.root.destroy()
 
     def run(self) -> None:
-        self.root_window.title("QT3Scan: Piezo Controlled NIDAQ Digital Count Rate Scanner")
-        self.root_window.deiconify()
-        self.root_window.mainloop()
+        '''
+        This function launches the application including the GUI
+        '''
+        # Set the title of the app window
+        self.root.title("qt3scan")
+        # Display the window (not in task bar)
+        self.root.deiconify()
+        # Launch the main loop
+        if self.is_root_process:
+            self.root.mainloop()
 
-    def go_to_position(self) -> None:
+    def configure_from_yaml(self, afile: str) -> None:
+        '''
+        This method loads a YAML file to configure the qt3scan hardware
+        based on yaml file indicated by argument `afile`.
 
-        x = self.view.sidepanel.go_to_x_position_text.get()
-        y = self.view.sidepanel.go_to_y_position_text.get()
-        self.application_controller.position_controller.go_to_position(x, y)
-        self.optimized_position['x'] = x
-        self.optimized_position['y'] = y
-        self.view.scan_view.update_position_indicator(x, y)
+        This method instantiates and configures the controllers and counters
+        for the scan application, then creates the application controller.
 
-        if len(self.application_controller.scanned_count_rate) > 0:
-            self.view.scan_view.update(self.application_controller)
-            self.view.canvas.draw()
+        Parameters
+        ----------
+        afile: str
+            Full-path filename of the YAML config file.
+        '''
+        with open(afile, 'r') as file:
+            # Log selection
+            logger.info(f"Loading settings from: {afile}")
+            # Get the YAML config as a nested dict
+            config = yaml.safe_load(file)
 
-    def go_to_z(self) -> None:
-        self.application_controller.position_controller.go_to_position(z=self.view.sidepanel.z_entry_text.get())
-        self.optimized_position['z'] = self.view.sidepanel.z_entry_text.get()
+        merge_shared_positioners_into_app_config(config)
 
-    def set_color_map(self) -> None:
-        proposed_cmap = self.view.sidepanel.mpl_color_map_entry.get()
-        if proposed_cmap in plt.colormaps():
-            self.view.scan_view.cmap = proposed_cmap
-        else:
-            logger.error(f"Color map {proposed_cmap} not found in matplotlib colormaps:")
-            logger.error(f'{plt.colormaps()}')
-        if self.application_controller.still_scanning() is False:
-            self.view.scan_view.update(self.application_controller)
-            self.view.canvas.draw()
+        # First we get the top level application name
+        APPLICATION_NAME = list(config.keys())[0]
+        # Microstage is controlled from qt3move only; do not open it in qt3scan.
+        config[APPLICATION_NAME].pop('Microstage', None)
 
-    def set_raw_background_counts(self):
-        bg_entry_value = self.view.sidepanel.raw_background_counts_entry.get()
+        # Get the names of the counter and positioners
+        hardware_dict = config[APPLICATION_NAME]['ApplicationController']['hardware']
+        counter_name = hardware_dict['counter']
+        x_axis_name = hardware_dict['x_axis_control']
+        y_axis_name = hardware_dict['y_axis_control']
+        z_axis_name = hardware_dict['z_axis_control']
+
+        # Get the counter, instantiate, and configure
+        import_path = config[APPLICATION_NAME][counter_name]['import_path']
+        class_name = config[APPLICATION_NAME][counter_name]['class_name']
+        module = importlib.import_module(import_path)
+        logger.debug(f"Importing {import_path}")
+        constructor = getattr(module, class_name)
+        counter = constructor()
+        counter.configure(config[APPLICATION_NAME][counter_name]['configure'])
+
+        photodiode_name = hardware_dict.get('photodiode')
+        photodiode = None
+        if photodiode_name:
+            import_path = config[APPLICATION_NAME][photodiode_name]['import_path']
+            class_name = config[APPLICATION_NAME][photodiode_name]['class_name']
+            module = importlib.import_module(import_path)
+            logger.debug(f"Importing {import_path}")
+            constructor = getattr(module, class_name)
+            photodiode = constructor()
+            photodiode.configure(config[APPLICATION_NAME][photodiode_name]['configure'])
+
+        snspd_name = hardware_dict.get('snspd')
+        snspd = None
+        if snspd_name:
+            import_path = config[APPLICATION_NAME][snspd_name]['import_path']
+            class_name = config[APPLICATION_NAME][snspd_name]['class_name']
+            module = importlib.import_module(import_path)
+            logger.debug(f"Importing {import_path}")
+            constructor = getattr(module, class_name)
+            snspd = constructor()
+            snspd.configure(config[APPLICATION_NAME][snspd_name]['configure'])
+
+        # Get the x axis instance
+        import_path = config[APPLICATION_NAME][x_axis_name]['import_path']
+        class_name = config[APPLICATION_NAME][x_axis_name]['class_name']
+        module = importlib.import_module(import_path)
+        logger.debug(f"Importing {import_path}")
+        constructor = getattr(module, class_name)
+        x_axis = constructor()
+        x_axis.configure(config[APPLICATION_NAME][x_axis_name]['configure'])
+        # Get the limits
+        self.min_x_position = config[APPLICATION_NAME][x_axis_name]['configure']['min_position']
+        self.max_x_position = config[APPLICATION_NAME][x_axis_name]['configure']['max_position']
+        self.max_x_range = self.max_x_position - self.min_x_position
+
+        # Get the y axis instance
+        import_path = config[APPLICATION_NAME][y_axis_name]['import_path']
+        class_name = config[APPLICATION_NAME][y_axis_name]['class_name']
+        module = importlib.import_module(import_path)
+        logger.debug(f"Importing {import_path}")
+        constructor = getattr(module, class_name)
+        y_axis = constructor()
+        y_axis.configure(config[APPLICATION_NAME][y_axis_name]['configure'])
+        # Get the limits
+        self.min_y_position = config[APPLICATION_NAME][y_axis_name]['configure']['min_position']
+        self.max_y_position = config[APPLICATION_NAME][y_axis_name]['configure']['max_position']
+        self.max_y_range = self.max_y_position - self.min_y_position
+
+        # Get the z axis instance
+        import_path = config[APPLICATION_NAME][z_axis_name]['import_path']
+        class_name = config[APPLICATION_NAME][z_axis_name]['class_name']
+        module = importlib.import_module(import_path)
+        logger.debug(f"Importing {import_path}")
+        constructor = getattr(module, class_name)
+        z_axis = constructor()
+        z_axis.configure(config[APPLICATION_NAME][z_axis_name]['configure'])
+        # Get the limits
+        self.min_z_position = config[APPLICATION_NAME][z_axis_name]['configure']['min_position']
+        self.max_z_position = config[APPLICATION_NAME][z_axis_name]['configure']['max_position']
+        self.max_z_range = self.max_z_position - self.min_z_position
+
+        # Get the application controller constructor 
+        import_path = config[APPLICATION_NAME]['ApplicationController']['import_path']
+        class_name = config[APPLICATION_NAME]['ApplicationController']['class_name']
+        module = importlib.import_module(import_path)
+        logger.debug(f"Importing {import_path}")
+        constructor = getattr(module, class_name)
+        # Get the configure dictionary (do not pass signal_source into ScanController)
+        controller_config_dict = dict(
+            config[APPLICATION_NAME]['ApplicationController']['configure']
+        )
+        signal_source = controller_config_dict.pop('signal_source', 'counter')
+        if signal_source == 'photodiode' and photodiode is None:
+            logger.warning(
+                'signal_source is photodiode but Photodiode hardware is missing; using counter'
+            )
+            signal_source = 'counter'
+        if signal_source == 'snspd' and snspd is None:
+            logger.warning(
+                'signal_source is snspd but Snspd hardware is missing; using counter'
+            )
+            signal_source = 'counter'
+        self.signal_source = signal_source
+        self._reader_counter = counter
+        self._reader_photodiode = photodiode
+        self._reader_snspd = snspd
+        active_reader = self._reader_for_source(signal_source)
+
+        self.application_controller = constructor(
+            **{'x_axis_controller': x_axis,
+               'y_axis_controller': y_axis,
+               'z_axis_controller': z_axis,
+               'counter_controller': active_reader,
+               **controller_config_dict}
+        )
+
+    def load_yaml_from_name(self, yaml_filename: str) -> None:
+        '''
+        Loads the yaml configuration file from name.
+
+        Should be called during instantiation of this class and should be the callback
+        function for loading of other standard yaml files while running.
+
+        Parameters
+        ----------
+        yaml_filename: str
+            Filename of the .yaml file in the qt3scan/config_files path.
+        '''
+        yaml_path = importlib.resources.files(CONFIG_PATH).joinpath(yaml_filename)
+        self.configure_from_yaml(str(yaml_path))
+
+    @property
+    def intensity_ylabel(self) -> str:
+        return 'Intensity (V)' if self.signal_source == 'photodiode' else 'Intensity (cts/s)'
+
+    def image_norm_axis_labels(self) -> Tuple[str, str]:
+        if self.signal_source == 'photodiode':
+            return ('Minimum (V)', 'Maximum (V)')
+        return ('Minimum (cts/s)', 'Maximum (cts/s)')
+
+    def _reader_for_source(self, source: str):
+        if source == 'photodiode':
+            return self._reader_photodiode
+        if source == 'snspd':
+            return self._reader_snspd
+        return self._reader_counter
+
+    def set_signal_source(self, source: str) -> None:
+        if source not in ('counter', 'photodiode', 'snspd'):
+            return
+        if self._reader_photodiode is None and source == 'photodiode':
+            logger.warning('Photodiode hardware not configured')
+            self._sync_signal_source_gui()
+            return
+        if self._reader_snspd is None and source == 'snspd':
+            logger.warning('SNSPD hardware not configured')
+            self._sync_signal_source_gui()
+            return
+        if self.application_controller is None:
+            return
+        if self.application_controller.busy:
+            logger.warning('Cannot switch signal source while scanning')
+            self._sync_signal_source_gui()
+            return
+        self.signal_source = source
+        self.application_controller.counter_controller = self._reader_for_source(source)
+
+    def _sync_signal_source_gui(self) -> None:
+        if not hasattr(self, 'view'):
+            return
+        panel = self.view.control_panel
+        if hasattr(panel, 'signal_source_var'):
+            panel.signal_source_var.set(self.signal_source)
+        if self._reader_photodiode is None and hasattr(panel, 'photodiode_radio'):
+            panel.photodiode_radio.config(state='disabled')
+        if self._reader_snspd is None and hasattr(panel, 'snspd_radio'):
+            panel.snspd_radio.config(state='disabled')
+
+    def _on_signal_source_selected(self) -> None:
+        self.set_signal_source(self.view.control_panel.signal_source_var.get())
+
+    def enable_buttons(self) -> None:
+        pass
+    def disable_buttons(self) -> None:
+        pass
+
+    def optimize_x_axis(self, tkinter_event=None) -> None:
+        '''
+        Callback to optimize X button in launcher GUI.
+        Gets the config data written in the GUI. If it is valid then it will create an 
+        instnace of the `LineScanApplication` class to scan the axis.
+
+        Parameters
+        ----------
+        tkinter_event: tk.Event
+            The button press event, not used.
+        '''
+        if self.application_controller.busy:
+            logger.error(f'Application controller is current busy.')
+            return None
+        logger.info('Optimizing X axis.')
+        # Update the parameters
         try:
-            raw_bg_counts = float(bg_entry_value)
+            self._get_scan_config()
         except Exception as e:
-            logger.warning(f'{bg_entry_value} is invalid. Background counts did not change:{self.application_controller.raw_bg_counts}.')
-            return
+            logger.error(f'Scan parameters are invalid: {e}')
+            return None
+        # Increase the nunmber of scans launched
+        self.number_scans += 1
+        # Launch a line scan application
+        self.current_scan = LineScanApplication(
+            parent_application = self,
+            application_controller = self.application_controller,
+            axis = 'x',
+            range = self.scan_parameters['line_range_xy'],
+            n_pixels = self.scan_parameters['line_pixels'],
+            time = self.scan_parameters['line_time'],
+            id = str(self.number_scans).zfill(3)
+        )
 
-        self.application_controller.raw_bg_counts = raw_bg_counts
+    def optimize_y_axis(self, tkinter_event=None) -> None:
+        '''
+        Callback to optimize Y button in launcher GUI.
+        Gets the config data written in the GUI. If it is valid then it will create an 
+        instnace of the `LineScanApplication` class to scan the axis.
 
-        if self.application_controller.still_scanning() is False:
-            self.view.scan_view.update(self.application_controller)
-            self.view.canvas.draw()
-
-    def set_filter_range(self) -> None:
-
-        if not hasattr(self.application_controller, 'filter_view_range'):
-            logger.debug(f'Filter Range not available for this DAQ. Nothing happens.')
-            return
-
-        filter_min = np.float64(self.view.sidepanel.range_min_entry.get())
-        filter_max = np.float64(self.view.sidepanel.range_max_entry.get())
-        self.application_controller.filter_view_range = filter_min, filter_max
-
-        if self.application_controller.still_scanning() is False:
-            self.view.scan_view.update(self.application_controller)
-            self.view.canvas.draw()
-
-    def set_count_aggregation_option(self):
-        if not hasattr(self.application_controller, 'counts_aggregation_option'):
-            logger.debug(f'Counts aggregation option is not available for this DAQ. Nothing happens.')
-            return
-
-        self.application_controller.counts_aggregation_option = self.view.sidepanel.count_aggregation_option.get()
-
-        if self.application_controller.still_scanning() is False:
-            self.view.scan_view.update(self.application_controller)
-            self.view.canvas.draw()
-
-    def log_scan_image(self) -> None:
-        self.view.scan_view.log_data = not self.view.scan_view.log_data
-        if self.application_controller.still_scanning() is False:
-            self.view.scan_view.update(self.application_controller)
-            self.view.canvas.draw()
-
-    def toggle_count_rate(self):
-        self.view.scan_view.plot_count_rate = not self.view.scan_view.plot_count_rate
-        if self.application_controller.still_scanning() is False:
-            self.view.scan_view.update(self.application_controller)
-            self.view.canvas.draw()
-
-    def stop_scan(self) -> None:
-        self.application_controller.stop()
-
-    def pop_out_scan(self) -> None:
-        """
-        Creates a new TKinter window with the data from the current scan. This allows researchers
-        to retain scan image in a separate window and run subsequent scans.
-        """
-
-        win = tk.Toplevel()
-        win.title(f'Scan {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
-
-        new_scan_view = ScanImage(self.view.scan_view.cmap)
-        new_scan_view.update(self.application_controller)
-
-        canvas = FigureCanvasTkAgg(new_scan_view.fig, master=win)
-        canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        toolbar = NavigationToolbar2Tk(canvas, win)
-        toolbar.update()
-        canvas._tkcanvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        canvas.draw()
-
-    def _scan_thread_function(self, xmin: float, xmax: float, ymin: float, ymax: float, step_size: float) -> None:
-
+        Parameters
+        ----------
+        tkinter_event: tk.Event
+            The button press event, not used.
+        '''
+        if self.application_controller.busy:
+            logger.error(f'Application controller is current busy.')
+            return None
+        logger.info('Optimizing Y axis.')
+        # Update the parameters
         try:
-            self.application_controller.set_scan_range(xmin, xmax, ymin, ymax)
-            self.application_controller.step_size = step_size
-            self.application_controller.reset()  # clears the data
-            self.application_controller.start()  # starts the DAQ
-            self.application_controller.set_to_starting_position()  # moves the stage to starting position
+            self._get_scan_config()
+        except Exception as e:
+            logger.error(f'Scan parameters are invalid: {e}')
+            return None
+        # Increase the nunmber of scans launched
+        self.number_scans += 1
+        # Launch a line scan application
+        self.current_scan = LineScanApplication(
+            parent_application = self,
+            application_controller = self.application_controller,
+            axis = 'y',
+            range = self.scan_parameters['line_range_xy'],
+            n_pixels = self.scan_parameters['line_pixels'],
+            time = self.scan_parameters['line_time'],
+            id = str(self.number_scans).zfill(3)
+        )
 
-            while self.application_controller.still_scanning():
-                self.application_controller.scan_x()
-                self.application_controller.move_y()
-                self.view.scan_view.update(self.application_controller)
-                self.view.canvas.draw()
+    def optimize_z_axis(self, tkinter_event=None) -> None:
+        '''
+        Callback to optimize Z button in launcher GUI.
+        Gets the config data written in the GUI. If it is valid then it will create an 
+        instnace of the `LineScanApplication` class to scan the axis.
 
-            self.application_controller.post_stop()
+        Parameters
+        ----------
+        tkinter_event: tk.Event
+            The button press event, not used.
+        '''
+        if self.application_controller.busy:
+            logger.error(f'Application controller is current busy.')
+            return None
+        logger.info('Optimizing Z axis.')
+        # Update the parameters
+        try:
+            self._get_scan_config()
+        except Exception as e:
+            logger.error(f'Scan parameters are invalid: {e}')
+            return None
+        # Increase the nunmber of scans launched
+        self.number_scans += 1
+        # Launch a line scan application
+        self.current_scan = LineScanApplication(
+            parent_application = self,
+            application_controller = self.application_controller,
+            axis = 'z',
+            range = self.scan_parameters['line_range_z'],
+            n_pixels = self.scan_parameters['line_pixels'],
+            time = self.scan_parameters['line_time'],
+            id = str(self.number_scans).zfill(3)
+        )
 
-        except nidaqmx.errors.DaqError as e:
-            logger.warning(e)
-            logger.warning('Check for other applications using resources.')
-        except ValueError as e:
-            logger.warning(e)
-            logger.warning('Check your configuration! You may have entered a value that is out of range')
-        except RuntimeError as e:
-            logger.warning(e)
-            logger.warning('Check your configuration! One or more of your devices were not properly initialized.')
+    def start_image_scan(self, tkinter_event=None) -> None:
+        '''
+        Callback to start scan button in launcher GUI.
+        Gets the config data written in the GUI. If it is valid then it will create an 
+        instnace of the `ImageScanApplication` class to create a confocal scan image.
 
-        finally:
-            self.view.sidepanel.startButton.config(state=tk.NORMAL)
-            self.view.sidepanel.go_to_z_button.config(state=tk.NORMAL)
-            self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
-            self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
-            self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
-            self.view.sidepanel.loadScanButton.config(state=tk.NORMAL)
+        Parameters
+        ----------
+        tkinter_event: tk.Event
+            The button press event, not used.
+        '''
+        if self.application_controller.busy:
+            logger.error(f'Application controller is current busy.')
+            return None
+        logger.info('Starting confocal image scan.')
+        # Update the parameters
+        try:
+            self._get_scan_config()
+        except Exception as e:
+            logger.error(f'Scan parameters are invalid: {e}')
+            return None
+        # Increase the nunmber of scans launched
+        self.number_scans += 1
+        # Launch a image scan application
+        self.current_scan = ImageScanApplication(
+            parent_application = self,
+            application_controller = self.application_controller,
+            axis_1 = 'x',
+            axis_2 = 'y',
+            range = self.scan_parameters['image_range'],
+            n_pixels = self.scan_parameters['image_pixels'],
+            time = self.scan_parameters['image_time'],
+            id = str(self.number_scans).zfill(3)
+        )
 
-            self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
-            self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
-            self.view.sidepanel.optimize_z_button.config(state=tk.NORMAL)
+    def open_counter(self, tkinter_event=None) -> None:
+        try:
+            qt3scope.main(
+                is_root_process=False,
+                signal_source=self.signal_source,
+            )
+        except Exception as e:
+            logger.warning(f'{e}')
 
-            self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-            self.view.sidepanel.daq_config_button.config(state=tk.NORMAL)
-            self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
-            self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
+    def _get_scan_config(self) -> None:
+        '''
+        Gets the scan parameters in the GUI and validates if they are allowable. Then 
+        saves the GUI input to the launcher application if valid.
+        '''
+        image_range = float(self.view.control_panel.image_range_entry.get())
+        image_pixels = int(self.view.control_panel.image_pixels_entry.get())
+        image_time = float(self.view.control_panel.image_time_entry.get())
+        line_range_xy = float(self.view.control_panel.line_range_xy_entry.get())
+        line_range_z = float(self.view.control_panel.line_range_z_entry.get())
+        line_pixels = int(self.view.control_panel.line_pixels_entry.get())
+        line_time = float(self.view.control_panel.line_time_entry.get())
 
-            if self.view.sidepanel.gotoAfterScanBoolVar.get():
-                self.go_to_position()
+        # Check image range
+        if image_range < 0.1:
+            raise ValueError(f'Requested scan range {image_range} < 100 nm is too small.')
+        if image_range > self.max_x_range:
+            raise ValueError(f'Requested image scan range {image_range}'
+                             +f' exceeds the x limit {self.max_x_range}.')
+        if image_range > self.max_y_range:
+            raise ValueError(f'Requested image scan range {image_range}'
+                             +f' exceeds the y limit {self.max_x_range}.')
+        if image_range > self.max_z_range:
+            raise ValueError(f'Requested image scan range {image_range}'
+                             +f' exceeds the z limit {self.max_x_range}.')
+        # Check the image pixels
+        if image_pixels < 1:
+            raise ValueError(f'Requested image pixels {image_pixels} < 1 is too small.')
+        # check the image time
+        if image_time < 0.001:
+            raise ValueError(f'Requested image scan time {image_time} < 1 ms is too small.')
 
-    def start_scan(self) -> None:
-        if self.application_controller.data_saved_once is False:
-            stored_data_shape = np.prod(np.shape(self.application_controller.scanned_count_rate))
-            data_shape_product = np.prod(stored_data_shape)
-            if data_shape_product > 0:
-                proceed = messagebox.askyesno("WARNING: Scan NOT SAVED",
-                                              "The previous scan was not saved. Are you sure you want to proceed with "
-                                              "a new scan? All DATA will be LOST.")
-                if not proceed:
-                    return
+        # Check the line xy range
+        if line_range_xy < 0.1:
+            raise ValueError(f'Requested scan range {line_range_xy} < 100 nm is too small.')
+        if line_range_xy > self.max_x_range:
+            raise ValueError(f'Requested xy scan range {line_range_xy}'
+                             +f' exceeds the x limit {self.max_x_range}.')
+        if line_range_xy > self.max_y_range:
+            raise ValueError(f'Requested xy scan range {line_range_xy}'
+                             +f' exceeds the y limit {self.max_y_range}.')
+        # check the line z range
+        if line_range_z < 0.1:
+            raise ValueError(f'Requested scan range {line_range_z} < 100 nm is too small.')
+        if line_range_z > self.max_z_range:
+            raise ValueError(f'Requested z scan range {line_range_z}'
+                             +f' exceeds the z limit {self.max_z_range}.')
+        # Check the line pixels
+        if line_pixels < 1:
+            raise ValueError(f'Requested line pixels {line_pixels} < 1 is too small.')
+        # check the line time
+        if line_time < 0.001:
+            raise ValueError(f'Requested line scan time {line_time} < 1 ms is too small.')
+        if line_time > 300:
+            raise ValueError(f'Requested line scan time {line_time} > 5 min is too long.')
 
-        self.view.sidepanel.startButton.config(state=tk.DISABLED)
-        self.view.sidepanel.go_to_z_button.config(state=tk.DISABLED)
-        self.view.sidepanel.gotoButton.config(state=tk.DISABLED)
-        self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
-        self.view.sidepanel.popOutScanButton.config(state=tk.DISABLED)
-        self.view.sidepanel.loadScanButton.config(state=tk.DISABLED)
+        # Write to application memory
+        self.scan_parameters = {
+            'image_range': image_range,
+            'image_pixels': image_pixels,
+            'image_time': image_time,
+            'line_range_xy': line_range_xy,
+            'line_range_z': line_range_z,
+            'line_pixels': line_pixels,
+            'line_time': line_time,
+        }
 
-        self.view.sidepanel.optimize_x_button.config(state=tk.DISABLED)
-        self.view.sidepanel.optimize_y_button.config(state=tk.DISABLED)
-        self.view.sidepanel.optimize_z_button.config(state=tk.DISABLED)
 
-        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
-        self.view.sidepanel.daq_config_button.config(state=tk.DISABLED)
-        self.view.sidepanel.position_controller_config_button.config(state=tk.DISABLED)
-        self.view.sidepanel.config_from_yaml_button.config(state=tk.DISABLED)
+class LineScanApplication:
+    '''
+    This is the line scan application class for `qt3scan` which manages the data
+    and GUI output for a single scan along a particular axis. It is meant to handle
+    1-d confocal scans for position optimization, although it could be made configurable.
+    '''
 
-        # clear the figure
-        self.view.scan_view.reset()
+    def __init__(self, 
+                 parent_application: LauncherApplication,
+                 application_controller: ScanController,
+                 axis: str,
+                 range: float,
+                 n_pixels: int,
+                 time: float,
+                 id: str):
+        
+        self.parent_application = parent_application
+        self.application_controller = application_controller
+        self.axis = axis
+        self.range = range
+        self.n_pixels = n_pixels
+        self.time = time
 
-        # get the scan settings
-        xmin = float(self.view.sidepanel.x_min_entry.get())
-        xmax = float(self.view.sidepanel.x_max_entry.get())
-        ymin = float(self.view.sidepanel.y_min_entry.get())
-        ymax = float(self.view.sidepanel.y_max_entry.get())
+        # Time per pixel
+        self.time_per_pixel = time / n_pixels
 
-        args = [xmin, xmax, ymin, ymax]
-        args.append(float(self.view.sidepanel.step_size_entry.get()))
+        # Optimization type
+        self.optimization_method = 'gaussian'
 
-        # get this value from the DAQ controller
-        self.scan_thread = Thread(target=self._scan_thread_function,
-                                  args=args)
+        self.id = id
+        self.timestamp = datetime.datetime.now()
+
+        # Get the limits of the position for the axis
+        if axis == 'x':
+            min_allowed_position = self.parent_application.min_x_position
+            max_allowed_position = self.parent_application.max_x_position
+        elif axis == 'y':
+            min_allowed_position = self.parent_application.min_y_position
+            max_allowed_position = self.parent_application.max_y_position
+        elif axis == 'z':
+            min_allowed_position = self.parent_application.min_z_position
+            max_allowed_position = self.parent_application.max_z_position
+        else:
+            raise ValueError(f'Requested axis {axis} is invalid.')
+
+        # Get the starting position
+        self.start_position_vector = application_controller.get_position()
+        self.start_position_axis = self.start_position_vector[AXIS_INDEX[axis]]
+        self.final_position_axis = None
+        # Get the limits of the scan
+        self.min_position = self.start_position_axis - (range/2)
+        self.max_position = self.start_position_axis + (range/2)
+        # Check if the limits exceed the range and shift range to edge
+        if self.min_position < min_allowed_position:
+            # Too close to minimum edge, need to shift up
+            logger.warning('Start position too close to edge, shifting.')
+            shift = min_allowed_position - self.min_position
+            self.min_position += shift
+            self.max_position += shift
+        if self.max_position > max_allowed_position:
+            # Too close to minimum edge, need to shift up
+            logger.warning('Start position too close to edge, shifting.')
+            shift = max_allowed_position - self.max_position
+            self.min_position += shift
+            self.max_position += shift
+        # Get the scan positions (along whatever axis is being scanned)
+        # We're brute forcing it here as the application controller might not sample
+        # positions in the exact same way...
+        self.data_x = np.linspace(start=self.min_position, 
+                                  stop=self.max_position, 
+                                  num=n_pixels)
+        # To hold scan results
+        self.data_y = np.empty(shape=n_pixels)
+        self.data_y[:] = np.nan
+
+        # Launch the line scan GUI
+        # Then initialize the GUI
+        self.root = tk.Toplevel()
+        self.root.title(f'Scan {id} ({self.timestamp.strftime("%Y-%m-%d %H:%M:%S")})')
+        self.view = LineScanApplicationView(window=self.root, 
+                                            application=self,
+                                            settings_dict=parent_application.scan_parameters)
+
+        # Bind the buttons
+        self.view.control_panel.save_button.bind("<Button>", self.save_scan)
+
+        # Setup the callback for rightclicks on the figure canvas
+        self.view.data_viewport.canvas.mpl_connect('button_press_event', 
+                                                   lambda event: self.open_rclick(event) if event.button == 3 else None)
+        self.view.rclick_menu.add_command(label='Open scope', command=self.rclick_open_counter)
+
+        # Launch the thread
+        self.scan_thread = Thread(target=self.scan_thread_function)
         self.scan_thread.start()
 
-    def save_scan(self) -> None:
-        afile = tk.filedialog.asksaveasfilename(filetypes=self.application_controller.allowed_file_save_formats(),
-                                                defaultextension=self.application_controller.default_file_format())
-        if afile is None or afile == '':
-            return  # selection was canceled.
+    @property
+    def intensity_ylabel(self) -> str:
+        return self.parent_application.intensity_ylabel
 
-        logger.info(f'Saving data to {afile}')
-        self.application_controller.save_scan(afile)
-
-    def load_scan(self):
-        afile = tk.filedialog.askopenfilename(filetypes=self.application_controller.allowed_file_save_formats(),
-                                              defaultextension=self.application_controller.default_file_format())
-        if afile is None or afile == '':
-            return  # selection was canceled.
-
-        logger.info(f'Loading data from {afile}')
-        self.application_controller.load_scan(afile)
-
-        if hasattr(self.application_controller, 'filter_view_range'):
-            self.view.sidepanel.range_min_entry.delete(0, tk.END)
-            self.view.sidepanel.range_min_entry.insert(0, str(self.application_controller.filter_view_range[0]))
-            self.view.sidepanel.range_max_entry.delete(0, tk.END)
-            self.view.sidepanel.range_max_entry.insert(0, str(self.application_controller.filter_view_range[1]))
-
-        if hasattr(self.application_controller, 'counts_aggregation_option'):
-            self.view.sidepanel.count_aggregation_option.set(self.application_controller.counts_aggregation_option)
-
-        if self.application_controller.still_scanning() is False:
-            self.view.scan_view.update(self.application_controller)
-            self.view.canvas.draw()
-
-    def _optimize_thread_function(self, axis: str, central: float, range: float, step_size: float) -> None:
-        """
-        This function is called by the optimize function. It is not intended to be called directly.
-        """
-
+    def scan_thread_function(self) -> None:
         try:
-            data, axis_vals, opt_pos, coeff = self.application_controller.optimize_position(axis,
-                                                                                            central,
-                                                                                            range,
-                                                                                            step_size)
-            self.optimized_position[axis] = opt_pos
-            self.application_controller.position_controller.go_to_position(**{axis: opt_pos})
-            self.view.show_optimization_plot(f'Optimize {axis}',
-                                             central,
-                                             self.optimized_position[axis],
-                                             axis_vals,
-                                             data,
-                                             coeff)
-            self.view.sidepanel.update_go_to_position(**{axis: self.optimized_position[axis]})
-            self.view.scan_view.update_position_indicator(self.optimized_position['x'],
-                                                          self.optimized_position['y'])
-            self.view.canvas.draw()
+            logger.info('Starting scan thread.')
+            logger.info(f'Starting scan on axis {self.axis}')
+            # Run the scan (raw counts per pixel or mean V per pixel for photodiode)
+            self.data_y = self.application_controller.scan_axis(
+                axis = self.axis,
+                start = self.min_position,
+                stop = self.max_position,
+                n_pixels = self.n_pixels,
+                scan_time = self.time
+            )
+            # Normalize to counts per second (counter only; photodiode stays mean V)
+            if self.parent_application.signal_source != 'photodiode':
+                self.data_y = self.data_y / self.time_per_pixel
+            # Optimize the position
+            self.update_position()
+            # Update the viewport
+            self.view.update_figure()
 
-        except nidaqmx.errors.DaqError as e:
-            logger.info(e)
-            logger.info('Check for other applications using resources. If not, you may need to restart the application.')
-
-        except NotImplementedError as e:
-            logger.info(e)
-
-        finally:
-            self.view.sidepanel.startButton.config(state=tk.NORMAL)
-            self.view.sidepanel.stopButton.config(state=tk.NORMAL)
-            self.view.sidepanel.go_to_z_button.config(state=tk.NORMAL)
-            self.view.sidepanel.gotoButton.config(state=tk.NORMAL)
-            self.view.sidepanel.saveScanButton.config(state=tk.NORMAL)
-            self.view.sidepanel.popOutScanButton.config(state=tk.NORMAL)
-            self.view.sidepanel.loadScanButton.config(state=tk.NORMAL)
-
-            self.view.sidepanel.optimize_x_button.config(state=tk.NORMAL)
-            self.view.sidepanel.optimize_y_button.config(state=tk.NORMAL)
-            self.view.sidepanel.optimize_z_button.config(state=tk.NORMAL)
-
-            self.view.sidepanel.controller_menu.config(state=tk.NORMAL)
-            self.view.sidepanel.daq_config_button.config(state=tk.NORMAL)
-            self.view.sidepanel.position_controller_config_button.config(state=tk.NORMAL)
-            self.view.sidepanel.config_from_yaml_button.config(state=tk.NORMAL)
-
-    def optimize(self, axis: str) -> None:
-
-        opt_range = float(self.view.sidepanel.optimize_range_entry.get())
-        opt_step_size = float(self.view.sidepanel.optimize_step_size_entry.get())
-        old_optimized_value = self.optimized_position[axis]
-
-        self.view.sidepanel.startButton.config(state=tk.DISABLED)
-        self.view.sidepanel.stopButton.config(state=tk.DISABLED)
-        self.view.sidepanel.go_to_z_button.config(state=tk.DISABLED)
-        self.view.sidepanel.gotoButton.config(state=tk.DISABLED)
-        self.view.sidepanel.saveScanButton.config(state=tk.DISABLED)
-        self.view.sidepanel.popOutScanButton.config(state=tk.DISABLED)
-        self.view.sidepanel.loadScanButton.config(state=tk.DISABLED)
-
-        self.view.sidepanel.optimize_x_button.config(state=tk.DISABLED)
-        self.view.sidepanel.optimize_y_button.config(state=tk.DISABLED)
-        self.view.sidepanel.optimize_z_button.config(state=tk.DISABLED)
-
-        self.view.sidepanel.controller_menu.config(state=tk.DISABLED)
-        self.view.sidepanel.daq_config_button.config(state=tk.DISABLED)
-        self.view.sidepanel.position_controller_config_button.config(state=tk.DISABLED)
-        self.view.sidepanel.config_from_yaml_button.config(state=tk.DISABLED)
-
-        self.optimize_thread = Thread(target=self._optimize_thread_function,
-                                      args=(axis, old_optimized_value, opt_range, opt_step_size))
-        self.optimize_thread.start()
-
-    def on_closing(self) -> None:
-        try:
-            self.stop_scan()
+            logger.info('Scan complete.')
         except Exception as e:
-            logger.debug(e)
+            logger.info(e)
+        # Enable the buttons
+        self.parent_application.enable_buttons()
+
+    def update_position(self) -> None:
+        '''
+        A function to update the position of the piezos after a scan has been completed.
+        Can eventually setup for multiple optimization techniques/methods.
+        '''
+        # Default behavior
+        if self.optimization_method == 'none':
+            # Do nothing
+            self._optimization_method_none()
+        # Fit the data to a gaussian and move to peak
+        elif self.optimization_method == 'gaussian':
+            # Gaussian optimize
+            self._optimization_method_gaussian()
+        # Move to location with highest density?
+        elif self.optimization_method == 'density':
+            pass
+
+        # Move to optmial position
+        self.application_controller.set_axis(axis=self.axis, position=self.final_position_axis)
+
+    def open_rclick(self, mpl_event : tk.Event = None):
+        mouse_x, mouse_y = self.root.winfo_pointerxy()
+        try:
+            self.view.rclick_menu.tk_popup(mouse_x, mouse_y)
         finally:
-            self.root_window.quit()
-            self.root_window.destroy()
+            self.view.rclick_menu.grab_release()
+
+    def rclick_open_counter(self):
+        try:
+            qt3scope.main(
+                is_root_process=False,
+                signal_source=self.parent_application.signal_source,
+            )
+        except Exception as e:
+            logger.warning(f'{e}')
+  
+    def _optimization_method_none(self) -> None:
+        '''
+        Internal method for determining the optimal position.
+
+        For this method we do nothing and just reset the position to the start postion.
+        '''
+        self.final_position_axis = self.start_position_axis
+
+    def _optimization_method_gaussian(self) -> None:
+        '''
+        Internal method for determining the optimal position.
+
+        For this method we fit the data to a Gaussian envelope centered at the maximum
+        counts position.
+        '''
+
+        def fit_function(x, a, x0, sigma, c):
+            return a * np.exp(-(x-x0)**2 / (2*sigma**2)) + c
+        
+        # Initial guess for parameters
+        max_counts_idx = np.argmax(self.data_y)
+        max_counts = self.data_y[max_counts_idx]
+        position_max_counts = self.data_x[max_counts_idx]
+        min_counts = np.min(self.data_y)
+        a = max_counts - min_counts
+        x0 = position_max_counts
+        sigma = 0.300 # 300 microns
+        c = min_counts
+
+        lower_a = 1e-6 if self.parent_application.signal_source == 'photodiode' else 100
+        try:
+            p, _ = curve_fit(f=fit_function, 
+                             xdata=self.data_x, 
+                             ydata=self.data_y,
+                             p0=[a, x0, sigma, c],
+                             bounds=[[lower_a,self.min_position, 0.250, 0],
+                                     [np.inf, self.max_position, np.inf, np.inf]]) 
+                                    # ^ Lower bound on a: counts vs voltage scale
+            
+            self.final_position_axis = p[1] # Set to x0
+
+        except Exception as e:
+            logger.info('Failed to find maximum: ' + str(e))
+            self.final_position_axis = self.start_position_axis
+        
+        
+    def save_scan(self, tkinter_event=None) -> None:
+        '''
+        Method to save the data, you can add more logic later for other filetypes.
+        The event input is to catch the tkinter event that is supplied but not used.
+        '''
+        allowed_formats = [('Image with dataset', '*.png'), ('Dataset', '*.hdf5')]
+
+        # Default filename
+        default_name = f'scan{self.id}_{self.timestamp.strftime("%Y%m%d")}'
+            
+        # Get the savefile name
+        afile = tk.filedialog.asksaveasfilename(filetypes=allowed_formats, 
+                                                initialfile=default_name+'.png',
+                                                initialdir = self.parent_application.last_save_directory)
+        # Handle if file was not chosen
+        if afile is None or afile == '':
+            logger.warning('File not saved!')
+            return # selection was canceled.
+
+        # Get the path
+        file_path = '/'.join(afile.split('/')[:-1])  + '/'
+        self.parent_application.last_save_directory = file_path # Save the last used file path
+        logger.info(f'Saving files to directory: {file_path}')
+        # Get the name with extension (will be overwritten)
+        file_name = afile.split('/')[-1]
+        # Get the filetype
+        file_type = file_name.split('.')[-1]
+        # Get the filename without extension
+        file_name = '.'.join(file_name.split('.')[:-1]) # Gets everything but the extension
+
+        # If the file type is .png, want to save image and hdf5
+        if file_type == 'png':
+            logger.info(f'Saving the PNG as {file_name}.png')
+            fig = self.view.data_viewport.fig
+            fig.savefig(file_path+file_name+'.png', dpi=300, bbox_inches=None, pad_inches=0)
+
+        # Save as hdf5
+        with h5py.File(file_path+file_name+'.hdf5', 'w') as df:
+            
+            logger.info(f'Saving the HDF5 as {file_name}.hdf5')
+            
+            # Save the file metadata
+            ds = df.create_dataset('file_metadata', 
+                                   data=np.array(['application', 
+                                                  'qt3utils_version', 
+                                                  'scan_id', 
+                                                  'timestamp', 
+                                                  'original_name'], dtype='S'))
+            ds.attrs['application'] = 'qt3utils.qt3scan.LineScanApplication'
+            ds.attrs['qt3utils_version'] = qt3utils.__version__
+            ds.attrs['scan_id'] = self.id
+            ds.attrs['timestamp'] = self.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            ds.attrs['original_name'] = file_name
+            ds.attrs['signal_source'] = self.parent_application.signal_source
+
+            # Save the scan settings
+            # If your implementation settings vary you should change the attrs
+            ds = df.create_dataset('scan_settings/axis', data=self.axis)
+            ds.attrs['units'] = 'None'
+            ds.attrs['description'] = 'Axis of the scan.'
+            ds = df.create_dataset('scan_settings/range', data=self.range)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Length of the scan.'
+            ds = df.create_dataset('scan_settings/n_pixels', data=self.n_pixels)
+            ds.attrs['units'] = 'None'
+            ds.attrs['description'] = 'Number of pixels in the scan.'
+            ds = df.create_dataset('scan_settings/time', data=self.time)
+            ds.attrs['units'] = 'Seconds'
+            ds.attrs['description'] = 'Length of time for the scan.'
+            ds = df.create_dataset('scan_settings/time_per_pixel', data=self.time_per_pixel)
+            ds.attrs['units'] = 'Seconds'
+            ds.attrs['description'] = 'Time integrated per pixel.'
+
+            ds = df.create_dataset('scan_settings/start_position_vector', data=self.start_position_vector)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Intial position of the scan.'
+            ds = df.create_dataset('scan_settings/start_position_axis', data=self.start_position_axis)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Initial position on the scan axis.'
+            ds = df.create_dataset('scan_settings/final_position_axis', data=self.final_position_axis)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Final position on the scan axis.'
+            ds = df.create_dataset('scan_settings/min_position', data=self.min_position)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Minimum axis position of the scan.'
+            ds = df.create_dataset('scan_settings/max_position', data=self.max_position)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Maximum axis position of the scan.'
+
+            # Data
+            ds = df.create_dataset('data/positions', data=self.data_x)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Positions of the scan (along axis).'
+            if self.parent_application.signal_source == 'photodiode':
+                ds = df.create_dataset('data/mean_voltage', data=self.data_y)
+                ds.attrs['units'] = 'Volts'
+                ds.attrs['description'] = 'Mean photodiode voltage per pixel dwell.'
+            else:
+                ds = df.create_dataset('data/count_rates', data=self.data_y)
+                ds.attrs['units'] = 'Counts per second'
+                ds.attrs['description'] = 'Count rates measured over scan.'
+                ds = df.create_dataset('data/counts', data=self.data_y*self.time_per_pixel)
+                ds.attrs['units'] = 'Counts'
+                ds.attrs['description'] = 'Counts measured over scan.'
 
 
-def main():
-    tkapp = MainTkApplication(DEFAULT_DAQ_DEVICE_NAME)
+class ImageScanApplication():
+    '''
+    This is the image scan application class for `qt3scan` which manages the data
+    and GUI output for a single scan along a particular axis. It is meant to handle
+    2-d confocal images, but could be used for scans in any pair of axes.
+    '''
+
+    def __init__(self,
+                 parent_application: LauncherApplication,
+                 application_controller: ScanController,
+                 axis_1: str,
+                 axis_2: str,
+                 range: float,
+                 n_pixels: int,
+                 time: float,
+                 id: str):
+        
+        
+        self.parent_application = parent_application
+        self.application_controller = application_controller
+        self.axis_1 = axis_1
+        self.axis_2 = axis_2
+        self.range = range
+        self.n_pixels = n_pixels
+        self.time = time
+
+        # Time per pixel
+        self.time_per_pixel = time / n_pixels
+
+        # Cmap for plotting
+        self.cmap = DEFAULT_COLOR_MAP
+
+        self.id = id
+        self.timestamp = datetime.datetime.now()
+
+        # Get the limits of the position for the axis
+        if axis_1 == 'x':
+            min_allowed_position_1 = self.parent_application.min_x_position
+            max_allowed_position_1 = self.parent_application.max_x_position
+        elif axis_1 == 'y':
+            min_allowed_position_1 = self.parent_application.min_y_position
+            max_allowed_position_1 = self.parent_application.max_y_position
+        elif axis_1 == 'z':
+            min_allowed_position_1 = self.parent_application.min_z_position
+            max_allowed_position_1 = self.parent_application.max_z_position
+        else:
+            raise ValueError(f'Requested axis_1 {axis_1} is invalid.')
+        if axis_2 == 'x':
+            min_allowed_position_2 = self.parent_application.min_x_position
+            max_allowed_position_2 = self.parent_application.max_x_position
+        elif axis_2 == 'y':
+            min_allowed_position_2 = self.parent_application.min_y_position
+            max_allowed_position_2 = self.parent_application.max_y_position
+        elif axis_2 == 'z':
+            min_allowed_position_2 = self.parent_application.min_z_position
+            max_allowed_position_2 = self.parent_application.max_z_position
+        else:
+            raise ValueError(f'Requested axis_2 {axis_2} is invalid.')
+
+        # Get the starting position
+        self.start_position_vector = application_controller.get_position()
+        self.start_position_axis_1 = self.start_position_vector[AXIS_INDEX[axis_1]]
+        self.start_position_axis_2 = self.start_position_vector[AXIS_INDEX[axis_2]]
+
+        # Get the limits of the scan on axis 1
+        self.min_position_1 = self.start_position_axis_1 - (range/2)
+        self.max_position_1 = self.start_position_axis_1 + (range/2)
+        # Check if the limits exceed the range and shift range to edge
+        if self.min_position_1 < min_allowed_position_1:
+            # Too close to minimum edge, need to shift up
+            shift = min_allowed_position_1 - self.min_position_1
+            self.min_position_1 += shift
+            self.max_position_1 += shift
+            self.start_position_axis_1 += shift
+        if self.max_position_1 > max_allowed_position_1:
+            # Too close to minimum edge, need to shift up
+            shift = max_allowed_position_1 - self.max_position_1
+            self.min_position_1 += shift
+            self.max_position_1 += shift
+            self.start_position_axis_1 += shift
+        # Get the limits of the scan on axis 2
+        self.min_position_2 = self.start_position_axis_2 - (range/2)
+        self.max_position_2 = self.start_position_axis_2 + (range/2)
+        # Check if the limits exceed the range and shift range to edge
+        if self.min_position_2 < min_allowed_position_2:
+            # Too close to minimum edge, need to shift up
+            shift = min_allowed_position_2 - self.min_position_2
+            self.min_position_2 += shift
+            self.max_position_2 += shift
+            self.start_position_axis_2 += shift
+        if self.max_position_2 > max_allowed_position_2:
+            # Too close to minimum edge, need to shift up
+            shift = max_allowed_position_2 - self.max_position_2
+            self.min_position_2 += shift
+            self.max_position_2 += shift
+            self.start_position_axis_2 += shift
+
+        # Get the scan positions
+        self.data_x = np.linspace(start=self.min_position_1, 
+                                  stop=self.max_position_1, 
+                                  num=n_pixels)
+        self.data_y = np.linspace(start=self.min_position_2, 
+                                  stop=self.max_position_2, 
+                                  num=n_pixels)
+        # To hold scan results
+        self.data_z = np.empty(shape=(n_pixels, n_pixels))
+        self.data_z[:,:] = np.nan
+
+        # Launch the line scan GUI
+        # Then initialize the GUI
+        self.root = tk.Toplevel()
+        self.root.title(f'Scan {id} ({self.timestamp.strftime("%Y-%m-%d %H:%M:%S")})')
+        _img_settings = dict(parent_application.scan_parameters)
+        _nmin, _nmax = parent_application.image_norm_axis_labels()
+        _img_settings['image_norm_min_label'] = _nmin
+        _img_settings['image_norm_max_label'] = _nmax
+        self.view = ImageScanApplicationView(window=self.root, 
+                                            application=self,
+                                            settings_dict=_img_settings)
+        
+        # Bind the buttons
+        self.view.control_panel.pause_button.bind("<Button>", self.pause_scan)
+        self.view.control_panel.continue_button.bind("<Button>", self.continue_scan)
+        self.view.control_panel.save_button.bind("<Button>", self.save_scan)
+        self.view.control_panel.norm_button.bind("<Button>", self.set_normalize)
+        self.view.control_panel.autonorm_button.bind("<Button>", self.auto_normalize)
+
+        # Setup the callback for rightclicks on the figure canvas
+        self.view.data_viewport.canvas.mpl_connect('button_press_event', 
+                                                   lambda event: self.open_rclick(event) if event.button == 3 else None)
+        self.view.rclick_menu.add_command(label='Open scope', command=self.rclick_open_counter)
+
+        # Launch the thread
+        self.scan_thread = Thread(target=self.start_scan_thread_function)
+        self.scan_thread.start()
+
+    @property
+    def intensity_ylabel(self) -> str:
+        return self.parent_application.intensity_ylabel
+
+    def continue_scan(self, tkinter_event=None):
+        # Don't do anything if busy
+        if self.application_controller.busy:
+            logger.error('Controller is busy; cannot continue scan.')
+        if self.current_scan_index == self.n_pixels:
+            logger.error('Scan already completed.')
+            return None
+        # Start the scan thread to continue
+        self.scan_thread = Thread(target=self.continue_scan_thread_function)
+        self.scan_thread.start()
+    
+    def pause_scan(self, tkinter_event=None):
+        '''
+        Tell the scanner to pause scanning
+        '''
+        if self.application_controller.stop_scan is True:
+            logger.info('Already waiting to pause.')
+            return None
+        if self.current_scan_index == self.n_pixels:
+            logger.error('Scan already completed.')
+            return None
+
+        if self.application_controller.busy:
+            logger.info('Pausing the scan...')
+            # Query the controller to stop
+            self.application_controller.stop_scan = True
+
+    def save_scan(self, tkinter_event=None):
+        '''
+        Method to save the data, you can add more logic later for other filetypes.
+        The event input is to catch the tkinter event that is supplied but not used.
+        '''
+        allowed_formats = [('Image with dataset', '*.png'), ('Dataset', '*.hdf5')]
+
+        # Default filename
+        default_name = f'scan{self.id}_{self.timestamp.strftime("%Y%m%d")}'
+            
+        # Get the savefile name
+        afile = tk.filedialog.asksaveasfilename(filetypes=allowed_formats, 
+                                                initialfile=default_name+'.png',
+                                                initialdir = self.parent_application.last_save_directory)
+        # Handle if file was not chosen
+        if afile is None or afile == '':
+            logger.warning('File not saved!')
+            return # selection was canceled.
+
+        # Get the path
+        file_path = '/'.join(afile.split('/')[:-1])  + '/'
+        self.parent_application.last_save_directory = file_path # Save the last used file path
+        logger.info(f'Saving files to directory: {file_path}')
+        # Get the name with extension (will be overwritten)
+        file_name = afile.split('/')[-1]
+        # Get the filetype
+        file_type = file_name.split('.')[-1]
+        # Get the filename without extension
+        file_name = '.'.join(file_name.split('.')[:-1]) # Gets everything but the extension
+
+        # If the file type is .png, want to save image and hdf5
+        if file_type == 'png':
+            logger.info(f'Saving the PNG as {file_name}.png')
+            fig = self.view.data_viewport.fig
+            fig.savefig(file_path+file_name+'.png', dpi=300, bbox_inches=None, pad_inches=0)
+
+        # Save as hdf5
+        with h5py.File(file_path+file_name+'.hdf5', 'w') as df:
+            
+            logger.info(f'Saving the HDF5 as {file_name}.hdf5')
+            
+            # Save the file metadata
+            ds = df.create_dataset('file_metadata', 
+                                   data=np.array(['application', 
+                                                  'qt3utils_version', 
+                                                  'scan_id', 
+                                                  'timestamp', 
+                                                  'original_name'], dtype='S'))
+            ds.attrs['application'] = 'qt3utils.qt3scan.ImageScanApplication'
+            ds.attrs['qt3utils_version'] = qt3utils.__version__
+            ds.attrs['signal_source'] = self.parent_application.signal_source
+            ds.attrs['scan_id'] = self.id
+            ds.attrs['timestamp'] = self.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            ds.attrs['original_name'] = file_name
+
+            # Save the scan settings
+            # If your implementation settings vary you should change the attrs
+            ds = df.create_dataset('scan_settings/axis_1', data=self.axis_1)
+            ds.attrs['units'] = 'None'
+            ds.attrs['description'] = 'First axis of the scan (which is scanned quickly).'
+            ds = df.create_dataset('scan_settings/axis_2', data=self.axis_2)
+            ds.attrs['units'] = 'None'
+            ds.attrs['description'] = 'Second axis of the scan (which is scanned slowly).'
+            ds = df.create_dataset('scan_settings/range', data=self.range)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Length of the scan.'
+            ds = df.create_dataset('scan_settings/n_pixels', data=self.n_pixels)
+            ds.attrs['units'] = 'None'
+            ds.attrs['description'] = 'Number of pixels in the scan.'
+            ds = df.create_dataset('scan_settings/time', data=self.time)
+            ds.attrs['units'] = 'Seconds'
+            ds.attrs['description'] = 'Length of time for the scan along axis 1.'
+            ds = df.create_dataset('scan_settings/time_per_pixel', data=self.time_per_pixel)
+            ds.attrs['units'] = 'Seconds'
+            ds.attrs['description'] = 'Time integrated per pixel.'
+
+            ds = df.create_dataset('scan_settings/start_position_vector', data=self.start_position_vector)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Intial position of the scan.'
+            ds = df.create_dataset('scan_settings/start_position_axis_1', data=self.start_position_axis_1)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Initial position on the scan axis 1.'
+            ds = df.create_dataset('scan_settings/start_position_axis_2', data=self.start_position_axis_2)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Initial position on the scan axis 2.'
+            ds = df.create_dataset('scan_settings/min_position_1', data=self.min_position_1)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Minimum axis 1 position of the scan.'
+            ds = df.create_dataset('scan_settings/min_position_2', data=self.min_position_2)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Minimum axis 2 position of the scan.'
+            ds = df.create_dataset('scan_settings/max_position_1', data=self.max_position_1)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Maximum axis 1 position of the scan.'
+            ds = df.create_dataset('scan_settings/max_position_2', data=self.max_position_2)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Maximum axis 2 position of the scan.'
+
+            # Data
+            ds = df.create_dataset('data/positions_axis_1', data=self.data_x)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Positions of the scan (along axis 1).'
+            ds = df.create_dataset('data/positions_axis_2', data=self.data_y)
+            ds.attrs['units'] = 'Micrometers'
+            ds.attrs['description'] = 'Positions of the scan (along axis 2).'
+            if self.parent_application.signal_source == 'photodiode':
+                ds = df.create_dataset('data/mean_voltage', data=self.data_z)
+                ds.attrs['units'] = 'Volts'
+                ds.attrs['description'] = 'Mean photodiode voltage per pixel dwell.'
+            else:
+                ds = df.create_dataset('data/count_rates', data=self.data_z)
+                ds.attrs['units'] = 'Counts per second'
+                ds.attrs['description'] = 'Count rates measured over 2-d scan.'
+                ds = df.create_dataset('data/counts', data=self.data_z*self.time_per_pixel)
+                ds.attrs['units'] = 'Counts'
+                ds.attrs['description'] = 'Counts measured over 2-d scan.'
+
+    def start_scan_thread_function(self):
+        '''
+        This is the thread scan function for starting a scan
+        '''
+        try:
+            self.current_scan_index = 0
+            for line in self.application_controller.scan_image(
+                            axis_1=self.axis_1,
+                            start_1=self.min_position_1,
+                            stop_1=self.max_position_1,
+                            n_pixels_1=self.n_pixels,
+                            axis_2=self.axis_2,
+                            start_2=self.min_position_2,
+                            stop_2=self.max_position_2,
+                            n_pixels_2=self.n_pixels,
+                            scan_time=self.time):
+                # Line data: counts/s (counter) or mean V (photodiode)
+                if self.parent_application.signal_source == 'photodiode':
+                    self.data_z[self.current_scan_index] = line
+                else:
+                    self.data_z[self.current_scan_index] = line / self.time_per_pixel
+                # Update the figure
+                self.view.update_figure()
+                # Increase the current scan index
+                self.current_scan_index += 1
+
+                logger.debug('Row complete.')
+
+            self.home_position()
+            # Update the figure
+            self.view.update_figure()
+            logger.info('Scan complete.')
+
+        except Exception as e:
+            logger.info(e)
+        # Enable the buttons
+        self.parent_application.enable_buttons()
+
+    def continue_scan_thread_function(self):
+        '''
+        This is is the thread function to continue the scan from the middle.
+
+        It would probably be the same as the start scan thread function if the 
+        current_scan_index was set to begin with.
+        '''
+        try:
+            for line in self.application_controller.scan_image(
+                            axis_1=self.axis_1,
+                            start_1=self.min_position_1,
+                            stop_1=self.max_position_1,
+                            n_pixels_1=self.n_pixels,
+                            axis_2=self.axis_2,
+                            start_2= self.data_y[self.current_scan_index], # Start at the index of the next queued scan
+                            stop_2=self.max_position_2,
+                            n_pixels_2=(self.n_pixels - self.current_scan_index), # Do the remaining pixels
+                            scan_time=self.time):
+                if self.parent_application.signal_source == 'photodiode':
+                    self.data_z[self.current_scan_index] = line
+                else:
+                    self.data_z[self.current_scan_index] = line / self.time_per_pixel
+                # Update the figure
+                self.view.update_figure()
+                # Increase the current scan index
+                self.current_scan_index += 1
+
+                logger.debug('Row complete.')
+
+            self.home_position()
+            # Update the figure
+            self.view.update_figure()
+            logger.info('Scan complete.')
+
+        except Exception as e:
+            logger.info(e)
+        # Enable the buttons
+        self.parent_application.enable_buttons()
+
+    def home_position(self):
+
+        '''
+        Go to the center of the scan
+        '''
+        # Move to optmial position
+        self.application_controller.set_axis(axis=self.axis_1, position=self.start_position_axis_1)
+        # Move to optmial position
+        self.application_controller.set_axis(axis=self.axis_2, position=self.start_position_axis_2)
+
+    def open_rclick(self, mpl_event : tk.Event = None):
+        mouse_x, mouse_y = self.root.winfo_pointerxy()
+        try:
+            self.view.rclick_menu.tk_popup(mouse_x, mouse_y)
+        finally:
+            self.view.rclick_menu.grab_release()
+
+    def rclick_open_counter(self):
+        '''
+        Method for the "open counter" command in the right click menu. Opens an instance
+        of `qt3scope`.
+        '''
+        try:
+            qt3scope.main(
+                is_root_process=False,
+                signal_source=self.parent_application.signal_source,
+            )
+        except Exception as e:
+            logger.warning(f'{e}')
+
+    def set_normalize(self, tkinter_event: tk.Event = None) -> None:
+        '''
+        Callback function to set the normalization of the figure based off of the values
+        written to the GUI.
+        '''
+        # Get the value from the controller
+        norm_min = float(self.view.control_panel.image_minimum.get())
+        norm_max = float(self.view.control_panel.image_maximum.get())
+
+        if norm_min > norm_max:
+            raise ValueError(f'Minimum norm value {norm_min} > {norm_max}.')
+        if norm_min < 0:
+            raise ValueError(f'Minimum norm cannot be less than 0.')
+
+        # Save the minimum/maximum norm
+        self.view.norm_min = norm_min
+        self.view.norm_max = norm_max
+
+        self.view.update_figure()
+
+    def auto_normalize(self, tkinter_event: tk.Event = None) -> None:
+        '''
+        Callback function to autonormalize the figure.
+        '''
+        # Save the minimum/maximum norm
+        self.view.norm_min = None
+        self.view.norm_max = None
+
+        self.view.update_figure()
+
+
+def main(is_root_process=True):
+    tkapp = LauncherApplication(
+        default_config_filename=DEFAULT_CONFIG_FILE,
+        is_root_process=is_root_process)
     tkapp.run()
-
 
 if __name__ == '__main__':
     main()

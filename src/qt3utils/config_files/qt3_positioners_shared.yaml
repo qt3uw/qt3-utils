@@ -1,0 +1,55 @@
+# Shared Microstage and piezo definitions (merged into app YAML). Microstage is used
+# by qt3move only; qt3scan merges Piezo* for scanning and uses piezo_daq_lock vs qt3move.
+# Merged at load time into the application root (e.g. QDLMOVE, QT3SCAN).
+
+Microstage:
+  import_path : qt3utils.applications.qt3move.microstage.encoderless_wrapper
+  class_name  : EncoderlessMicrostage
+  configure :
+    x_min: 0.0
+    x_max: 12000.0
+    y_min: 0.0
+    y_max: 12000.0
+    velocity: 0.5
+
+PiezoX:
+  import_path : qt3utils.applications.qt3move.piezo.nidaq_position
+  class_name  : NidaqPositionController
+  configure:
+    device_name: Dev1
+    write_channel: ao0
+    read_channel: ai7
+    move_settle_time: 0.0
+    scale_microns_per_volt: 8
+    zero_microns_volt_offset: 0
+    min_position: 0.0
+    max_position: 80.0
+    invert_axis: False
+
+PiezoY:
+  import_path : qt3utils.applications.qt3move.piezo.nidaq_position
+  class_name  : NidaqPositionController
+  configure:
+    device_name: Dev1
+    write_channel: ao1
+    read_channel: ai4
+    move_settle_time: 0.0
+    scale_microns_per_volt: 8
+    zero_microns_volt_offset: 0
+    min_position: 0.0
+    max_position: 80.0
+    invert_axis: False
+
+PiezoZ:
+  import_path : qt3utils.applications.qt3move.piezo.nidaq_position
+  class_name  : NidaqPositionController
+  configure:
+    device_name: Dev1
+    write_channel: ao2
+    read_channel: ai5
+    move_settle_time: 0.0
+    scale_microns_per_volt: 8
+    zero_microns_volt_offset: 0
+    min_position: 0.0
+    max_position: 80.0
+    invert_axis: False

@@ -1,0 +1,53 @@
+# qt3scan with Single Quantum WebSQ (SNSPD over lab LAN, Option B).
+# Copy or symlink as your active config; set host to Atlas static IP after IT assignment.
+QT3SCAN:
+  ApplicationController:
+    import_path : qt3utils.applications.qt3scan.application_controller
+    class_name : ScanController
+    hardware :
+      counter : Counter
+      photodiode : Photodiode
+      snspd : Snspd
+      x_axis_control : PiezoX
+      y_axis_control : PiezoY
+      z_axis_control : PiezoZ
+    configure :
+      inter_scan_settle_time : 0.01
+      signal_source : snspd
+
+  Counter:
+    import_path : qt3utils.hardware.nidaq.counters.nidaqtimedratecounter
+    class_name  : NidaqTimedRateCounter
+    configure :
+      daq_name : Dev1
+      signal_terminal : PFI0
+      clock_terminal :
+      clock_rate: 100000
+      sample_time_in_seconds : 1
+      read_write_timeout : 10
+      signal_counter : ctr2
+
+  Photodiode:
+    import_path : qt3utils.hardware.nidaq.analoginputs.nidaqtimedanaloginput
+    class_name  : NidaqTimedAnalogMean
+    configure :
+      daq_name : Dev1
+      channel : ai1
+      clock_rate: 100000
+      sample_time_in_seconds : 1
+      read_write_timeout : 10
+      min_val : -10.0
+      max_val : 10.0
+
+  Snspd:
+    import_path : qt3utils.hardware.singlequantum.websq_timed_counter
+    class_name  : WebSqTimedCounter
+    configure :
+      host : "3.3.44.57"
+      counts_port : 12345
+      control_port : 12000
+      detector_index : 0
+      auto_sync_period : true
+      auto_enable_detectors : false
+      connect_timeout : 10.0
+      read_timeout : 30.0

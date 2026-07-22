@@ -3,8 +3,9 @@ import numpy as np
 try:
     from pulseblaster.PBInd import PBInd
     import pulseblaster.spinapi
-except NameError as e:
-    #handling this error allows for development of pulse sequences without need to interact with hardware
+except (NameError, ModuleNotFoundError, ImportError) as e:
+    # Handling these errors allows for development of pulse sequences without
+    # requiring the PulseBlaster hardware/software to be installed.
     print(e)
     print('Pulse Blaster software has not been properly installed.')
 

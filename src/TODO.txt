@@ -1,0 +1,12 @@
+1. Copy over qdlscan, everything is same except:
+    - replace their separate piezo mover with ours (with microstage)
+    - For them, their detector is just a counter channel detector.
+        We want three options, analogue photodiode in the back, SNSPD channel (check manual in drive)
+        and a third counter channel (won't receive anything for now but just plan to have as option)
+
+2. Make sure theres no unused code in qt3utils and its maintainable for future use
+
+
+4. qt3chromatune is unused, but document its existence in case need for future.
+
+6. Automate flip mirrors

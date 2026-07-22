@@ -1,0 +1,8 @@
+[console_scripts]
+qt3home = qt3utils.applications.qt3home.main:main
+qt3mirror = qt3utils.applications.qt3mirror.main:main
+qt3pb = qt3utils.applications.qt3pb.main:main
+qt3power = qt3utils.applications.qt3power.main:main
+qt3scan = qt3utils.applications.qt3scan.main:main
+qt3scope = qt3utils.applications.qt3scope.main:main
+qt3test-snspd = qt3utils.tools.test_snspd_connection:main

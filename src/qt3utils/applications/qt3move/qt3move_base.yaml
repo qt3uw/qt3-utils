@@ -1,0 +1,6 @@
+QT3MOVE:
+  Positioners:      # Add positioner configs defined in qt3utils.config_files.qt3_positioners_shared
+    - Microstage
+    - PiezoX
+    - PiezoY
+    - PiezoZ   # Enable in Positioners if Z piezo is wired
