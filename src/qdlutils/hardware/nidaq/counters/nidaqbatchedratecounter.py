@@ -249,6 +249,36 @@ class NidaqBatchedRateCounter:
         # Update state
         self.running = False
 
+    def _save_do_states(self):
+        '''Save current digital output states on port0/line0:3 before DAQ reinit.'''
+        try:
+            import nidaqmx
+            task = nidaqmx.Task()
+            task.di_channels.add_di_chan(f"{self.daq_name}/port1/line2:5")
+            states = task.read(number_of_samples_per_channel=1)
+            task.close()
+            if states:
+                result = list(states[0])
+                logger.info(f'Saved DO mirror states: {result}')
+                return result
+        except Exception as e:
+            logger.warning(f'Could not save DO states: {e}')
+        return None
+
+    def _restore_do_states(self, states):
+        '''Restore digital output states on port0/line0:3 after DAQ reinit.'''
+        try:
+            import nidaqmx
+            if not states or len(states) != 4:
+                return
+            task = nidaqmx.Task()
+            task.do_channels.add_do_chan(f"{self.daq_name}/port1/line2:5")
+            task.write(states, auto_start=True)
+            task.close()
+            logger.info(f'Restored DO mirror states: {states}')
+        except Exception as e:
+            logger.warning(f'Could not restore DO states: {e}')
+
 
     def _read_samples(self) -> tuple:
         '''

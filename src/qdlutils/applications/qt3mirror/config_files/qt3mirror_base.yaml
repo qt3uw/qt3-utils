@@ -16,13 +16,13 @@ sync_pulse_high_ms: 15.0
 
 flippers:
   - name: M5
-    line: port0/line0
-  - name: M6 
-    line: port0/line1
+    line: port1/line2
+  - name: M6
+    line: port1/line3
   - name: M7
-    line: port0/line2
+    line: port1/line4
   - name: M8
-    line: port0/line3
+    line: port1/line5
 
 # Presets only change the mirrors listed; others keep their current TTL line level.
 # Omit `presets` in a custom config to fall back to these defaults in code.
