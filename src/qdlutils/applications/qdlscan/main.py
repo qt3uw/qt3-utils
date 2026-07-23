@@ -661,16 +661,27 @@ class LineScanApplication:
         self.view.control_panel.save_button.bind("<Button>", self.save_scan)
 
         # Setup the callback for rightclicks on the figure canvas
-        self.view.data_viewport.canvas.mpl_connect('button_press_event', 
+        self.view.data_viewport.canvas.mpl_connect('button_press_event',
                                                    lambda event: self.open_rclick(event) if event.button == 3 else None)
         # Set the commands for the right click
-        self.view.rclick_menu.add_command(label='Go to position', command=self.rclick_go_to) 
-        self.view.rclick_menu.add_separator() 
-        self.view.rclick_menu.add_command(label='Open counter', command=self.rclick_open_counter) 
+        self.view.rclick_menu.add_command(label='Go to position', command=self.rclick_go_to)
+        self.view.rclick_menu.add_separator()
+        self.view.rclick_menu.add_command(label='Open counter', command=self.rclick_open_counter)
+
+        # Handle window close: signal the running scan to stop then close immediately
+        self.root.protocol('WM_DELETE_WINDOW', self._on_window_close)
 
         # Launch the thread
         self.scan_thread = Thread(target=self.scan_thread_function)
         self.scan_thread.start()
+
+    def _on_window_close(self):
+        '''Handle window close - only stop if scan is actively running.'''
+        if self.application_controller.scanning or self.scan_thread.is_alive():
+            # Scan is active, request graceful stop
+            self.application_controller.stop_scan = True
+        # Close the window
+        self.root.destroy()
 
     def scan_thread_function(self) -> None:
         try:
@@ -688,8 +699,11 @@ class LineScanApplication:
             self.data_y = self.data_y / self.time_per_pixel
             # Optimize the position
             self.update_position()
-            # Update the viewport
-            self.view.update_figure()
+            # Update the viewport (may fail if the window was closed mid-scan)
+            try:
+                self.view.update_figure()
+            except Exception as e:
+                logger.debug(f'Could not update figure, window likely closed: {e}')
 
             logger.info('Scan complete.')
         except Exception as e:
@@ -1026,13 +1040,24 @@ class ImageScanApplication():
         self.view.data_viewport.canvas.mpl_connect('button_press_event', 
                                                    lambda event: self.open_rclick(event) if event.button == 3 else None)
         # Set the commands for the right click
-        self.view.rclick_menu.add_command(label='Go to position', command=self.rclick_go_to) 
-        self.view.rclick_menu.add_separator() 
-        self.view.rclick_menu.add_command(label='Open counter', command=self.rclick_open_counter) 
+        self.view.rclick_menu.add_command(label='Go to position', command=self.rclick_go_to)
+        self.view.rclick_menu.add_separator()
+        self.view.rclick_menu.add_command(label='Open counter', command=self.rclick_open_counter)
+
+        # Handle window close: signal the running scan to stop then close immediately
+        self.root.protocol('WM_DELETE_WINDOW', self._on_window_close)
 
         # Launch the thread
         self.scan_thread = Thread(target=self.start_scan_thread_function)
         self.scan_thread.start()
+
+    def _on_window_close(self):
+        '''Handle window close - only stop if scan is actively running.'''
+        if self.application_controller.scanning or self.scan_thread.is_alive():
+            # Scan is active, request graceful stop
+            self.application_controller.stop_scan = True
+        # Close the window
+        self.root.destroy()
 
     def continue_scan(self, tkinter_event=None):
         # Don't do anything if busy
@@ -1190,8 +1215,11 @@ class ImageScanApplication():
                             scan_time=self.time):
                 # Set the data to the recently calculated line (in counts/second)
                 self.data_z[self.current_scan_index] = line / self.time_per_pixel
-                # Update the figure
-                self.view.update_figure()
+                # Update the figure (may fail if the window was closed mid-scan)
+                try:
+                    self.view.update_figure()
+                except Exception as e:
+                    logger.debug(f'Could not update figure, window likely closed: {e}')
                 # Increase the current scan index
                 self.current_scan_index += 1
 
@@ -1199,7 +1227,10 @@ class ImageScanApplication():
 
             self.home_position()
             # Update the figure
-            self.view.update_figure()
+            try:
+                self.view.update_figure()
+            except Exception as e:
+                logger.debug(f'Could not update figure, window likely closed: {e}')
             logger.info('Scan complete.')
 
         except Exception as e:
@@ -1227,8 +1258,11 @@ class ImageScanApplication():
                             scan_time=self.time):
                 # Set the data to the recently calculated line (in counts/second)
                 self.data_z[self.current_scan_index] = line / self.time_per_pixel
-                # Update the figure
-                self.view.update_figure()
+                # Update the figure (may fail if the window was closed mid-scan)
+                try:
+                    self.view.update_figure()
+                except Exception as e:
+                    logger.debug(f'Could not update figure, window likely closed: {e}')
                 # Increase the current scan index
                 self.current_scan_index += 1
 
@@ -1236,7 +1270,10 @@ class ImageScanApplication():
 
             self.home_position()
             # Update the figure
-            self.view.update_figure()
+            try:
+                self.view.update_figure()
+            except Exception as e:
+                logger.debug(f'Could not update figure, window likely closed: {e}')
             logger.info('Scan complete.')
 
         except Exception as e:
